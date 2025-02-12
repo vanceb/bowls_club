@@ -1,0 +1,29 @@
+{# templates/partials/sidebar.html #}
+<div class="column is-3">
+    <aside class="menu">
+        <input type="checkbox" id="menu-toggle" class="is-hidden">
+        <label for="menu-toggle" class="button is-primary is-hidden-tablet mb-2 mt-2">
+            <span class="icon">
+                <i class="fas fa-bars"></i>
+            </span>
+            <span>Menu</span>
+        </label>
+
+        <ul class="menu-list">
+            {% for item in menu_items %}
+                <li>
+                    <a href="{{ url_for(item.link) }}" {% if item.is_active %}class="is-active"{% endif %}>
+                        {{ item.name }}
+                    </a>
+                    {% if item.submenu %}
+                        <ul>
+                            {% for subitem in item.submenu %}
+                                <li><a href="{{ url_for(subitem.link) }}">{{ subitem.name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    </aside>
+</div>

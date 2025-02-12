@@ -1,0 +1,64 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+sdist/
+*.egg-info/
+*.egg
+*.whl
+
+# PyInstaller
+#  Usually these files are written into a dist/ directory, but be sure to ignore them if they are lying around
+build/
+*.spec
+
+# Translations
+*.mo
+
+# Environment management
+.venv/
+venv/
+env/
+*/env/
+*/venv/
+.python-version
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.pytest_cache/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editor-related files
+.idea/
+*.swp
+*.swo
+*.vim/
+*.vscode/
+
+# Log files
+*.log
+
+# Flask specific
+instance/
+secrets.conf
+
+# Database
+*.sqlite
+*.db
+
+# Uploads folder
+uploads/

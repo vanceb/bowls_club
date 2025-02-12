@@ -1,0 +1,25 @@
+{# templates/index.html #}
+{% extends "base.html" %}
+
+{% block title %}Home - Flask Bulma App{% endblock %}
+
+{% block content %}
+    <h1 class="title">Main Content</h1>
+    <div class="content">
+        <p class="mb-4">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla accumsan, 
+            metus ultrices eleifend gravida, nulla nunc varius lectus, nec rutrum 
+            justo nibh eu lectus.
+        </p>
+        <div class="card">
+            <div class="card-content">
+                <p class="title is-4">Featured Content</p>
+                <p>
+                    Proin ornare ligula eu tellus tempus elementum. Aenean bibendum 
+                    iaculis mi, nec blandit lacus interdum vitae. Vestibulum non nibh 
+                    risus, a scelerisque purus.
+                </p>
+            </div>
+        </div>
+    </div>
+{% endblock %}

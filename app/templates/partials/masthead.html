@@ -1,0 +1,19 @@
+{# templates/partials/masthead.html #}
+<section class="hero is-primary">
+    <div class="hero-body">
+        <div class="container">
+            <figure class="image is-16by9">
+                <img src="https://via.placeholder.com/1600x900" alt="Masthead">
+            </figure>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <ul>
+                {% for message in messages %}
+                <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% endwith %}            
+        </div>
+    </div>
+</section>
