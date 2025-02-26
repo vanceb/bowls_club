@@ -2,8 +2,8 @@
 <section class="hero is-primary">
     <div class="hero-body">
         <div class="container">
-            <figure class="image is-16by9">
-                <img src="https://via.placeholder.com/1600x900" alt="Masthead">
+            <figure>
+                <img src="{{ url_for('static', filename='images/pbc.png') }}" alt="Paignton Bowling Club">
             </figure>
             {% with messages = get_flashed_messages() %}
             {% if messages %}
