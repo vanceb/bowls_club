@@ -1,3 +1,31 @@
+:root {
+  --primary-color: #660033;
+  --secondary-color: #EFBF04;
+
+}
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+.hero {
+  background-color: var(--primary-color);
+  color: white;
+}
+.hero img {
+  max-width: 100%;
+  height: auto;
+}
+.container {
+  margin-top: 20px;
+}
+.columns {
+  margin-bottom: 20px;
+}
+#sidebar {
+  background-color: var(--secondary-color);
+  padding: 20px;
+}
+
 /* Custom styles for collapsing the menu on small screens */
 @media screen and (max-width: 768px) {
   #menu-toggle:checked ~ .menu-list {
