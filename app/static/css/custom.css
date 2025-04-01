@@ -1,0 +1,9 @@
+/* Custom styles for collapsing the menu on small screens */
+@media screen and (max-width: 768px) {
+  #menu-toggle:checked ~ .menu-list {
+      display: block;
+  }
+  .menu-list {
+      display: none;
+  }
+}
