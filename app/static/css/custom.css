@@ -3,19 +3,20 @@
   --secondary: #660033;
 
 /* Bulma colors need to be set as HSL values to apply across all elements */ 
+
   --bulma-primary-h: 42deg;
   --bulma-primary-s: 100%;
   --bulma-primary-l: 53%;
   --bulma-secondary-h: 330deg;
   --bulma-secondary-s: 100%;
   --bulma-secondary-l: 20%;
-  --navbar-background-color: var(--secondary);
+
 }
 
 /* Custom styles for the navbar to match the club colours */
 .navbar, .navbar-item, .navbar-link, .navbar-dropdown, .navbar-dropdown-item {
   color: var(--primary) !important;
-  background-color: var(--navbar-background-color) !important;
+  background-color: var(--secondary) !important;
 }
 /* Invert the colours for the dropdown items when hovered over */
 .navbar-link:hover, .navbar-item:hover{
