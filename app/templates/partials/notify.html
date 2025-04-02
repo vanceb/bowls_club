@@ -1,0 +1,14 @@
+<!-- Get Flash messages from Flask and show them -->
+{% with messages = get_flashed_messages() %}
+{% if messages %}
+<div class="notification is-warning">
+    <button class="delete"></button>
+    <strong>Messages:</strong>
+    <ul>
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endwith %}

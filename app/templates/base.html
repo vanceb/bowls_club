@@ -11,10 +11,27 @@
     </head>
     <body>
         {% include 'partials/navbar.html' %}
+        {% include 'partials/notify.html' %}
+
+
+        <!-- Main content area -->
         <div class="container">
             <section class="section">
                 {% block content %}{% endblock %}
             </section>
         </div>
+
+
     </body>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        (document.querySelectorAll('.notification .delete') || []).forEach(($delete) => {
+          const $notification = $delete.parentNode;
+      
+          $delete.addEventListener('click', () => {
+            $notification.parentNode.removeChild($notification);
+          });
+        });
+      });
+    </script>
 </html>
