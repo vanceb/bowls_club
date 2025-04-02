@@ -12,10 +12,12 @@
   --navbar-background-color: var(--secondary);
 }
 
-.navbar, .navbar-item, .navbar-link, .navbar-divider{
+/* Custom styles for the navbar to match the club colours */
+.navbar, .navbar-item, .navbar-link, .navbar-dropdown, .navbar-dropdown-item {
   color: var(--primary) !important;
   background-color: var(--navbar-background-color) !important;
 }
+/* Invert the colours for the dropdown items when hovered over */
 .navbar-link:hover, .navbar-item:hover{
   color: var(--secondary) !important;
   background-color: var(--primary) !important;
