@@ -1,52 +1,56 @@
 <nav class="navbar" role="navigation" aria-label="main navigation">
-    <div class="navbar-brand">
-      <a class="navbar-item" href="{{ url_for('index') }}">
-        <img src="{{ url_for('static', filename='images/brand.svg') }}" alt="" style="max-height: 70px", class="py-2">
-      </a>
-  
-      <!-- these spans below are needed by bulma to make the navbar menu work -->
-      <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbar-menu">
-        <span aria-hidden="true"></span>
-        <span aria-hidden="true"></span>
-        <span aria-hidden="true"></span>
-        <span aria-hidden="true"></span>
-      </a>
-    </div>
 
-    <!-- Create dynamic menu items --> 
-    <div id="navbar-menu" class="navbar-menu">
-      <div class="navbar-start">
+  <!-- Brand is placed left of the navbar and stays when screens are small -->
+  <div class="navbar-brand">
+    <a class="navbar-item" href="{{ url_for('index') }}">
+      <img src="{{ url_for('static', filename='images/brand.svg') }}" alt="" style="max-height: 70px", class="py-2">
+    </a>
 
-<!-- Create the menu items -->
+    <!-- these spans below are needed by bulma to make the navbar menu work -->
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbar-menu">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+
+<!-- Menu sits right of the brand, but collapses on small screens -->
+<!-- See javascript at the bottom of this file for the collapse code --> 
+  <div id="navbar-menu" class="navbar-menu">
+    <div class="navbar-start">
+
+  <!-- Create the menu items -->
 {% for item in menu_items %}
   {% if item.submenu %}
-        <div class="navbar-item has-dropdown is-hoverable">
-          <a class="navbar-link">
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">
     {{ item.name }}
-          </a>
-          <div class="navbar-dropdown">
+        </a>
+        <div class="navbar-dropdown">
     {% for subitem in item.submenu %}
-            <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
+          <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
     {% endfor %}
-          </div>
         </div>
+      </div>
   {% else %}
         <a class="navbar-item" href="{{ url_for(item.link) }}">
     {{ item.name }}
         </a>
   {% endif %}
 {% endfor %}
-      </div>
     </div>
-      <div class="navbar-end">
-            {% if current_user.is_anonymous %}
-            <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
-            {% else %}
-            <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
-            {% endif %}
-      </div>
-    </div>
-  </nav>
+  </div>
+
+  <!-- navbar-end sits to the right -->
+  <div class="navbar-end">
+        {% if current_user.is_anonymous %}
+        <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
+        {% else %}
+        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
+        {% endif %}
+  </div>
+</nav>
   
   <!-- javascript to handle the expanding and collapsing of the navbar elements -->
   <script>
