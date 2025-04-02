@@ -7,26 +7,12 @@ import sqlalchemy as sa
 from app import db
 from app.models import Member
 
-menu_items = [
-    {'name': 'Home', 'link': 'index'},
-    {'name': 'Login', 'link': 'login'},
-    {'name': 'Logout', 'link': 'logout'},
-    {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
-                                                    {'name': 'Subitem 2', 'link': 'index'},
-                                                    {'name': 'Subitem 3', 'link': 'index'},
-                                                    {'name': 'Subitem 4', 'link': 'index'},
-                                                    {'name': 'Subitem 5', 'link': 'index'}]},
-
-
-
-]
-
 
 @app.route("/")
 @app.route("/index")
 @login_required
 def index():
-    return render_template('index.html', title='Home', menu_items=menu_items)
+    return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'])
 
 
 

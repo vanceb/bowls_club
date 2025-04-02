@@ -17,3 +17,13 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     ADMINS = ['your-email@example.com']
+
+    # A structure holding the menu for the site
+    MENU_ITEMS = [
+    {'name': 'Home', 'link': 'index'},
+    {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
+                                                    {'name': 'Subitem 2', 'link': 'index'},
+                                                    {'name': 'Subitem 3', 'link': 'index'},
+                                                    {'name': 'Subitem 4', 'link': 'index'},
+                                                    {'name': 'Subitem 5', 'link': 'index'}]},
+]

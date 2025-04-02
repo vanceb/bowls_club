@@ -39,16 +39,19 @@
         </a>
   {% endif %}
 {% endfor %}
+
+<!-- Add a Login / Logout item to the end of the menu -->
+{% if current_user.is_anonymous %}
+        <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
+{% else %}
+        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
+{% endif %}
     </div>
   </div>
 
   <!-- navbar-end sits to the right -->
   <div class="navbar-end">
-        {% if current_user.is_anonymous %}
-        <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
-        {% else %}
-        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
-        {% endif %}
+
   </div>
 </nav>
   
