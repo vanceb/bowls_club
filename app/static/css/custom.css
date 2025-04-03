@@ -18,8 +18,11 @@
   color: var(--primary) !important;
   background-color: var(--secondary) !important;
 }
+.navbar-link::after {
+  border-color: var(--primary) !important;
+}
 /* Invert the colours for the dropdown items when hovered over */
-.navbar-link:hover, .navbar-item:hover{
+.navbar-link:hover, .navbar-item:hover {
   color: var(--secondary) !important;
   background-color: var(--primary) !important;
 }
