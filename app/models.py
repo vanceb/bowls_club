@@ -13,6 +13,9 @@ class Member(UserMixin, db.Model):
                                                 unique=True)
     email: so.Mapped[str] = so.mapped_column(sa.String(120), index=True,
                                              unique=True)
+    phone: so.Mapped[str] = so.mapped_column(sa.String(15), index=True)
+    firstname: so.Mapped[str] = so.mapped_column(sa.String(64))
+    lastname: so.Mapped[str] = so.mapped_column(sa.String(64))
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
     bookings: so.WriteOnlyMapped['Booking'] = so.relationship(back_populates='member')
 
