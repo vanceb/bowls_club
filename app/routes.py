@@ -1,10 +1,10 @@
 from flask import render_template, flash, redirect, url_for, request
-from app import app
-from app.forms import LoginForm
+from app import app, db
+from app.forms import LoginForm, MemberForm
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
-from app import db
+from werkzeug.security import generate_password_hash
 from app.models import Member
 
 
@@ -15,9 +15,7 @@ def index():
     return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'])
 
 
-
 @app.route('/login', methods=['GET', 'POST'])
-
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
@@ -38,7 +36,27 @@ def login():
 
 
 @app.route('/logout')
-
 def logout():
     logout_user()
     return redirect(url_for('index'))
+
+
+@app.route('/add_member', methods=['GET', 'POST'])
+def add_member():
+    form = MemberForm()
+    if form.validate_on_submit():
+        # Create a new Member instance
+        new_member = Member(
+            username=form.username.data,
+            firstname=form.firstname.data,
+            lastname=form.lastname.data,
+            email=form.email.data,
+            phone=form.phone.data,
+            password_hash=generate_password_hash(form.password.data)
+        )
+        # Add to the database
+        db.session.add(new_member)
+        db.session.commit()
+        flash(f'Joining application submitted for {form.firstname.data} {form.surname.data}', 'success')
+        return redirect(url_for('index'))  # Redirect to the homepage or another page
+    return render_template('add_member.html', form=form)
