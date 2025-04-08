@@ -61,4 +61,37 @@ def add_member():
         return redirect(url_for('login'))  # Redirect to the homepage or another page
     if form.errors:
         flash(f'There are errors in your application.  Please review your application and try again.', 'danger')
-    return render_template('add_member.html', form=form)
+    return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'])
+
+
+@app.route('/members')
+@login_required
+def members():
+    members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
+    return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'])
+
+
+@app.route('/search_members', methods=['GET'])
+@login_required
+def search_members():
+    query = request.args.get('q', '').strip()
+    if query:
+        members = db.session.scalars(
+            sa.select(Member)
+            .where(Member.firstname.ilike(f'%{query}%') | Member.lastname.ilike(f'%{query}%'))
+            .order_by(Member.firstname)
+        ).all()
+    else:
+        members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
+    
+    return {
+        "members": [
+            {
+                "firstname": member.firstname,
+                "lastname": member.lastname,
+                "phone": member.phone,
+                "email": member.email
+            }
+            for member in members
+        ]
+    }

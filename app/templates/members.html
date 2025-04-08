@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1 class="title">Members</h1>
+    <div class="field">
+        <label class="label">Search Members</label>
+        <div class="control">
+            <input id="search-input" class="input" type="text" placeholder="Search by first or last name">
+        </div>
+    </div>
+    <table class="table is-striped is-hoverable is-fullwidth">
+        <thead>
+            <tr>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody id="members-table-body">
+            {% for member in members %}
+            <tr>
+                <td>{{ member.firstname }}</td>
+                <td>{{ member.lastname }}</td>
+                <td>{{ member.phone }}</td>
+                <td>{{ member.email }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        document.getElementById('search-input').addEventListener('input', function () {
+            const query = this.value;
+            fetch(`/search_members?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('members-table-body');
+                    tbody.innerHTML = ''; // Clear the table body
+                    data.members.forEach(member => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${member.firstname}</td>
+                            <td>${member.lastname}</td>
+                            <td>${member.phone}</td>
+                            <td>${member.email}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                });
+        });
+    </script>
+{% endblock %}

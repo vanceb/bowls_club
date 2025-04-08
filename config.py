@@ -21,6 +21,7 @@ class Config:
     # A structure holding the menu for the site
     MENU_ITEMS = [
     {'name': 'Home', 'link': 'index'},
+    {'name': 'Members', 'link': 'members'},
     {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
                                                     {'name': 'Subitem 2', 'link': 'index'},
                                                     {'name': 'Subitem 3', 'link': 'index'},
