@@ -17,7 +17,7 @@ class Member(UserMixin, db.Model):
     firstname: so.Mapped[str] = so.mapped_column(sa.String(64), index=True)
     lastname: so.Mapped[str] = so.mapped_column(sa.String(64), index=True)
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
-    bookings: so.WriteOnlyMapped['Booking'] = so.relationship(back_populates='member')
+    is_admin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
 
     def __repr__(self):
         return '<User {}>'.format(self.username)
@@ -32,16 +32,3 @@ class Member(UserMixin, db.Model):
 def load_user(id):
     return db.session.get(Member, int(id))
 
-
-class Booking(db.Model):
-    id: so.Mapped[int] = so.mapped_column(primary_key=True)
-    member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey(Member.id), index=True)
-    member: so.Mapped[Member] = so.relationship('Member', back_populates='bookings')
-    timestamp: so.Mapped[datetime] = so.mapped_column(sa.DateTime, index=True, default=datetime.now(timezone.utc))
-    date: so.Mapped[datetime] = so.mapped_column(sa.DateTime, index=True)
-    time: so.Mapped[str] = so.mapped_column(sa.String(5))
-    duration: so.Mapped[int] = so.mapped_column(sa.Integer)
-    notes: so.Mapped[Optional[str]] = so.mapped_column(sa.String(140))
-    
-    def __repr__(self):
-        return '<Booking {}>'.format(self.id)

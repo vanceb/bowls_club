@@ -1,4 +1,4 @@
-from flask import render_template, flash, redirect, url_for, request
+from flask import render_template, flash, redirect, url_for, request, abort
 from app import app, db
 from app.forms import LoginForm, MemberForm
 from flask_login import current_user, login_user, logout_user, login_required
@@ -6,6 +6,19 @@ from urllib.parse import urlsplit
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash
 from app.models import Member
+from functools import wraps
+
+# Create an @admin_required decorator to protect admin routes
+# This decorator checks if the current user is authenticated and is an admin
+# If not, it aborts the request with a 403 Forbidden status
+# This decorator can be used to protect any route that requires admin access
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            abort(403)  # Forbidden
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @app.route("/")
@@ -95,3 +108,46 @@ def search_members():
             for member in members
         ]
     }
+
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    return render_template('admin_dashboard.html', title='Admin Dashboard')
+
+
+@app.route('/admin/manage_members')
+@admin_required
+def manage_members():
+    members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
+    return render_template('manage_members.html', members=members)
+
+
+@app.route('/admin/update_member/<int:member_id>', methods=['POST'])
+@admin_required
+def update_member(member_id):
+    member = db.session.get(Member, member_id)
+    if not member:
+        abort(404)
+    member.username = request.form['username']
+    member.firstname = request.form['firstname']
+    member.lastname = request.form['lastname']
+    member.email = request.form['email']
+    member.phone = request.form['phone']
+    member.is_admin = 'is_admin' in request.form
+    db.session.commit()
+    flash('Member updated successfully', 'success')
+    return redirect(url_for('manage_members'))
+
+
+@app.route('/admin/delete_member/<int:member_id>', methods=['GET'])
+@admin_required
+def delete_member(member_id):
+    member = db.session.get(Member, member_id)
+    if not member:
+        abort(404)
+    db.session.delete(member)
+    db.session.commit()
+    flash('Member deleted successfully', 'success')
+    return redirect(url_for('manage_members'))
+
