@@ -44,7 +44,7 @@
 {% if current_user.is_anonymous %}
         <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
 {% else %}
-        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
+        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.firstname }}</a>
 {% endif %}
     </div>
   </div>

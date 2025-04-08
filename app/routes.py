@@ -57,6 +57,8 @@ def add_member():
         # Add to the database
         db.session.add(new_member)
         db.session.commit()
-        flash(f'Joining application submitted for {form.firstname.data} {form.surname.data}', 'success')
-        return redirect(url_for('index'))  # Redirect to the homepage or another page
+        flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
+        return redirect(url_for('login'))  # Redirect to the homepage or another page
+    if form.errors:
+        flash(f'There are errors in your application.  Please review your application and try again.', 'danger')
     return render_template('add_member.html', form=form)

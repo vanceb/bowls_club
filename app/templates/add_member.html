@@ -10,7 +10,7 @@
                 {{ form.username(size=32, class_="input") }}
             </div>
             {% for error in form.username.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
@@ -19,7 +19,7 @@
                 {{ form.firstname(size=32, class_="input") }}
             </div>
             {% for error in form.firstname.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
@@ -28,7 +28,7 @@
                 {{ form.lastname(size=32, class_="input") }}
             </div>
             {% for error in form.lastname.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
@@ -37,7 +37,7 @@
                 {{ form.email(size=32, class_="input") }}
             </div>
             {% for error in form.email.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
@@ -46,16 +46,22 @@
                 {{ form.phone(size=32, class_="input") }}
             </div>
             {% for error in form.phone.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
             <label class="label">{{ form.password.label }}</label>
             <div class="control">
-                {{ form.password(size=32, class_="input") }}
+                {{ form.password(size=128, class_="input") }}
+            </div>
+        </div>
+        <div class="field">
+            <label class="label">{{ form.password2.label }}</label>
+            <div class="control">
+                {{ form.password2(size=128, class_="input") }}
             </div>
             {% for error in form.password.errors %}
-            <p class="help is-danger">{{ error }}</p>
+            <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
         <div class="field">
