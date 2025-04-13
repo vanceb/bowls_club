@@ -120,7 +120,7 @@ def admin_dashboard():
 @admin_required
 def manage_members():
     members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
-    return render_template('manage_members.html', members=members)
+    return render_template('manage_members.html', members=members, menu_items=app.config['MENU_ITEMS'])
 
 
 @app.route('/admin/update_member/<int:member_id>', methods=['POST'])
