@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="title">Edit Member</h1>
+
+<form method="POST">
+    <div class="field">
+        <label class="label">Username</label>
+        <div class="control">
+            <input class="input" type="text" name="username" value="{{ member.username }}" required>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">First Name</label>
+        <div class="control">
+            <input class="input" type="text" name="firstname" value="{{ member.firstname }}" required>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Last Name</label>
+        <div class="control">
+            <input class="input" type="text" name="lastname" value="{{ member.lastname }}" required>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Email</label>
+        <div class="control">
+            <input class="input" type="email" name="email" value="{{ member.email }}" required>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="label">Phone</label>
+        <div class="control">
+            <input class="input" type="text" name="phone" value="{{ member.phone }}" required>
+        </div>
+    </div>
+
+    <div class="field">
+        <label class="checkbox">
+            <input type="checkbox" name="is_admin" {% if member.is_admin %}checked{% endif %}>
+            Is Admin
+        </label>
+    </div>
+
+    <div class="buttons">
+        <a class="button is-light" href="{{ url_for('manage_members') }}">Cancel</a>
+        <button class="button is-primary" type="submit" name="update">Update</button>
+        <button class="button is-danger" type="submit" name="delete">Delete</button>
+    </div>
+</form>
+{% endblock %}

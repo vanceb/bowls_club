@@ -3,105 +3,52 @@
 {% block content %}
 <h1 class="title">Manage Members</h1>
 
-<!-- Add New Member Form -->
 <div class="box">
-    <h2 class="subtitle">Add New Member</h2>
-    <form action="{{ url_for('add_member') }}" method="POST">
-        <div class="field">
-            <label class="label">Username</label>
-            <div class="control">
-                <input class="input" type="text" name="username" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="label">First Name</label>
-            <div class="control">
-                <input class="input" type="text" name="firstname" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="label">Last Name</label>
-            <div class="control">
-                <input class="input" type="text" name="lastname" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="label">Email</label>
-            <div class="control">
-                <input class="input" type="email" name="email" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="label">Phone</label>
-            <div class="control">
-                <input class="input" type="text" name="phone" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="label">Password</label>
-            <div class="control">
-                <input class="input" type="password" name="password" required>
-            </div>
-        </div>
-        <div class="field">
-            <label class="checkbox">
-                <input type="checkbox" name="is_admin">
-                Admin
-            </label>
-        </div>
+    <div class="field">
+        <label class="label is-size-5">Search Members</label>
         <div class="control">
-            <button class="button is-primary" type="submit">Add Member</button>
+            <input id="search-input" class="input" type="text" placeholder="Search by first or last name">
         </div>
-    </form>
+    </div>
 </div>
 
-<!-- Members Table -->
-<div class="box">
-    <h2 class="subtitle">Existing Members</h2>
-    <table class="table is-striped is-hoverable is-fullwidth">
-        <thead>
-            <tr>
-                <th>Username</th>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Admin</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for member in members %}
-            <tr>
-                <form action="{{ url_for('update_member', member_id=member.id) }}" method="POST">
-                    <td><input class="input" type="text" name="username" value="{{ member.username }}"></td>
-                    <td><input class="input" type="text" name="firstname" value="{{ member.firstname }}"></td>
-                    <td><input class="input" type="text" name="lastname" value="{{ member.lastname }}"></td>
-                    <td><input class="input" type="email" name="email" value="{{ member.email }}"></td>
-                    <td><input class="input" type="text" name="phone" value="{{ member.phone }}"></td>
-                    <td>
-                        <input type="checkbox" name="is_admin" {% if member.is_admin %}checked{% endif %}>
-                    </td>
-                    <td>
-                        <div class="field is-grouped">
-                            <button class="button is-link" type="submit">
-                                    <span class="icon is-sm2all">
-                                        <i class="fas fa-check"></i>
-                                    </span> 
-                                    <span>Update</span>
-                            </button>
-                            <button class="button is-danger" href="{{ url_for('delete_member', member_id=member.id) }}">
-                                    <span class="icon is-sm2all">
-                                        <i class="fas fa-times"></i>
-                                    </span> 
-                                    <span>Delete</span>
-                            </button>
-                        </div>
-                    </td>
-                </form>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<table class="table is-striped is-hoverable is-fullwidth">
+    <thead>
+        <tr>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+        </tr>
+    </thead>
+    <tbody id="members-table-body">
+        <!-- Results will be dynamically loaded here -->
+    </tbody>
+</table>
+
+<script>
+    document.getElementById('search-input').addEventListener('input', function () {
+        const query = this.value;
+        fetch(`/search_members?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('members-table-body');
+                tbody.innerHTML = ''; // Clear the table body
+                data.members.forEach(member => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${member.firstname}</td>
+                        <td>${member.lastname}</td>
+                        <td>${member.email}</td>
+                        <td>${member.phone}</td>
+                    `;
+                    row.dataset.memberId = member.id; // Store the member ID
+                    row.addEventListener('click', () => {
+                        window.location.href = `/admin/edit_member/${member.id}`;
+                    });
+                    tbody.appendChild(row);
+                });
+            });
+    });
+</script>
 {% endblock %}

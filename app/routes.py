@@ -100,6 +100,7 @@ def search_members():
     return {
         "members": [
             {
+                "id": member.id,  # Include the ID field
                 "firstname": member.firstname,
                 "lastname": member.lastname,
                 "phone": member.phone,
@@ -116,38 +117,36 @@ def admin_dashboard():
     return render_template('admin_dashboard.html', title='Admin Dashboard')
 
 
-@app.route('/admin/manage_members')
+@app.route('/admin/manage_members', methods=['GET'])
 @admin_required
 def manage_members():
-    members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
-    return render_template('manage_members.html', members=members, menu_items=app.config['MENU_ITEMS'])
+    return render_template('manage_members.html', title='Manage Members', menu_items=app.config['MENU_ITEMS'])
 
 
-@app.route('/admin/update_member/<int:member_id>', methods=['POST'])
+@app.route('/admin/edit_member/<int:member_id>', methods=['GET', 'POST'])
 @admin_required
-def update_member(member_id):
+def edit_member(member_id):
     member = db.session.get(Member, member_id)
     if not member:
         abort(404)
-    member.username = request.form['username']
-    member.firstname = request.form['firstname']
-    member.lastname = request.form['lastname']
-    member.email = request.form['email']
-    member.phone = request.form['phone']
-    member.is_admin = 'is_admin' in request.form
-    db.session.commit()
-    flash('Member updated successfully', 'success')
-    return redirect(url_for('manage_members'))
 
+    if request.method == 'POST':
+        if 'update' in request.form:
+            # Update member details
+            member.username = request.form['username']
+            member.firstname = request.form['firstname']
+            member.lastname = request.form['lastname']
+            member.email = request.form['email']
+            member.phone = request.form['phone']
+            member.is_admin = 'is_admin' in request.form
+            db.session.commit()
+            flash('Member updated successfully', 'success')
+            return redirect(url_for('manage_members'))
+        elif 'delete' in request.form:
+            # Delete the member
+            db.session.delete(member)
+            db.session.commit()
+            flash('Member deleted successfully', 'success')
+            return redirect(url_for('manage_members'))
 
-@app.route('/admin/delete_member/<int:member_id>', methods=['GET'])
-@admin_required
-def delete_member(member_id):
-    member = db.session.get(Member, member_id)
-    if not member:
-        abort(404)
-    db.session.delete(member)
-    db.session.commit()
-    flash('Member deleted successfully', 'success')
-    return redirect(url_for('manage_members'))
-
+    return render_template('edit_member.html', member=member)
