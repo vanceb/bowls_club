@@ -28,3 +28,7 @@ class Config:
                                                     {'name': 'Subitem 4', 'link': 'index'},
                                                     {'name': 'Subitem 5', 'link': 'index'}]},
 ]
+    # A List holding the contents of the Admin menu
+    ADMIN_MENU_ITEMS = [
+        {"name": "Manage Members", "link": "manage_members"}
+]

@@ -25,7 +25,7 @@ def admin_required(f):
 @app.route("/index")
 @login_required
 def index():
-    return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'])
+    return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -74,14 +74,14 @@ def add_member():
         return redirect(url_for('login'))  # Redirect to the homepage or another page
     if form.errors:
         flash(f'There are errors in your application.  Please review your application and try again.', 'danger')
-    return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'])
+    return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/members')
 @login_required
 def members():
     members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
-    return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'])
+    return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/search_members', methods=['GET'])
@@ -114,13 +114,13 @@ def search_members():
 @app.route('/admin')
 @admin_required
 def admin_dashboard():
-    return render_template('admin_dashboard.html', title='Admin Dashboard')
+    return render_template('admin_dashboard.html', title='Admin Dashboard', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/admin/manage_members', methods=['GET'])
 @admin_required
 def manage_members():
-    return render_template('manage_members.html', title='Manage Members', menu_items=app.config['MENU_ITEMS'])
+    return render_template('manage_members.html', title='Manage Members', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/admin/edit_member/<int:member_id>', methods=['GET', 'POST'])
@@ -152,4 +152,4 @@ def edit_member(member_id):
             flash('Member deleted successfully', 'success')
             return redirect(url_for('manage_members'))
 
-    return render_template('edit_member.html', form=form, member=member)
+    return render_template('edit_member.html', form=form, member=member, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])

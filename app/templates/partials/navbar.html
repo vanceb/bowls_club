@@ -15,56 +15,67 @@
     </a>
   </div>
 
-<!-- Menu sits right of the brand, but collapses on small screens -->
-<!-- See javascript at the bottom of this file for the collapse code --> 
+  <!-- Menu sits right of the brand, but collapses on small screens -->
+  <!-- See javascript at the bottom of this file for the collapse code --> 
   <div id="navbar-menu" class="navbar-menu">
     <div class="navbar-start">
 
-  <!-- Create the menu items -->
-{% for item in menu_items %}
-  {% if item.submenu %}
-      <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link">
-    {{ item.name }}
-        </a>
-        <div class="navbar-dropdown">
-    {% for subitem in item.submenu %}
-          <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
-    {% endfor %}
-        </div>
-      </div>
-  {% else %}
-        <a class="navbar-item" href="{{ url_for(item.link) }}">
-    {{ item.name }}
-        </a>
-  {% endif %}
-{% endfor %}
+      <!-- Create the menu items -->
+      {% for item in menu_items %}
+        {% if item.submenu %}
+          <div class="navbar-item has-dropdown is-hoverable">
+            <a class="navbar-link">
+              {{ item.name }}
+            </a>
+            <div class="navbar-dropdown">
+              {% for subitem in item.submenu %}
+                <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <a class="navbar-item" href="{{ url_for(item.link) }}">
+            {{ item.name }}
+          </a>
+        {% endif %}
+      {% endfor %}
 
-<!-- Add a Login / Logout item to the end of the menu -->
-{% if current_user.is_anonymous %}
+      <!-- Add a Login / Logout item to the end of the menu -->
+      {% if current_user.is_anonymous %}
         <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
-{% else %}
+      {% else %}
         <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.firstname }}</a>
-{% endif %}
+      {% endif %}
+    </div>
+
+    <!-- navbar-end sits to the right -->
+    <div class="navbar-end">
+      {% if current_user.is_authenticated and current_user.is_admin %}
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link">
+            Admin
+          </a>
+          <div class="navbar-dropdown is-right">
+            {% for admin_item in admin_menu_items %}
+              <a href="{{ url_for(admin_item.link) }}" class="navbar-item">{{ admin_item.name }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
     </div>
   </div>
-
-  <!-- navbar-end sits to the right -->
-  <div class="navbar-end">
-
-  </div>
 </nav>
-  
-  <!-- javascript to handle the expanding and collapsing of the navbar elements -->
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
+
+<!-- javascript to handle the expanding and collapsing of the navbar elements -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
 
     // Get all "navbar-burger" elements
     const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
 
     // Add a click event on each of them
-    $navbarBurgers.forEach( el => {
-    el.addEventListener('click', () => {
+    $navbarBurgers.forEach(el => {
+      el.addEventListener('click', () => {
 
         // Get the target from the "data-target" attribute
         const target = el.dataset.target;
@@ -74,8 +85,8 @@
         el.classList.toggle('is-active');
         $target.classList.toggle('is-active');
 
-    });
+      });
     });
 
-    });
-  </script>
+  });
+</script>
