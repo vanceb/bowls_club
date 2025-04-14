@@ -1,6 +1,6 @@
 from flask import render_template, flash, redirect, url_for, request, abort
 from app import app, db
-from app.forms import LoginForm, MemberForm
+from app.forms import LoginForm, MemberForm, EditMemberForm
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
@@ -130,23 +130,26 @@ def edit_member(member_id):
     if not member:
         abort(404)
 
-    if request.method == 'POST':
-        if 'update' in request.form:
+    form = EditMemberForm(obj=member)
+    form.member_id = member.id  # Pass the member ID to the form for validation
+
+    if form.validate_on_submit():
+        if form.submit_update.data:
             # Update member details
-            member.username = request.form['username']
-            member.firstname = request.form['firstname']
-            member.lastname = request.form['lastname']
-            member.email = request.form['email']
-            member.phone = request.form['phone']
-            member.is_admin = 'is_admin' in request.form
+            member.username = form.username.data
+            member.firstname = form.firstname.data
+            member.lastname = form.lastname.data
+            member.email = form.email.data
+            member.phone = form.phone.data
+            member.is_admin = form.is_admin.data
             db.session.commit()
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))
-        elif 'delete' in request.form:
+        elif form.submit_delete.data:
             # Delete the member
             db.session.delete(member)
             db.session.commit()
             flash('Member deleted successfully', 'success')
             return redirect(url_for('manage_members'))
 
-    return render_template('edit_member.html', member=member)
+    return render_template('edit_member.html', form=form, member=member)

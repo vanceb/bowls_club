@@ -4,52 +4,69 @@
 <h1 class="title">Edit Member</h1>
 
 <form method="POST">
+    {{ form.hidden_tag() }}
+
     <div class="field">
-        <label class="label">Username</label>
+        {{ form.username.label(class="label") }}
         <div class="control">
-            <input class="input" type="text" name="username" value="{{ member.username }}" required>
+            {{ form.username(class="input") }}
+            {% for error in form.username.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="field">
-        <label class="label">First Name</label>
+        {{ form.firstname.label(class="label") }}
         <div class="control">
-            <input class="input" type="text" name="firstname" value="{{ member.firstname }}" required>
+            {{ form.firstname(class="input") }}
+            {% for error in form.firstname.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="field">
-        <label class="label">Last Name</label>
+        {{ form.lastname.label(class="label") }}
         <div class="control">
-            <input class="input" type="text" name="lastname" value="{{ member.lastname }}" required>
+            {{ form.lastname(class="input") }}
+            {% for error in form.lastname.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="field">
-        <label class="label">Email</label>
+        {{ form.email.label(class="label") }}
         <div class="control">
-            <input class="input" type="email" name="email" value="{{ member.email }}" required>
+            {{ form.email(class="input") }}
+            {% for error in form.email.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="field">
-        <label class="label">Phone</label>
+        {{ form.phone.label(class="label") }}
         <div class="control">
-            <input class="input" type="text" name="phone" value="{{ member.phone }}" required>
+            {{ form.phone(class="input") }}
+            {% for error in form.phone.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
         </div>
     </div>
 
     <div class="field">
         <label class="checkbox">
-            <input type="checkbox" name="is_admin" {% if member.is_admin %}checked{% endif %}>
-            Is Admin
+            {{ form.is_admin }}
+            {{ form.is_admin.label.text }}
         </label>
     </div>
 
     <div class="buttons">
         <a class="button is-light" href="{{ url_for('manage_members') }}">Cancel</a>
-        <button class="button is-primary" type="submit" name="update">Update</button>
-        <button class="button is-danger" type="submit" name="delete">Delete</button>
+        {{ form.submit_update(class="button is-primary") }}
+        {{ form.submit_delete(class="button is-danger") }}
     </div>
 </form>
 {% endblock %}

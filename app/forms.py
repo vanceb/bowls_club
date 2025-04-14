@@ -32,3 +32,23 @@ class MemberForm(FlaskForm):
             Member.email == email.data))
         if user is not None:
             raise ValidationError('Please use a different email address.')
+
+class EditMemberForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(max=64)])
+    firstname = StringField('First Name', validators=[DataRequired(), Length(max=64)])
+    lastname = StringField('Last Name', validators=[DataRequired(), Length(max=64)])
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
+    phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
+    is_admin = BooleanField('Is Admin')
+    submit_update = SubmitField('Update')
+    submit_delete = SubmitField('Delete')
+
+    def validate_username(self, username):
+        user = db.session.scalar(sa.select(Member).where(Member.username == username.data))
+        if user is not None and user.id != self.member_id:
+            raise ValidationError('That username is not available. Please use a different username.')
+
+    def validate_email(self, email):
+        user = db.session.scalar(sa.select(Member).where(Member.email == email.data))
+        if user is not None and user.id != self.member_id:
+            raise ValidationError('Please use a different email address.')
