@@ -134,6 +134,13 @@ def edit_member(member_id):
     form.member_id = member.id  # Pass the member ID to the form for validation
 
     if form.validate_on_submit():
+        # Check if the member is an admin and ensure there are at least 2 admins
+        admin_count = db.session.scalar(sa.select(sa.func.count()).where(Member.is_admin == True))
+        
+        if member.is_admin and admin_count < 2:
+            flash('You are attempting to update or delete the last admin user.  You must make someone else an admin before you do this', 'danger')
+            return redirect(url_for('edit_member', member_id=member.id))
+
         if form.submit_update.data:
             # Update member details
             member.username = form.username.data
