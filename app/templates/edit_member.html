@@ -66,7 +66,54 @@
     <div class="buttons">
         <a class="button is-light" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}
-        {{ form.submit_delete(class="button is-danger") }}
+        <button type="button" class="button is-danger" id="delete-button">Delete</button>
     </div>
 </form>
+
+<!-- Confirm Delete Modal -->
+<div class="modal" id="confirm-delete-modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Confirm Delete - {{ member.firstname }} {{ member.lastname }} ({{ member.email }})</p>
+            <button class="delete" aria-label="close" id="close-modal"></button>
+        </header>
+        <section class="modal-card-body">
+            <p>Are you sure you want to delete?</p>
+            <p>This action cannot be undone!</p>
+        </section>
+        <footer class="modal-card-foot">
+            <div class="buttons">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    {{ form.submit_delete(class="button is-danger") }}
+                </form>
+                <button class="button" id="cancel-modal">Cancel</button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<script>
+    // Get modal elements
+    const deleteButton = document.getElementById('delete-button');
+    const modal = document.getElementById('confirm-delete-modal');
+    const closeModal = document.getElementById('close-modal');
+    const cancelModal = document.getElementById('cancel-modal');
+
+    // Show the modal when the delete button is clicked
+    deleteButton.addEventListener('click', () => {
+        modal.classList.add('is-active');
+    });
+
+    // Close the modal when the close or cancel button is clicked
+    closeModal.addEventListener('click', () => {
+        modal.classList.remove('is-active');
+    });
+
+    cancelModal.addEventListener('click', (event) => {
+        event.preventDefault();
+        modal.classList.remove('is-active');
+    });
+</script>
 {% endblock %}
