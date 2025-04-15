@@ -31,6 +31,19 @@
             <p class="help is-danger is-size-6">{{ error }}</p>
             {% endfor %}
         </div>
+
+        <div class="field">
+            {{ form.gender.label(class="label") }}
+            <div class="control">
+                <div class="select is-fullwidth">
+                    {{ form.gender(class="input") }}
+                </div>
+            </div>
+            {% for error in form.gender.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
         <div class="field">
             <label class="label">{{ form.email.label }}</label>
             <div class="control">

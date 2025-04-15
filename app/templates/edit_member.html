@@ -35,6 +35,18 @@
             {% endfor %}
         </div>
     </div>
+    
+    <div class="field">
+        {{ form.gender.label(class="label") }}
+        <div class="control">
+            <div class="select is-fullwidth">
+                {{ form.gender(class="input") }}
+            </div>
+        </div>
+        {% for error in form.gender.errors %}
+            <p class="help is-danger">{{ error }}</p>
+        {% endfor %}
+    </div>
 
     <div class="field">
         {{ form.email.label(class="label") }}
@@ -64,7 +76,7 @@
     </div>
 
     <div class="buttons">
-        <a class="button is-light" href="{{ url_for('manage_members') }}">Cancel</a>
+        <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}
         <button type="button" class="button is-danger" id="delete-button">Delete</button>
     </div>
