@@ -54,3 +54,12 @@ class EditMemberForm(FlaskForm):
         user = db.session.scalar(sa.select(Member).where(Member.email == email.data))
         if user is not None and user.id != self.member_id:
             raise ValidationError('Please use a different email address.')
+        
+class RequestResetForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Request Password Reset')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
+    submit = SubmitField('Reset Password')

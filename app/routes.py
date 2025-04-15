@@ -1,12 +1,14 @@
 from flask import render_template, flash, redirect, url_for, request, abort
 from app import app, db
-from app.forms import LoginForm, MemberForm, EditMemberForm
+
+from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash
 from app.models import Member
 from functools import wraps
+from app.utils import generate_reset_token, verify_reset_token, send_reset_email
 
 # Create an @admin_required decorator to protect admin routes
 # This decorator checks if the current user is authenticated and is an admin
@@ -160,3 +162,43 @@ def edit_member(member_id):
             return redirect(url_for('manage_members'))
 
     return render_template('edit_member.html', form=form, member=member, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+# Password Reset Routes
+@app.route('/reset_password', methods=['GET', 'POST'])
+def pw_reset_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    form = RequestResetForm()
+    if form.validate_on_submit():
+        user = db.session.scalar(sa.select(Member).where(Member.email == form.email.data))
+        if user:
+            token = generate_reset_token(user.email)
+            reset_url = url_for('pw_reset', token=token, _external=True)
+            send_reset_email(user.email, reset_url)
+
+        # If the email is not found, we still want to inform the user
+        # without revealing whether the email exists in the database
+        flash('If that email address is registered, you will receive an email with instructions to reset your password.', 'info')
+
+        return redirect(url_for('login'))
+    return render_template('pw_reset_request.html', form=form)
+
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def pw_reset(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    email = verify_reset_token(token)
+    if not email:
+        flash('That is an invalid or expired token.', 'danger')
+        return redirect(url_for('pw_reset_request'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user = db.session.scalar(sa.select(Member).where(Member.email == email))
+        if user:
+            user.set_password(form.password.data)
+            db.session.commit()
+            flash('Your password has been updated!', 'success')
+            return redirect(url_for('login'))
+    return render_template('pw_reset.html', form=form)
