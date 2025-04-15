@@ -19,6 +19,8 @@
             <th>Last Name</th>
             <th>Email</th>
             <th>Phone</th>
+            <th>Gender</th> <!-- Add Gender column -->
+            <th>Status</th> <!-- Add Status column -->
         </tr>
     </thead>
     <tbody id="members-table-body">
@@ -41,6 +43,8 @@
                         <td>${member.lastname}</td>
                         <td>${member.email}</td>
                         <td>${member.phone}</td>
+                        <td>${member.gender}</td> <!-- Add Gender -->
+                        <td>${member.status}</td> <!-- Add Status -->
                     `;
                     row.dataset.memberId = member.id; // Store the member ID
                     row.addEventListener('click', () => {

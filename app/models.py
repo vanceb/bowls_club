@@ -19,6 +19,9 @@ class Member(UserMixin, db.Model):
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
     is_admin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
     gender: so.Mapped[str] = so.mapped_column(sa.String(10), default="Male")  # New field
+    status: so.Mapped[str] = so.mapped_column(
+        sa.String(16), default="Pending", nullable=False
+    )  # New field
 
     def __repr__(self):
         return '<User {}>'.format(self.username)

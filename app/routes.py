@@ -37,9 +37,13 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = db.session.scalar(
-            sa.select(Member).where(Member.username == form.username.data))
+            sa.select(Member).where(Member.username == form.username.data)
+        )
         if user is None or not user.check_password(form.password.data):
             flash('Invalid username or password')
+            return redirect(url_for('login'))
+        if user.status in ['Pending', 'Suspended']:  # Restrict login
+            flash('Your account is not active. Please contact the administrator.')
             return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         next_page = request.args.get('next')
@@ -67,7 +71,8 @@ def add_member():
             lastname=form.lastname.data,
             email=form.email.data,
             phone=form.phone.data,
-            password_hash=generate_password_hash(form.password.data)
+            password_hash=generate_password_hash(form.password.data),
+            status="Pending"  # Set default status
         )
         # Add to the database
         db.session.add(new_member)
@@ -75,7 +80,7 @@ def add_member():
         flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
         return redirect(url_for('login'))  # Redirect to the homepage or another page
     if form.errors:
-        flash(f'There are errors in your application.  Please review your application and try again.', 'danger')
+        flash(f'There are errors in your application. Please review your application and try again.', 'danger')
     return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
@@ -92,21 +97,26 @@ def search_members():
     query = request.args.get('q', '').strip()
     if query:
         members = db.session.scalars(
-            sa.select(Member)
-            .where(Member.firstname.ilike(f'%{query}%') | Member.lastname.ilike(f'%{query}%'))
-            .order_by(Member.firstname)
+            sa.select(Member).where(
+                sa.or_(
+                    Member.firstname.ilike(f"%{query}%"),
+                    Member.lastname.ilike(f"%{query}%")
+                )
+            ).order_by(Member.firstname)
         ).all()
     else:
         members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
-    
+
     return {
         "members": [
             {
-                "id": member.id,  # Include the ID field
+                "id": member.id,
                 "firstname": member.firstname,
                 "lastname": member.lastname,
+                "email": member.email,
                 "phone": member.phone,
-                "email": member.email
+                "gender": member.gender,  # Include gender
+                "status": member.status   # Include status
             }
             for member in members
         ]
@@ -122,7 +132,14 @@ def admin_dashboard():
 @app.route('/admin/manage_members', methods=['GET'])
 @admin_required
 def manage_members():
-    return render_template('manage_members.html', title='Manage Members', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
+    return render_template(
+        'manage_members.html',
+        title='Manage Members',
+        members=members,  # Pass the members list to the template
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
 
 
 @app.route('/admin/edit_member/<int:member_id>', methods=['GET', 'POST'])
@@ -133,16 +150,9 @@ def edit_member(member_id):
         abort(404)
 
     form = EditMemberForm(obj=member)
-    form.member_id = member.id  # Pass the member ID to the form for validation
+    form.member_id.data = member.id  # Set the member_id field
 
     if form.validate_on_submit():
-        # Check if the member is an admin and ensure there are at least 2 admins
-        admin_count = db.session.scalar(sa.select(sa.func.count()).where(Member.is_admin == True))
-        
-        if member.is_admin and admin_count < 2:
-            flash('You are attempting to update or delete the last admin user.  You must make someone else an admin before you do this', 'danger')
-            return redirect(url_for('edit_member', member_id=member.id))
-
         if form.submit_update.data:
             # Update member details
             member.username = form.username.data
@@ -151,6 +161,8 @@ def edit_member(member_id):
             member.email = form.email.data
             member.phone = form.phone.data
             member.is_admin = form.is_admin.data
+            member.gender = form.gender.data  # Update gender
+            member.status = form.status.data  # Update status
             db.session.commit()
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))

@@ -5,6 +5,7 @@
 
 <form method="POST">
     {{ form.hidden_tag() }}
+    {{ form.member_id }}  <!-- Add this line to include the hidden member_id field -->
 
     <div class="field">
         {{ form.username.label(class="label") }}
@@ -66,6 +67,18 @@
                 <p class="help is-danger">{{ error }}</p>
             {% endfor %}
         </div>
+    </div>
+
+    <div class="field">
+        {{ form.status.label(class="label") }}
+        <div class="control">
+            <div class="select is-fullwidth">
+                {{ form.status(class="input") }}
+            </div>
+        </div>
+        {% for error in form.status.errors %}
+            <p class="help is-danger">{{ error }}</p>
+        {% endfor %}
     </div>
 
     <div class="field">
