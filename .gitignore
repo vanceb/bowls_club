@@ -62,3 +62,6 @@ secrets.conf
 
 # Uploads folder
 uploads/
+
+# Flask Env
+.flaskenv
