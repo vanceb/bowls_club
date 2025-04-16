@@ -1,4 +1,4 @@
-from flask import render_template, flash, redirect, url_for, request, abort
+from flask import render_template, flash, redirect, url_for, request, abort, jsonify
 from app import app, db
 
 from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm
@@ -6,7 +6,7 @@ from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash
-from app.models import Member
+from app.models import Member, Role
 from functools import wraps
 from app.utils import generate_reset_token, verify_reset_token, send_reset_email
 
@@ -95,32 +95,30 @@ def members():
 @login_required
 def search_members():
     query = request.args.get('q', '').strip()
-    if query:
-        members = db.session.scalars(
-            sa.select(Member).where(
-                sa.or_(
-                    Member.firstname.ilike(f"%{query}%"),
-                    Member.lastname.ilike(f"%{query}%")
-                )
-            ).order_by(Member.firstname)
-        ).all()
-    else:
-        members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
+    # Search by first name, last name, or username
+    members = Member.query.filter(
+        (Member.firstname.ilike(f'%{query}%')) |
+        (Member.lastname.ilike(f'%{query}%')) |
+        (Member.email.ilike(f'%{query}%'))
+    ).all()
 
-    return {
-        "members": [
+    # Return JSON response with all member details, including roles
+    return jsonify({
+        'members': [
             {
-                "id": member.id,
-                "firstname": member.firstname,
-                "lastname": member.lastname,
-                "email": member.email,
-                "phone": member.phone,
-                "gender": member.gender,  # Include gender
-                "status": member.status   # Include status
+                'id': member.id,
+                'firstname': member.firstname,
+                'lastname': member.lastname,
+                'username': member.username,
+                'email': member.email,
+                'phone': member.phone,
+                'gender': member.gender,
+                'status': member.status,
+                'roles': [{'id': role.id, 'name': role.name} for role in member.roles]  # Include roles
             }
             for member in members
         ]
-    }
+    })
 
 
 @app.route('/admin')
@@ -152,6 +150,24 @@ def edit_member(member_id):
     form = EditMemberForm(obj=member)
     form.member_id.data = member.id  # Set the member_id field
 
+    # Fetch all roles for the roles section
+    roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
+    form.roles.choices = [(role.id, role.name) for role in roles]  # Populate roles field
+
+    # Pre-select member's roles for GET requests
+    if request.method == 'GET':
+        form.roles.data = [role.id for role in member.roles]
+
+    # Normalize the submitted data for the roles field
+    if request.method == 'POST':
+        raw_roles = request.form.getlist('roles')  # Always returns a list
+        print("Raw roles field data:", raw_roles)  # Debugging
+        form.roles.data = [int(role_id) for role_id in raw_roles]  # Convert to integers
+
+    print("Form data received:", request.form)
+    print("Roles field choices:", form.roles.choices)
+    print("Roles field data (selected):", form.roles.data)
+
     if form.validate_on_submit():
         if form.submit_update.data:
             # Update member details
@@ -163,6 +179,20 @@ def edit_member(member_id):
             member.is_admin = form.is_admin.data
             member.gender = form.gender.data  # Update gender
             member.status = form.status.data  # Update status
+
+            # Update roles
+            selected_role_ids = form.roles.data  # Get selected roles from the form
+            print("Selected role IDs:", selected_role_ids)  # Debugging
+            selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
+            member.roles = selected_roles  # Update the member's roles
+#DEBUG
+            print("Selected role IDs:", selected_role_ids)
+            print("Updated member roles:", member.roles)
+            print("Form validation status:", form.validate_on_submit())
+            print("Form errors:", form.errors)
+            print("Raw roles field data:", request.form.getlist('roles'))
+            print("Form data attribute:", form.data)
+            
             db.session.commit()
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))
@@ -173,7 +203,67 @@ def edit_member(member_id):
             flash('Member deleted successfully', 'success')
             return redirect(url_for('manage_members'))
 
-    return render_template('edit_member.html', form=form, member=member, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    return render_template(
+        'edit_member.html',
+        form=form,
+        member=member,
+        roles=roles,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
+
+
+@app.route('/admin/manage_roles', methods=['GET', 'POST'])
+@admin_required
+def manage_roles():
+    roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        role_id = request.form.get('role_id')
+        role_name = request.form.get('role_name', '').strip()
+
+        if action == 'create' and role_name:
+            # Create a new role
+            if db.session.scalar(sa.select(Role).where(Role.name == role_name)):
+                flash('Role already exists.', 'danger')
+            else:
+                new_role = Role(name=role_name)
+                db.session.add(new_role)
+                db.session.commit()
+                flash('Role created successfully.', 'success')
+
+        elif action == 'rename' and role_id and role_name:
+            # Rename an existing role
+            role = db.session.get(Role, int(role_id))
+            if role:
+                if db.session.scalar(sa.select(Role).where(Role.name == role_name)):
+                    flash('A role with this name already exists.', 'danger')
+                else:
+                    role.name = role_name
+                    db.session.commit()
+                    flash('Role renamed successfully.', 'success')
+            else:
+                flash('Role not found.', 'danger')
+
+        elif action == 'delete' and role_id:
+            # Delete an existing role
+            role = db.session.get(Role, int(role_id))
+            if role:
+                db.session.delete(role)
+                db.session.commit()
+                flash('Role deleted successfully.', 'success')
+            else:
+                flash('Role not found.', 'danger')
+
+        return redirect(url_for('manage_roles'))
+
+    return render_template(
+        'manage_roles.html',
+        roles=roles,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
 
 
 # Password Reset Routes

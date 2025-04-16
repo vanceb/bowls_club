@@ -1,5 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField
+from wtforms.widgets import CheckboxInput, ListWidget
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional
 import sqlalchemy as sa
 from app import db
@@ -42,7 +43,7 @@ class EditMemberForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
     is_admin = BooleanField('Is Admin')
-    gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])  # Removed default
+    gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
     status = SelectField(
         'Status',
         choices=[
@@ -52,6 +53,13 @@ class EditMemberForm(FlaskForm):
             ('Suspended', 'Suspended'),
             ('Life', 'Life')
         ]
+    )
+    # Add roles field
+    roles = SelectMultipleField(
+        'Roles',
+        coerce=int,  # Ensure role IDs are converted to integers
+        option_widget=CheckboxInput(),
+        widget=ListWidget(prefix_label=False)
     )
     submit_update = SubmitField('Update')
     submit_delete = SubmitField('Delete')

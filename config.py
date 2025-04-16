@@ -31,5 +31,6 @@ class Config:
 ]
     # A List holding the contents of the Admin menu
     ADMIN_MENU_ITEMS = [
-        {"name": "Manage Members", "link": "manage_members"}
+        {"name": "Manage Members", "link": "manage_members"},
+        {"name": "Manage Roles", "link": "manage_roles"}
 ]

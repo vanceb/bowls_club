@@ -7,7 +7,7 @@
     <div class="field">
         <label class="label is-size-5">Search Members</label>
         <div class="control">
-            <input id="search-input" class="input" type="text" placeholder="Search by first or last name">
+            <input id="search-input" class="input" type="text" placeholder="Search by first or last name" autofocus>
         </div>
     </div>
 </div>
@@ -19,8 +19,9 @@
             <th>Last Name</th>
             <th>Email</th>
             <th>Phone</th>
-            <th>Gender</th> <!-- Add Gender column -->
-            <th>Status</th> <!-- Add Status column -->
+            <th>Gender</th>
+            <th>Status</th>
+            <th>Roles</th>
         </tr>
     </thead>
     <tbody id="members-table-body">
@@ -38,13 +39,15 @@
                 tbody.innerHTML = ''; // Clear the table body
                 data.members.forEach(member => {
                     const row = document.createElement('tr');
+                    const roles = member.roles.map(role => role.name).join(', '); // Combine role names
                     row.innerHTML = `
                         <td>${member.firstname}</td>
                         <td>${member.lastname}</td>
                         <td>${member.email}</td>
                         <td>${member.phone}</td>
-                        <td>${member.gender}</td> <!-- Add Gender -->
-                        <td>${member.status}</td> <!-- Add Status -->
+                        <td>${member.gender}</td>
+                        <td>${member.status}</td>
+                        <td>${roles}</td>
                     `;
                     row.dataset.memberId = member.id; // Store the member ID
                     row.addEventListener('click', () => {

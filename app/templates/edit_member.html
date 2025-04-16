@@ -5,7 +5,7 @@
 
 <form method="POST">
     {{ form.hidden_tag() }}
-    {{ form.member_id }}  <!-- Add this line to include the hidden member_id field -->
+    {{ form.member_id }}  <!-- Include the hidden member_id field -->
 
     <div class="field">
         {{ form.username.label(class="label") }}
@@ -86,6 +86,21 @@
             {{ form.is_admin }}
             {{ form.is_admin.label.text }}
         </label>
+    </div>
+
+    <!-- Roles Section -->
+    <div class="field">
+        {{ form.roles.label(class="label") }}
+        <div class="control">
+            {% for subfield in form.roles %}
+            <label class="checkbox">
+                {{ subfield }} {{ subfield.label.text }}
+            </label>
+            {% endfor %}
+        </div>
+        {% for error in form.roles.errors %}
+            <p class="help is-danger">{{ error }}</p>
+        {% endfor %}
     </div>
 
     <div class="buttons">
