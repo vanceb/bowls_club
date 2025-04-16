@@ -25,6 +25,7 @@ class Config:
     {'name': 'Members', 'link': 'members'},
     {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
                                                     {'name': 'Subitem 2', 'link': 'index'},
+                                                    None,
                                                     {'name': 'Subitem 3', 'link': 'index'},
                                                     {'name': 'Subitem 4', 'link': 'index'},
                                                     {'name': 'Subitem 5', 'link': 'index'}]},
@@ -32,5 +33,6 @@ class Config:
     # A List holding the contents of the Admin menu
     ADMIN_MENU_ITEMS = [
         {"name": "Manage Members", "link": "manage_members"},
+        None,
         {"name": "Manage Roles", "link": "manage_roles"}
 ]
