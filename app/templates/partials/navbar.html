@@ -29,7 +29,11 @@
             </a>
             <div class="navbar-dropdown">
               {% for subitem in item.submenu %}
-                <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
+                {% if subitem is none %}
+                  <hr class="navbar-divider">
+                {% else %}
+                  <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
+                {% endif %}
               {% endfor %}
             </div>
           </div>
@@ -57,7 +61,11 @@
           </a>
           <div class="navbar-dropdown is-right">
             {% for admin_item in admin_menu_items %}
-              <a href="{{ url_for(admin_item.link) }}" class="navbar-item">{{ admin_item.name }}</a>
+              {% if admin_item is none %}
+                <hr class="navbar-divider">
+              {% else %}
+                <a href="{{ url_for(admin_item.link) }}" class="navbar-item">{{ admin_item.name }}</a>
+              {% endif %}
             {% endfor %}
           </div>
         </div>
