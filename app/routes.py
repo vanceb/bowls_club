@@ -164,10 +164,6 @@ def edit_member(member_id):
         print("Raw roles field data:", raw_roles)  # Debugging
         form.roles.data = [int(role_id) for role_id in raw_roles]  # Convert to integers
 
-    print("Form data received:", request.form)
-    print("Roles field choices:", form.roles.choices)
-    print("Roles field data (selected):", form.roles.data)
-
     if form.validate_on_submit():
         if form.submit_update.data:
             # Update member details
@@ -185,14 +181,7 @@ def edit_member(member_id):
             print("Selected role IDs:", selected_role_ids)  # Debugging
             selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
             member.roles = selected_roles  # Update the member's roles
-#DEBUG
-            print("Selected role IDs:", selected_role_ids)
-            print("Updated member roles:", member.roles)
-            print("Form validation status:", form.validate_on_submit())
-            print("Form errors:", form.errors)
-            print("Raw roles field data:", request.form.getlist('roles'))
-            print("Form data attribute:", form.data)
-            
+           
             db.session.commit()
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))
