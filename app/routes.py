@@ -1,14 +1,18 @@
-from flask import render_template, flash, redirect, url_for, request, abort, jsonify
+from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
 from app import app, db
 
-from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm
+from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm, WritePostForm
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash
-from app.models import Member, Role
+from app.models import Member, Role, Post
 from functools import wraps
-from app.utils import generate_reset_token, verify_reset_token, send_reset_email
+from app.utils import generate_reset_token, verify_reset_token, send_reset_email, sanitize_filename
+from datetime import datetime, timedelta, date
+import os
+from markdown2 import markdown
+
 
 # Decorator to restrict access to admin-only routes
 def admin_required(f):
@@ -328,3 +332,74 @@ def pw_reset(token):
             flash('Your password has been updated!', 'success')
             return redirect(url_for('login'))
     return render_template('pw_reset.html', form=form)
+
+
+@app.route('/admin/write_post', methods=['GET', 'POST'])
+@admin_required
+def write_post():
+    """
+    Route: Write Post
+    - Allows admins to create a new post.
+    """
+    form = WritePostForm()
+
+    # Set default values for the form fields
+    if request.method == 'GET':
+        form.publish_on.data = date.today()  # Assign a datetime.date object
+        form.expires_on.data = date.today() + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30))
+
+    if form.validate_on_submit():
+        # Determine the value of the pin field based on pin_until
+        pin = bool(form.pin_until.data)
+
+        # Generate filenames
+        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
+        safe_title = sanitize_filename(form.title.data)[:31]
+        markdown_filename = f"{timestamp}_{safe_title}.md"
+        html_filename = f"{timestamp}_{safe_title}.html"
+
+        # Save metadata to the database
+        post = Post(
+            title=form.title.data,
+            summary=form.summary.data,
+            publish_on=form.publish_on.data,
+            expires_on=form.expires_on.data,
+            pin=pin,
+            pin_until=form.pin_until.data,
+            tags=form.tags.data,
+            author_id=current_user.id,
+            markdown_filename=markdown_filename,
+            html_filename=html_filename
+        )
+        db.session.add(post)
+        db.session.commit()
+
+        # Save content as a Markdown file
+        post_dir = os.path.join(current_app.static_folder, 'posts')
+        os.makedirs(post_dir, exist_ok=True)
+        markdown_path = os.path.join(post_dir, markdown_filename)
+        html_path = os.path.join(post_dir, html_filename)
+
+        metadata = f"""---
+title: {post.title}
+summary: {post.summary}
+publish_on: {post.publish_on}
+expires_on: {post.expires_on}
+pin: {post.pin}
+pin_until: {post.pin_until}
+tags: {post.tags}
+author: {current_user.username}
+---
+"""
+        with open(markdown_path, 'w') as md_file:
+            md_file.write(metadata + '\n' + form.content.data)
+
+        # Convert Markdown to HTML and save
+        html_content = markdown(form.content.data, extras=["tables"])
+        with open(html_path, 'w') as html_file:
+            html_file.write(html_content)
+
+        flash('Post created successfully!', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('write_post.html', form=form)

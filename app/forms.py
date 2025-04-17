@@ -1,10 +1,12 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField, TextAreaField, DateField
 from wtforms.widgets import CheckboxInput, ListWidget
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional
 import sqlalchemy as sa
 from app import db
 from app.models import Member
+from datetime import date, timedelta
+from flask import current_app
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -73,3 +75,18 @@ class ResetPasswordForm(FlaskForm):
     password = PasswordField('New Password', validators=[DataRequired()])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
+
+class WritePostForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired(), Length(max=255)])
+    summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=200)])
+    publish_on = DateField('Publish On', default=date.today, validators=[DataRequired()])
+    expires_on = DateField(
+        'Expires On',
+        default=lambda: date.today() + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30)),
+        validators=[DataRequired()]
+    )
+    pin = BooleanField('Pin')
+    pin_until = DateField('Pin Until', validators=[Optional()])
+    tags = StringField('Tags', validators=[Optional(), Length(max=255)])
+    content = TextAreaField('Content', validators=[DataRequired()])
+    submit = SubmitField('Submit')

@@ -34,6 +34,8 @@ class Config:
     # Using None to create a separator
     ADMIN_MENU_ITEMS = [
         {"name": "Manage Members", "link": "manage_members"},
+        None, 
+        {"name": "Write Post", "link": "write_post"},
         None,
         {"name": "Manage Roles", "link": "manage_roles"}
 ]

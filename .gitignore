@@ -65,3 +65,6 @@ uploads/
 
 # Flask Env
 .flaskenv
+
+# Posts folder
+posts/

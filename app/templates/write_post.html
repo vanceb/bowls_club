@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+        <h1 class="title">Write a New Post</h1>
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="field">
+                <label class="label">{{ form.title.label }}</label>
+                <div class="control">
+                    {{ form.title(class="input") }}
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">{{ form.summary.label }}</label>
+                <div class="control">
+                    {{ form.summary(class="textarea") }}
+                </div>
+            </div>
+            <div class="field-body">    
+                <div class="field">
+                    <label class="label">{{ form.publish_on.label }}</label>
+                    <div class="control">
+                        {{ form.publish_on(class="input", type="date") }}
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label">{{ form.expires_on.label }}</label>
+                    <div class="control">
+                        {{ form.expires_on(class="input", type="date") }}
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="label">{{ form.pin_until.label }}</label>
+                    <div class="control">
+                        {{ form.pin_until(class="input", type="date") }}
+                    </div>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label">{{ form.tags.label }}</label>
+                <div class="control">
+                    {{ form.tags(class="input") }}
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">{{ form.content.label }}</label>
+                <div class="control">
+                    {{ form.content(class="textarea", rows=10) }}
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="control">
+                    <button type="submit" class="button is-primary">Submit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+<div id="locale-display"></div>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const browserLocale = navigator.language || navigator.userLanguage;
+        document.getElementById('locale-display').textContent = `Your browser locale is: ${browserLocale}`;
+    });
+</script>
+{% endblock %}

@@ -27,6 +27,7 @@ class Role(db.Model):
         return f"<Role {self.name}>"
 
 class Member(UserMixin, db.Model):
+    __tablename__ = 'member'
     id: so.Mapped[int] = so.mapped_column(primary_key=True)
     username: so.Mapped[str] = so.mapped_column(sa.String(64), index=True,
                                                 unique=True)
@@ -57,4 +58,24 @@ def load_user(id):
     return db.session.get(Member, int(id))
 
 Role.members = relationship('Member', secondary=member_roles, back_populates='roles')
+
+class Post(db.Model):
+    __tablename__ = 'posts'
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    title: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    summary: so.Mapped[str] = so.mapped_column(sa.String(200), nullable=False)
+    publish_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
+    expires_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
+    pin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
+    pin_until: so.Mapped[Optional[date]] = so.mapped_column(sa.Date, nullable=True)
+    tags: so.Mapped[Optional[str]] = so.mapped_column(sa.String(255), nullable=True)
+    author_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
+    markdown_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    html_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+
+    author: so.Mapped['Member'] = so.relationship('Member', back_populates='posts')
+
+# Add the back_populates relationship to the Member class
+Member.posts = so.relationship('Post', back_populates='author')
 
