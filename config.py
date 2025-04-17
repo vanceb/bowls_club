@@ -31,6 +31,7 @@ class Config:
                                                     {'name': 'Subitem 5', 'link': 'index'}]},
 ]
     # A List holding the contents of the Admin menu
+    # Using None to create a separator
     ADMIN_MENU_ITEMS = [
         {"name": "Manage Members", "link": "manage_members"},
         None,

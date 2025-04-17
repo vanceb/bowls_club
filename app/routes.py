@@ -10,11 +10,13 @@ from app.models import Member, Role
 from functools import wraps
 from app.utils import generate_reset_token, verify_reset_token, send_reset_email
 
-# Create an @admin_required decorator to protect admin routes
-# This decorator checks if the current user is authenticated and is an admin
-# If not, it aborts the request with a 403 Forbidden status
-# This decorator can be used to protect any route that requires admin access
+# Decorator to restrict access to admin-only routes
 def admin_required(f):
+    """
+    Decorator to restrict access to admin-only routes.
+    - Checks if the current user is authenticated and has admin privileges.
+    - Aborts with a 403 status if the user is not authorized.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
@@ -27,11 +29,21 @@ def admin_required(f):
 @app.route("/index")
 @login_required
 def index():
+    """
+    Route: Home page
+    - Displays the main dashboard for logged-in users.
+    - Requires login.
+    """
     return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """
+    Route: Login page
+    - Handles user login with username and password.
+    - Redirects authenticated users to the home page.
+    """
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = LoginForm()
@@ -87,6 +99,11 @@ def add_member():
 @app.route('/members')
 @login_required
 def members():
+    """
+    Route: Members page
+    - Displays a list of all members sorted by their first name.
+    - Requires login.
+    """
     members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
     return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
@@ -94,15 +111,19 @@ def members():
 @app.route('/search_members', methods=['GET'])
 @login_required
 def search_members():
+    """
+    Route: Search Members
+    - Allows searching for members by first name, last name, or email.
+    - Returns a JSON response with member details, including roles.
+    - Requires login.
+    """
     query = request.args.get('q', '').strip()
-    # Search by first name, last name, or username
     members = Member.query.filter(
         (Member.firstname.ilike(f'%{query}%')) |
         (Member.lastname.ilike(f'%{query}%')) |
         (Member.email.ilike(f'%{query}%'))
     ).all()
 
-    # Return JSON response with all member details, including roles
     return jsonify({
         'members': [
             {
@@ -114,27 +135,27 @@ def search_members():
                 'phone': member.phone,
                 'gender': member.gender,
                 'status': member.status,
-                'roles': [{'id': role.id, 'name': role.name} for role in member.roles]  # Include roles
+                'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
             }
             for member in members
         ]
     })
 
 
-@app.route('/admin')
-@admin_required
-def admin_dashboard():
-    return render_template('admin_dashboard.html', title='Admin Dashboard', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
-
 
 @app.route('/admin/manage_members', methods=['GET'])
 @admin_required
 def manage_members():
+    """
+    Route: Manage Members
+    - Displays a list of all members for administrative management.
+    - Requires admin privileges.
+    """
     members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
     return render_template(
         'manage_members.html',
         title='Manage Members',
-        members=members,  # Pass the members list to the template
+        members=members,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
@@ -143,16 +164,22 @@ def manage_members():
 @app.route('/admin/edit_member/<int:member_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_member(member_id):
+    """
+    Route: Edit Member
+    - Allows admins to edit or delete a member's details.
+    - Fetches the member by ID and pre-populates the form with their details.
+    - Updates member details or deletes the member based on the form submission.
+    - Requires admin privileges.
+    """
     member = db.session.get(Member, member_id)
     if not member:
         abort(404)
 
     form = EditMemberForm(obj=member)
-    form.member_id.data = member.id  # Set the member_id field
+    form.member_id.data = member.id
 
-    # Fetch all roles for the roles section
     roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
-    form.roles.choices = [(role.id, role.name) for role in roles]  # Populate roles field
+    form.roles.choices = [(role.id, role.name) for role in roles]
 
     # Pre-select member's roles for GET requests
     if request.method == 'GET':
@@ -160,28 +187,24 @@ def edit_member(member_id):
 
     # Normalize the submitted data for the roles field
     if request.method == 'POST':
-        raw_roles = request.form.getlist('roles')  # Always returns a list
-        print("Raw roles field data:", raw_roles)  # Debugging
-        form.roles.data = [int(role_id) for role_id in raw_roles]  # Convert to integers
+        raw_roles = request.form.getlist('roles')
+        form.roles.data = [int(role_id) for role_id in raw_roles]
 
     if form.validate_on_submit():
         if form.submit_update.data:
-            # Update member details
             member.username = form.username.data
             member.firstname = form.firstname.data
             member.lastname = form.lastname.data
             member.email = form.email.data
             member.phone = form.phone.data
             member.is_admin = form.is_admin.data
-            member.gender = form.gender.data  # Update gender
-            member.status = form.status.data  # Update status
+            member.gender = form.gender.data
+            member.status = form.status.data
 
-            # Update roles
-            selected_role_ids = form.roles.data  # Get selected roles from the form
-            print("Selected role IDs:", selected_role_ids)  # Debugging
+            selected_role_ids = form.roles.data
             selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
-            member.roles = selected_roles  # Update the member's roles
-           
+            member.roles = selected_roles
+
             db.session.commit()
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))
@@ -205,6 +228,12 @@ def edit_member(member_id):
 @app.route('/admin/manage_roles', methods=['GET', 'POST'])
 @admin_required
 def manage_roles():
+    """
+    Route: Manage Roles
+    - Allows admins to create, rename, or delete roles.
+    - Displays a list of all roles.
+    - Requires admin privileges.
+    """
     roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
 
     if request.method == 'POST':
@@ -255,9 +284,13 @@ def manage_roles():
     )
 
 
-# Password Reset Routes
 @app.route('/reset_password', methods=['GET', 'POST'])
 def pw_reset_request():
+    """
+    Route: Password Reset Request
+    - Allows users to request a password reset by providing their email.
+    - Sends a reset email with a token if the email is registered.
+    """
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = RequestResetForm()
@@ -268,16 +301,18 @@ def pw_reset_request():
             reset_url = url_for('pw_reset', token=token, _external=True)
             send_reset_email(user.email, reset_url)
 
-        # If the email is not found, we still want to inform the user
-        # without revealing whether the email exists in the database
         flash('If that email address is registered, you will receive an email with instructions to reset your password.', 'info')
-
         return redirect(url_for('login'))
     return render_template('pw_reset_request.html', form=form)
 
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def pw_reset(token):
+    """
+    Route: Password Reset
+    - Allows users to reset their password using a valid token.
+    - Verifies the token and updates the user's password.
+    """
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     email = verify_reset_token(token)
