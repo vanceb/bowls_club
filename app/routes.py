@@ -402,4 +402,4 @@ author: {current_user.username}
         flash('Post created successfully!', 'success')
         return redirect(url_for('index'))
 
-    return render_template('write_post.html', form=form)
+    return render_template('write_post.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
