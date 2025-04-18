@@ -64,11 +64,4 @@
         </form>
     </div>
 </section>
-<div id="locale-display"></div>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const browserLocale = navigator.language || navigator.userLanguage;
-        document.getElementById('locale-display').textContent = `Your browser locale is: ${browserLocale}`;
-    });
-</script>
 {% endblock %}
