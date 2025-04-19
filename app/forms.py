@@ -85,7 +85,6 @@ class WritePostForm(FlaskForm):
         default=lambda: date.today() + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30)),
         validators=[DataRequired()]
     )
-    pin = BooleanField('Pin')
     pin_until = DateField('Pin Until', validators=[Optional()])
     tags = StringField('Tags', validators=[Optional(), Length(max=255)])
     content = TextAreaField('Content', validators=[DataRequired()])

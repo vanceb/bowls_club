@@ -45,14 +45,13 @@ def index():
 
     # Fetch pinned posts
     pinned_posts_query = sa.select(Post).where(
-        Post.pin == True,
-        Post.pin_until >= today
+        Post.pin_until >= today  # A post is pinned if pin_until is in the future
     ).order_by(Post.publish_on.desc())
     pinned_posts = db.session.scalars(pinned_posts_query).all()
 
     # Fetch non-pinned posts
     non_pinned_posts_query = sa.select(Post).where(
-        Post.pin == False,
+        sa.or_(Post.pin_until < today, Post.pin_until == None),  # Not pinned
         Post.publish_on <= today,
         Post.expires_on >= today
     ).order_by(Post.publish_on.desc())
@@ -60,7 +59,7 @@ def index():
 
     # Pagination for non-pinned posts
     page = request.args.get(get_page_parameter(), type=int, default=1)
-    per_page = 5  # Number of posts per page
+    per_page = 5
     start = (page - 1) * per_page
     end = start + per_page
     paginated_non_pinned_posts = non_pinned_posts[start:end]
@@ -73,7 +72,7 @@ def index():
         pinned_posts=pinned_posts,
         non_pinned_posts=paginated_non_pinned_posts,
         pagination=pagination,
-        current_page=page,  # Pass the current page number
+        current_page=page,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
@@ -412,13 +411,10 @@ def write_post():
 
     # Set default values for the form fields
     if request.method == 'GET':
-        form.publish_on.data = date.today()  # Assign a datetime.date object
+        form.publish_on.data = date.today()
         form.expires_on.data = date.today() + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30))
 
     if form.validate_on_submit():
-        # Determine the value of the pin field based on pin_until
-        pin = bool(form.pin_until.data)
-
         # Generate filenames
         timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
         safe_title = sanitize_filename(form.title.data)[:31]
@@ -431,7 +427,6 @@ def write_post():
             summary=form.summary.data,
             publish_on=form.publish_on.data,
             expires_on=form.expires_on.data,
-            pin=pin,
             pin_until=form.pin_until.data,
             tags=form.tags.data,
             author_id=current_user.id,
@@ -452,7 +447,6 @@ title: {post.title}
 summary: {post.summary}
 publish_on: {post.publish_on}
 expires_on: {post.expires_on}
-pin: {post.pin}
 pin_until: {post.pin_until}
 tags: {post.tags}
 author: {current_user.username}
@@ -507,7 +501,9 @@ def manage_posts():
         'manage_posts.html',
         title='Manage Posts',
         posts=posts,
-        today=today
+        today=today,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS'],
     )
 
 
@@ -540,7 +536,6 @@ def edit_post(post_id):
         summary=post.summary,
         publish_on=post.publish_on,
         expires_on=post.expires_on,
-        pin=post.pin,
         pin_until=post.pin_until,
         content=content
     )
@@ -551,7 +546,6 @@ def edit_post(post_id):
         post.summary = form.summary.data
         post.publish_on = form.publish_on.data
         post.expires_on = form.expires_on.data
-        post.pin = form.pin.data
         post.pin_until = form.pin_until.data
 
         # Update the markdown file
@@ -560,7 +554,6 @@ title: {form.title.data}
 summary: {form.summary.data}
 publish_on: {form.publish_on.data}
 expires_on: {form.expires_on.data}
-pin: {form.pin.data}
 pin_until: {form.pin_until.data}
 tags: {post.tags}
 author: {post.author_id}
@@ -579,5 +572,7 @@ author: {post.author_id}
     return render_template(
         'write_post.html',
         title='Edit Post',
-        form=form
+        form=form,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS'],
     )

@@ -66,7 +66,6 @@ class Post(db.Model):
     summary: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
     publish_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     expires_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
-    pin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
     pin_until: so.Mapped[Optional[date]] = so.mapped_column(sa.Date, nullable=True)
     tags: so.Mapped[Optional[str]] = so.mapped_column(sa.String(255), nullable=True)
     author_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
