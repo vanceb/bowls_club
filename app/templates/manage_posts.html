@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Posts{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="container">
+        <h1 class="title">Manage Posts</h1>
+
+        <form method="POST" id="manage-posts-form">
+            <table class="table is-fullwidth is-striped">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="select-all"></th>
+                        <th>Title</th>
+                        <th>Expires On</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for post in posts %}
+                    <tr data-post-id="{{ post.id }}">
+                        <td><input type="checkbox" name="post_ids" value="{{ post.id }}" class="post-checkbox" data-expires-on="{{ post.expires_on }}"></td>
+                        <td><a href="{{ url_for('edit_post', post_id=post.id) }}">{{ post.title }}</a></td>
+                        <td>{{ post.expires_on }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="buttons">
+                <button type="button" class="button is-warning" id="select-expired">Select Expired</button>
+                <button type="submit" class="button is-danger">Delete Checked</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script>
+    document.getElementById('select-expired').addEventListener('click', function() {
+        const today = new Date('{{ today }}');
+        document.querySelectorAll('.post-checkbox').forEach(checkbox => {
+            const expiresOn = new Date(checkbox.dataset.expiresOn);
+            if (expiresOn < today) {
+                checkbox.checked = true;
+            }
+        });
+    });
+
+    document.getElementById('select-all').addEventListener('change', function() {
+        const isChecked = this.checked;
+        document.querySelectorAll('.post-checkbox').forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+    });
+</script>
+{% endblock %}

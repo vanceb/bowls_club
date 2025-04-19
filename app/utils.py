@@ -45,6 +45,31 @@ def render_markdown_with_metadata(markdown_path):
     html_content = markdown2.markdown(markdown_content, extras=["tables"])
     return metadata, html_content
 
+def parse_metadata_from_markdown(markdown_content):
+    """
+    Parses metadata and content from a Markdown file with YAML front matter.
+
+    Args:
+        markdown_content (str): The content of the Markdown file as a string.
+
+    Returns:
+        tuple: A dictionary containing the metadata and a string containing the Markdown content.
+    """
+    # Check if the content starts with YAML front matter
+    if markdown_content.startswith('---'):
+        parts = markdown_content.split('---', 2)
+        if len(parts) >= 3:
+            metadata = yaml.safe_load(parts[1])  # Parse YAML metadata
+            content = parts[2].strip()  # The remaining Markdown content
+        else:
+            metadata = {}
+            content = markdown_content.strip()
+    else:
+        metadata = {}
+        content = markdown_content.strip()
+
+    return metadata, content
+
 def sanitize_filename(filename):
     # Replace unsafe characters with an underscore
     sanitized = re.sub(r'[^\w\-_\.]', '_', filename)

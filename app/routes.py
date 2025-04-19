@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, date
 import os
 from markdown2 import markdown
 from flask_paginate import Pagination, get_page_parameter
+from app.utils import parse_metadata_from_markdown
+import shutil
 
 
 # Decorator to restrict access to admin-only routes
@@ -468,3 +470,114 @@ author: {current_user.username}
         return redirect(url_for('index'))
 
     return render_template('write_post.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/manage_posts', methods=['GET', 'POST'])
+@login_required
+def manage_posts():
+    """
+    Route: Manage Posts
+    - Displays a list of posts with checkboxes and metadata.
+    - Handles deletion of selected posts.
+    """
+    today = date.today()
+    posts_query = sa.select(Post).order_by(Post.expires_on.asc())
+    posts = db.session.scalars(posts_query).all()
+
+    if request.method == 'POST':
+        # Handle deletion of selected posts
+        post_ids = request.form.getlist('post_ids')
+        for post_id in post_ids:
+            post = db.session.get(Post, post_id)
+            if post:
+                # Move markdown file to archive folder
+                post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
+                archive_path = os.path.join(current_app.static_folder, 'archive', post.html_filename)
+                if os.path.exists(post_path):
+                    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
+                    shutil.move(post_path, archive_path)
+
+                # Delete post from database
+                db.session.delete(post)
+        db.session.commit()
+        flash(f"{len(post_ids)} post(s) deleted successfully!", "success")
+        return redirect(url_for('manage_posts'))
+
+    return render_template(
+        'manage_posts.html',
+        title='Manage Posts',
+        posts=posts,
+        today=today
+    )
+
+
+@app.route('/edit_post/<int:post_id>', methods=['GET', 'POST'])
+@login_required
+def edit_post(post_id):
+    """
+    Route: Edit Post
+    - Loads post metadata and content for editing.
+    - Reuses the write_post.html template.
+    """
+    post = db.session.get(Post, post_id)
+    if not post:
+        abort(404)
+
+    # Load the post content from the markdown file
+    post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
+    if not os.path.exists(post_path):
+        abort(404)
+
+    with open(post_path, 'r') as file:
+        markdown_content = file.read()
+
+    # Parse metadata and content
+    metadata, content = parse_metadata_from_markdown(markdown_content)
+
+    # Prepopulate the form with post data
+    form = WritePostForm(
+        title=post.title,
+        summary=post.summary,
+        publish_on=post.publish_on,
+        expires_on=post.expires_on,
+        pin=post.pin,
+        pin_until=post.pin_until,
+        content=content
+    )
+
+    if form.validate_on_submit():
+        # Update the post metadata
+        post.title = form.title.data
+        post.summary = form.summary.data
+        post.publish_on = form.publish_on.data
+        post.expires_on = form.expires_on.data
+        post.pin = form.pin.data
+        post.pin_until = form.pin_until.data
+
+        # Update the markdown file
+        updated_markdown = f"""---
+title: {form.title.data}
+summary: {form.summary.data}
+publish_on: {form.publish_on.data}
+expires_on: {form.expires_on.data}
+pin: {form.pin.data}
+pin_until: {form.pin_until.data}
+tags: {post.tags}
+author: {post.author_id}
+---
+
+{form.content.data}
+"""
+        with open(post_path, 'w') as file:
+            file.write(updated_markdown)
+
+        # Save changes to the database
+        db.session.commit()
+        flash("Post updated successfully!", "success")
+        return redirect(url_for('manage_posts'))
+
+    return render_template(
+        'write_post.html',
+        title='Edit Post',
+        form=form
+    )

@@ -36,6 +36,7 @@ class Config:
         {"name": "Manage Members", "link": "manage_members"},
         None, 
         {"name": "Write Post", "link": "write_post"},
+        {"name": "Manage Posts", "link": "manage_posts"},
         None,
         {"name": "Manage Roles", "link": "manage_roles"}
 ]

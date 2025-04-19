@@ -94,9 +94,12 @@
                 {% endif %}
             </div>
 
-            <div class="field">
+            <div class="field is-grouped">
                 <div class="control">
-                    <button type="submit" class="button is-primary">Submit</button>
+                    <button type="submit" class="button is-primary">Save</button>
+                </div>
+                <div class="control">
+                    <a href="{{ url_for('manage_posts') }}" class="button is-light">Cancel</a>
                 </div>
             </div>
         </form>
