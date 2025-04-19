@@ -1,0 +1,14 @@
+{# templates/view_post.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">{{ post.title }}</h1>
+    <p class="subtitle">Published on {{ post.publish_on }}</p>
+    <div class="content">
+        {{ post_content|safe }}
+    </div>
+</div>
+{% endblock %}

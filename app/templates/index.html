@@ -4,22 +4,30 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-    <h1 class="title">Welcome, {{ current_user.firstname }}</h1>
-    <div class="content">
-        <p class="mb-4">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nulla accumsan, 
-            metus ultrices eleifend gravida, nulla nunc varius lectus, nec rutrum 
-            justo nibh eu lectus.
-        </p>
-        <div class="card">
-            <div class="card-content">
-                <p class="title is-4">Featured Content</p>
-                <p>
-                    Proin ornare ligula eu tellus tempus elementum. Aenean bibendum 
-                    iaculis mi, nec blandit lacus interdum vitae. Vestibulum non nibh 
-                    risus, a scelerisque purus.
-                </p>
-            </div>
-        </div>
-    </div>
+<h1 class="title">Welcome, {{ current_user.firstname }}</h1>
+
+<!-- Pinned Posts -->
+{% if pinned_posts %}
+<div class="box">
+    <h2 class="title is-4">Important</h2>
+    <ul>
+        {% for post in pinned_posts %}
+            {% include 'partials/post_item.html' %}
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- Non-Pinned Posts -->
+<h2 class="title is-4">News</h2>
+<ul>
+    {% for post in non_pinned_posts %}
+        {% include 'partials/post_item.html' %}
+    {% endfor %}
+</ul>
+
+<!-- Pagination -->
+<div class="pagination">
+    {{ pagination.links }}
+</div>
 {% endblock %}

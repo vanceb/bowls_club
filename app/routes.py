@@ -12,6 +12,7 @@ from app.utils import generate_reset_token, verify_reset_token, send_reset_email
 from datetime import datetime, timedelta, date
 import os
 from markdown2 import markdown
+from flask_paginate import Pagination, get_page_parameter
 
 
 # Decorator to restrict access to admin-only routes
@@ -35,10 +36,73 @@ def admin_required(f):
 def index():
     """
     Route: Home page
-    - Displays the main dashboard for logged-in users.
+    - Displays pinned and non-pinned posts with pagination.
     - Requires login.
     """
-    return render_template('index.html', title='Home', menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    today = date.today()
+
+    # Fetch pinned posts
+    pinned_posts_query = sa.select(Post).where(
+        Post.pin == True,
+        Post.pin_until >= today
+    ).order_by(Post.publish_on.desc())
+    pinned_posts = db.session.scalars(pinned_posts_query).all()
+
+    # Fetch non-pinned posts
+    non_pinned_posts_query = sa.select(Post).where(
+        Post.pin == False,
+        Post.publish_on <= today,
+        Post.expires_on >= today
+    ).order_by(Post.publish_on.desc())
+    non_pinned_posts = db.session.scalars(non_pinned_posts_query).all()
+
+    # Pagination for non-pinned posts
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    per_page = 5  # Number of posts per page
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_non_pinned_posts = non_pinned_posts[start:end]
+
+    pagination = Pagination(page=page, total=len(non_pinned_posts), per_page=per_page, css_framework='bulma')
+
+    return render_template(
+        'index.html',
+        title='Home',
+        pinned_posts=pinned_posts,
+        non_pinned_posts=paginated_non_pinned_posts,
+        pagination=pagination,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
+
+
+@app.route("/post/<int:post_id>")
+@login_required
+def view_post(post_id):
+    """
+    Route: View Post
+    - Displays the content of a specific post.
+    - Requires login.
+    """
+    post = db.session.get(Post, post_id)
+    if not post:
+        abort(404)
+
+    # Load the HTML content from the static/posts directory
+    post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
+    if not os.path.exists(post_path):
+        abort(404)
+
+    with open(post_path, 'r') as file:
+        post_content = file.read()
+
+    return render_template(
+        'view_post.html',
+        post=post,
+        post_content=post_content,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
