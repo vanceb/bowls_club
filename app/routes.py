@@ -71,6 +71,7 @@ def index():
         pinned_posts=pinned_posts,
         non_pinned_posts=paginated_non_pinned_posts,
         pagination=pagination,
+        current_page=page,  # Pass the current page number
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
