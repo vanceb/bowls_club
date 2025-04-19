@@ -78,7 +78,7 @@ class ResetPasswordForm(FlaskForm):
 
 class WritePostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=255)])
-    summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=200)])
+    summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=255)])
     publish_on = DateField('Publish On', default=date.today, validators=[DataRequired()])
     expires_on = DateField(
         'Expires On',

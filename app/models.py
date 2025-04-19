@@ -63,7 +63,7 @@ class Post(db.Model):
     __tablename__ = 'posts'
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     title: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
-    summary: so.Mapped[str] = so.mapped_column(sa.String(200), nullable=False)
+    summary: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
     publish_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     expires_on: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     pin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
