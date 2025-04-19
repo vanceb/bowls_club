@@ -40,3 +40,6 @@ class Config:
         None,
         {"name": "Manage Roles", "link": "manage_roles"}
 ]
+    
+    POSTS_PER_PAGE = 10 # Number of posts to display per page
+    POST_EXPIRATION_DAYS = 30 # Default number of days before a post expires   

@@ -59,7 +59,7 @@ def index():
 
     # Pagination for non-pinned posts
     page = request.args.get(get_page_parameter(), type=int, default=1)
-    per_page = 5
+    per_page = current_app.config.get('POSTS_PER_PAGE', 5)  # Use the config value
     start = (page - 1) * per_page
     end = start + per_page
     paginated_non_pinned_posts = non_pinned_posts[start:end]
