@@ -520,11 +520,11 @@ def edit_post(post_id):
         abort(404)
 
     # Load the post content from the markdown file
-    post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
-    if not os.path.exists(post_path):
+    markdown_path = os.path.join(current_app.static_folder, 'posts', post.markdown_filename)
+    if not os.path.exists(markdown_path):
         abort(404)
 
-    with open(post_path, 'r') as file:
+    with open(markdown_path, 'r') as file:
         markdown_content = file.read()
 
     # Parse metadata and content
@@ -561,7 +561,7 @@ author: {post.author_id}
 
 {form.content.data}
 """
-        with open(post_path, 'w') as file:
+        with open(markdown_path, 'w') as file:
             file.write(updated_markdown)
 
         # Save changes to the database
