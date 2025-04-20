@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField, TextAreaField, DateField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField, TextAreaField, DateField, IntegerField
 from wtforms.widgets import CheckboxInput, ListWidget
-from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional
+from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional, NumberRange
 import sqlalchemy as sa
 from app import db
 from app.models import Member
@@ -89,3 +89,28 @@ class WritePostForm(FlaskForm):
     tags = StringField('Tags', validators=[Optional(), Length(max=255)])
     content = TextAreaField('Content', validators=[DataRequired()])
     submit = SubmitField('Submit')
+
+class BookingForm(FlaskForm):
+    booking_date = DateField('Booking Date', validators=[DataRequired()])
+    session = SelectField(
+        'Session',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[DataRequired()]
+    )
+    rink = IntegerField(
+        'Rink',
+        validators=[DataRequired()]  # NumberRange will be added dynamically
+    )
+    priority = StringField('Priority', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Submit')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate the session choices dynamically from the app config
+        self.session.choices = [
+            (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
+        ]
+        # Dynamically set the max value for the rink field
+        max_rinks = int(current_app.config.get('RINKS', 6))
+        self.rink.validators.append(NumberRange(min=1, max=max_rinks))

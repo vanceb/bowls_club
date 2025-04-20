@@ -78,3 +78,15 @@ class Post(db.Model):
 # Add the back_populates relationship to the Member class
 Member.posts = so.relationship('Post', back_populates='author')
 
+class Booking(db.Model):
+    __tablename__ = 'bookings'
+
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    booking_date: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
+    session: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    rink: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    priority: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
+
+    def __repr__(self):
+        return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink={self.rink}>"
+

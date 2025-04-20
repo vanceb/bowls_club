@@ -51,10 +51,10 @@ class Config:
     RINKS = 6
     # Define daily session periods
     DAILY_SESSIONS = {
-        1: {"start_time": "10:00", "end_time": "12:30"},
-        2: {"start_time": "12:30", "end_time": "15:00"},
-        3: {"start_time": "15:00", "end_time": "17:30"},
-        4: {"start_time": "17:30", "end_time": "20:00"}
+        1: "10:00 - 12:30",
+        2: "12:30 - 15:00",
+        3: "15:00 - 17:30",
+        4: "17:30 - 20:00"
     }
     EVENT_TYPES = {"County Competition": 1,
                     "Club Competition": 2,

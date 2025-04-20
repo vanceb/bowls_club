@@ -1,12 +1,12 @@
 from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
 from app import app, db
 
-from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm, WritePostForm
+from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm, WritePostForm, BookingForm
 from flask_login import current_user, login_user, logout_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from werkzeug.security import generate_password_hash
-from app.models import Member, Role, Post
+from app.models import Member, Role, Post, Booking
 from functools import wraps
 from app.utils import generate_reset_token, verify_reset_token, send_reset_email, sanitize_filename
 from datetime import datetime, timedelta, date
@@ -594,3 +594,26 @@ author: {post.author_id}
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS'],
     )
+
+
+@app.route('/admin/create_booking', methods=['GET', 'POST'])
+@admin_required
+def create_booking():
+    """
+    Route: Create Booking
+    - Allows users to create a new booking.
+    - Requires login.
+    """
+    form = BookingForm()
+    if form.validate_on_submit():
+        booking = Booking(
+            booking_date=form.booking_date.data,
+            session=form.session.data,
+            rink=form.rink.data,
+            priority=form.priority.data
+        )
+        db.session.add(booking)
+        db.session.commit()
+        flash('Booking created successfully!', 'success')
+        return redirect(url_for('create_booking'))
+    return render_template('booking_form.html', form=form)
