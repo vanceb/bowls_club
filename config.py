@@ -19,6 +19,7 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
     ADMINS = ['your-email@example.com']
 
+# Menus
     # A structure holding the menu for the site
     MENU_ITEMS = [
     {'name': 'Home', 'link': 'index'},
@@ -40,6 +41,25 @@ class Config:
         None,
         {"name": "Manage Roles", "link": "manage_roles"}
 ]
-    
+
+# Config options relating to Posts    
     POSTS_PER_PAGE = 10 # Number of posts to display per page
     POST_EXPIRATION_DAYS = 30 # Default number of days before a post expires   
+
+    # Config options relating to bookings and competitions, etc
+    # Number of rinks
+    RINKS = 6
+    # Define daily session periods
+    DAILY_SESSIONS = {
+        1: {"start_time": "10:00", "end_time": "12:30"},
+        2: {"start_time": "12:30", "end_time": "15:00"},
+        3: {"start_time": "15:00", "end_time": "17:30"},
+        4: {"start_time": "17:30", "end_time": "20:00"}
+    }
+    EVENT_TYPES = {"County Competition": 1,
+                    "Club Competition": 2,
+                    "League": 3,
+                    "Friendly": 4,
+                    "Roll Up": 5,
+                    "Other": 6
+}
