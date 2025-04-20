@@ -547,6 +547,7 @@ def edit_post(post_id):
         publish_on=post.publish_on,
         expires_on=post.expires_on,
         pin_until=post.pin_until,
+        tags=post.tags,  # Ensure tags are included
         content=content
     )
 
@@ -557,6 +558,7 @@ def edit_post(post_id):
         post.publish_on = form.publish_on.data
         post.expires_on = form.expires_on.data
         post.pin_until = form.pin_until.data
+        post.tags = form.tags.data
 
         # Update the markdown file
         updated_markdown = f"""---
@@ -565,7 +567,7 @@ summary: {form.summary.data}
 publish_on: {form.publish_on.data}
 expires_on: {form.expires_on.data}
 pin_until: {form.pin_until.data}
-tags: {post.tags}
+tags: {form.tags.data}
 author: {post.author_id}
 ---
 
