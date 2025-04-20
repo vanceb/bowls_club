@@ -485,11 +485,21 @@ def manage_posts():
             post = db.session.get(Post, post_id)
             if post:
                 # Move markdown file to archive folder
-                post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
-                archive_path = os.path.join(current_app.static_folder, 'archive', post.html_filename)
-                if os.path.exists(post_path):
-                    os.makedirs(os.path.dirname(archive_path), exist_ok=True)
-                    shutil.move(post_path, archive_path)
+                markdown_path = os.path.join(current_app.static_folder, 'posts', post.markdown_filename)
+                html_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
+                archive_markdown_path = os.path.join(current_app.static_folder, 'archive', post.markdown_filename)
+                archive_html_path = os.path.join(current_app.static_folder, 'archive', post.html_filename)
+
+                # Ensure the archive directory exists
+                os.makedirs(os.path.dirname(archive_markdown_path), exist_ok=True)
+
+                # Move Markdown file if it exists
+                if os.path.exists(markdown_path):
+                    shutil.move(markdown_path, archive_markdown_path)
+
+                # Move HTML file if it exists
+                if os.path.exists(html_path):
+                    shutil.move(html_path, archive_html_path)
 
                 # Delete post from database
                 db.session.delete(post)
