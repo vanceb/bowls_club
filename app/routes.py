@@ -531,6 +531,7 @@ def edit_post(post_id):
 
     # Load the post content from the markdown file
     markdown_path = os.path.join(current_app.static_folder, 'posts', post.markdown_filename)
+    html_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
     if not os.path.exists(markdown_path):
         abort(404)
 
@@ -547,7 +548,7 @@ def edit_post(post_id):
         publish_on=post.publish_on,
         expires_on=post.expires_on,
         pin_until=post.pin_until,
-        tags=post.tags,  # Ensure tags are included
+        tags=post.tags,
         content=content
     )
 
@@ -575,6 +576,11 @@ author: {post.author_id}
 """
         with open(markdown_path, 'w') as file:
             file.write(updated_markdown)
+
+        # Convert the updated Markdown to HTML and overwrite the HTML file
+        updated_html = markdown(form.content.data, extras=["tables"])
+        with open(html_path, 'w') as file:
+            file.write(updated_html)
 
         # Save changes to the database
         db.session.commit()
