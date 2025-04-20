@@ -40,7 +40,9 @@ class Config:
         {"name": "Write Post", "link": "write_post"},
         {"name": "Manage Posts", "link": "manage_posts"},
         None,
-        {"name": "Manage Roles", "link": "manage_roles"}
+        {"name": "Manage Roles", "link": "manage_roles"},
+        None,
+        {"name": "Test Create Booking", "link": "create_booking"},
 ]
 
 # Config options relating to Posts    
