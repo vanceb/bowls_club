@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Bookings</h1>
+    <div class="field">
+        <label class="label">Select Date</label>
+        <div class="control">
+            <input id="booking-date" class="input" type="date" value="{{ today }}">
+        </div>
+    </div>
+    <div id="bookings-table-container">
+        <!-- Table will be dynamically loaded here -->
+    </div>
+</div>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Get today's date from the server-rendered value
+        const dateInput = document.getElementById('booking-date');
+        const today = dateInput.value;
+
+        // Fetch bookings for today's date when the page loads
+        fetchBookings(today);
+
+        // Add event listener for date changes
+        dateInput.addEventListener('change', function () {
+            fetchBookings(this.value);
+        });
+    });
+
+    function fetchBookings(selectedDate) {
+        fetch(`/get_bookings/${selectedDate}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Data received from server:", data); // Debugging
+                const tableContainer = document.getElementById('bookings-table-container');
+                tableContainer.innerHTML = buildTable(data.bookings, data.rinks, data.sessions);
+            })
+            .catch(error => console.error("Error fetching bookings:", error)); // Debugging
+    }
+
+    function buildTable(bookings, rinks, sessions) {
+        let table = '<table class="table is-bordered is-striped is-hoverable is-fullwidth">';
+        table += '<thead><tr><th>Session / Rink</th>';
+        for (let rink = 1; rink <= rinks; rink++) {
+            table += `<th>Rink ${rink}</th>`;
+        }
+        table += '</tr></thead><tbody>';
+
+        for (const [sessionId, sessionTime] of Object.entries(sessions)) {
+            table += `<tr><td>${sessionTime}</td>`;
+            for (let rink = 1; rink <= rinks; rink++) {
+                const isBooked = bookings.some(booking => booking.rink === rink && booking.session === parseInt(sessionId));
+                table += `<td class="${isBooked ? 'booked' : ''}"></td>`;
+            }
+            table += '</tr>';
+        }
+
+        table += '</tbody></table>';
+        return table;
+    }
+</script>
+{% endblock %}

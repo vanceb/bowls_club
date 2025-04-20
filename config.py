@@ -24,6 +24,7 @@ class Config:
     MENU_ITEMS = [
     {'name': 'Home', 'link': 'index'},
     {'name': 'Members', 'link': 'members'},
+    {'name': 'Bookings', 'link': 'bookings'},
     {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
                                                     {'name': 'Subitem 2', 'link': 'index'},
                                                     None,

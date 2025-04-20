@@ -616,4 +616,38 @@ def create_booking():
         db.session.commit()
         flash('Booking created successfully!', 'success')
         return redirect(url_for('create_booking'))
-    return render_template('booking_form.html', form=form)
+    return render_template('booking_form.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/bookings')
+@login_required
+def bookings():
+    """
+    Route: Bookings Table
+    - Renders the bookings table page.
+    """
+    return render_template('bookings_table.html', today=date.today().isoformat(), menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+@app.route('/get_bookings/<string:selected_date>')
+@login_required
+def get_bookings(selected_date):
+    """
+    Route: Get Bookings
+    - Returns bookings for a specific date in JSON format.
+    """
+    # Validate the date format
+    try:
+        selected_date = datetime.strptime(selected_date, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+    # Query bookings for the selected date
+    bookings_query = sa.select(Booking).where(Booking.booking_date == selected_date)
+    bookings = db.session.scalars(bookings_query).all()
+
+    # Prepare data for the table
+    bookings_data = [{'rink': booking.rink, 'session': booking.session} for booking in bookings]
+    rinks = current_app.config['RINKS']
+    sessions = current_app.config['DAILY_SESSIONS']
+
+    return jsonify({'bookings': bookings_data, 'rinks': rinks, 'sessions': sessions, 'menu_items': app.config['MENU_ITEMS'], 'admin_menu_items': app.config['ADMIN_MENU_ITEMS']})
