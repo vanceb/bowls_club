@@ -58,7 +58,7 @@
             table += `<tr><td>${sessionTime}</td>`;
             for (let rink = 1; rink <= rinks; rink++) {
                 const isBooked = bookings.some(booking => booking.rink === rink && booking.session === parseInt(sessionId));
-                table += `<td class="${isBooked ? 'booked' : ''}"></td>`;
+                table += `<td class="${isBooked ? 'has-background-primary' : ''}"></td>`;
             }
             table += '</tr>';
         }
