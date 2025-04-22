@@ -1,108 +1,106 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="section">
-    <div class="container">
-        <h1 class="title">Write or Edit Post</h1>
+<div class="container">
+    <h1 class="title">Write or Edit Post</h1>
 
-        <!-- Display general form errors -->
-        {% if form.errors %}
-        <div class="notification is-danger">
-            <strong>There were errors in your submission:</strong>
-            <ul>
-                {% for field, errors in form.errors.items() %}
-                    {% for error in errors %}
-                        <li>{{ field|capitalize }}: {{ error }}</li>
-                    {% endfor %}
+    <!-- Display general form errors -->
+    {% if form.errors %}
+    <div class="notification is-danger">
+        <strong>There were errors in your submission:</strong>
+        <ul>
+            {% for field, errors in form.errors.items() %}
+                {% for error in errors %}
+                    <li>{{ field|capitalize }}: {{ error }}</li>
                 {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-
-        <form method="POST">
-            {{ form.hidden_tag() }}
-            
-            <div class="field">
-                <label class="label">{{ form.title.label }}</label>
-                <div class="control">
-                    {{ form.title(class="input") }}
-                </div>
-                {% if form.title.errors %}
-                <p class="help is-danger">{{ form.title.errors[0] }}</p>
-                {% endif %}
-            </div>
-
-            <div class="field">
-                <label class="label">{{ form.summary.label }}</label>
-                <div class="control">
-                    {{ form.summary(class="textarea") }}
-                </div>
-                {% if form.summary.errors %}
-                <p class="help is-danger">{{ form.summary.errors[0] }}</p>
-                {% endif %}
-            </div>
-
-            <div class="field-body">    
-                <div class="field">
-                    <label class="label">{{ form.publish_on.label }}</label>
-                    <div class="control">
-                        {{ form.publish_on(class="input", type="date") }}
-                    </div>
-                    {% if form.publish_on.errors %}
-                    <p class="help is-danger">{{ form.publish_on.errors[0] }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="field">
-                    <label class="label">{{ form.expires_on.label }}</label>
-                    <div class="control">
-                        {{ form.expires_on(class="input", type="date") }}
-                    </div>
-                    {% if form.expires_on.errors %}
-                    <p class="help is-danger">{{ form.expires_on.errors[0] }}</p>
-                    {% endif %}
-                </div>
-
-                <div class="field">
-                    <label class="label">{{ form.pin_until.label }}</label>
-                    <div class="control">
-                        {{ form.pin_until(class="input", type="date") }}
-                    </div>
-                    {% if form.pin_until.errors %}
-                    <p class="help is-danger">{{ form.pin_until.errors[0] }}</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="field">
-                <label class="label">{{ form.tags.label }}</label>
-                <div class="control">
-                    {{ form.tags(class="input") }}
-                </div>
-                {% if form.tags.errors %}
-                <p class="help is-danger">{{ form.tags.errors[0] }}</p>
-                {% endif %}
-            </div>
-
-            <div class="field">
-                <label class="label">{{ form.content.label }}</label>
-                <div class="control">
-                    {{ form.content(class="textarea", rows=10) }}
-                </div>
-                {% if form.content.errors %}
-                <p class="help is-danger">{{ form.content.errors[0] }}</p>
-                {% endif %}
-            </div>
-
-            <div class="field is-grouped">
-                <div class="control">
-                    <button type="submit" class="button is-primary">Save</button>
-                </div>
-                <div class="control">
-                    <a href="{{ url_for('manage_posts') }}" class="button is-light">Cancel</a>
-                </div>
-            </div>
-        </form>
+            {% endfor %}
+        </ul>
     </div>
-</section>
+    {% endif %}
+
+    <form method="POST">
+        {{ form.hidden_tag() }}
+        
+        <div class="field">
+            <label class="label">{{ form.title.label }}</label>
+            <div class="control">
+                {{ form.title(class="input") }}
+            </div>
+            {% if form.title.errors %}
+            <p class="help is-danger">{{ form.title.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.summary.label }}</label>
+            <div class="control">
+                {{ form.summary(class="textarea") }}
+            </div>
+            {% if form.summary.errors %}
+            <p class="help is-danger">{{ form.summary.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <div class="field-body">    
+            <div class="field">
+                <label class="label">{{ form.publish_on.label }}</label>
+                <div class="control">
+                    {{ form.publish_on(class="input", type="date") }}
+                </div>
+                {% if form.publish_on.errors %}
+                <p class="help is-danger">{{ form.publish_on.errors[0] }}</p>
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <label class="label">{{ form.expires_on.label }}</label>
+                <div class="control">
+                    {{ form.expires_on(class="input", type="date") }}
+                </div>
+                {% if form.expires_on.errors %}
+                <p class="help is-danger">{{ form.expires_on.errors[0] }}</p>
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <label class="label">{{ form.pin_until.label }}</label>
+                <div class="control">
+                    {{ form.pin_until(class="input", type="date") }}
+                </div>
+                {% if form.pin_until.errors %}
+                <p class="help is-danger">{{ form.pin_until.errors[0] }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.tags.label }}</label>
+            <div class="control">
+                {{ form.tags(class="input") }}
+            </div>
+            {% if form.tags.errors %}
+            <p class="help is-danger">{{ form.tags.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.content.label }}</label>
+            <div class="control">
+                {{ form.content(class="textarea", rows=10) }}
+            </div>
+            {% if form.content.errors %}
+            <p class="help is-danger">{{ form.content.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <div class="field is-grouped">
+            <div class="control">
+                <button type="submit" class="button is-primary">Save</button>
+            </div>
+            <div class="control">
+                <a href="{{ url_for('manage_posts') }}" class="button is-light">Cancel</a>
+            </div>
+        </div>
+    </form>
+</div>
 {% endblock %}
