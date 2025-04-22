@@ -626,7 +626,7 @@ def bookings():
     Route: Bookings Table
     - Renders the bookings table page.
     """
-    return render_template('bookings_table.html', today=date.today().isoformat(), menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    return render_template('bookings_table.html', title="Bookings", today=date.today().isoformat(), menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 @app.route('/get_bookings/<string:selected_date>')
 @login_required

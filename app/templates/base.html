@@ -4,7 +4,10 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}Bowls Club{% endblock %}</title>
-
+        <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32x32.png') }}">
+        <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='images/favicon-16x16.png') }}">
+        <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/1.0.3/css/bulma.min.css" integrity="sha512-4EnjWdm80dyWrJ7rh/tlhNt6fJL52dSDSHNEqfdVmBLpJLPrRYnFa+Kn4ZZL+FRkDL5/7lAXuHylzJkpzkSM2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
         <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
         <script defer src="https://use.fontawesome.com/releases/v5.15.4/js/all.js"></script>
