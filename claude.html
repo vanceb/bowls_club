@@ -2,7 +2,7 @@
         <html>
         <head>
             <meta charset="UTF-8">
-            <title>AI Context for Bowls Club Project</title>
+            <title>Bowls Club Project &ndash; AI &amp; Claude Context</title>
             <style>
 /* From extension vscode.github */
 /*---------------------------------------------------------------------------------------------
@@ -138,24 +138,25 @@
         
         </head>
         <body class="vscode-body vscode-light">
-            <h1 id="ai-context-for-bowls-club-project">AI Context for Bowls Club Project</h1>
+            <h1 id="bowls-club-project--ai--claude-context">Bowls Club Project – AI &amp; Claude Context</h1>
 <h2 id="overview">Overview</h2>
-<p>This project is a Flask-based web application designed for managing a bowls club. It includes features for member management, role-based access control, and administrative tools.</p>
+<p>This project is a Flask-based web application designed for managing a bowls club. It includes features for member management, role-based access control, bookings, posts, and administrative tools.</p>
+<hr>
 <h2 id="technologies-and-libraries-used">Technologies and Libraries Used</h2>
 <h3 id="backend">Backend</h3>
 <ul>
-<li><strong>Flask</strong>: A lightweight WSGI web application framework.</li>
-<li><strong>Flask-SQLAlchemy</strong>: An ORM for managing database interactions.</li>
-<li><strong>Flask-Migrate</strong>: For handling database migrations using Alembic.</li>
-<li><strong>Flask-Login</strong>: For user session management and authentication.</li>
-<li><strong>Flask-WTF</strong>: For form handling and CSRF protection.</li>
-<li><strong>SQLAlchemy</strong>: For database modeling and querying.</li>
-<li><strong>Werkzeug</strong>: For password hashing and security utilities.</li>
+<li><strong>Flask</strong>: Lightweight WSGI web application framework.</li>
+<li><strong>Flask-SQLAlchemy</strong>: ORM for managing database interactions.</li>
+<li><strong>Flask-Migrate</strong>: Handles database migrations using Alembic.</li>
+<li><strong>Flask-Login</strong>: User session management and authentication.</li>
+<li><strong>Flask-WTF</strong>: Form handling and CSRF protection.</li>
+<li><strong>SQLAlchemy</strong>: Database modeling and querying.</li>
+<li><strong>Werkzeug</strong>: Password hashing and security utilities.</li>
 </ul>
 <h3 id="frontend">Frontend</h3>
 <ul>
-<li><strong>Bulma</strong>: A CSS framework for styling and responsive design.</li>
-<li><strong>Jinja2</strong>: For server-side templating.</li>
+<li><strong>Bulma</strong>: CSS framework for styling and responsive design.</li>
+<li><strong>Jinja2</strong>: Server-side templating.</li>
 </ul>
 <h3 id="email">Email</h3>
 <ul>
@@ -163,30 +164,32 @@
 </ul>
 <h3 id="database">Database</h3>
 <ul>
-<li><strong>SQLite</strong>: Used as the default database for development.</li>
+<li><strong>SQLite</strong>: Default database for development.</li>
 </ul>
 <h3 id="other-tools">Other Tools</h3>
 <ul>
 <li><strong>Alembic</strong>: For database schema migrations.</li>
 <li><strong>itsdangerous</strong>: For generating and verifying secure tokens (e.g., password reset tokens).</li>
 </ul>
+<hr>
 <h2 id="project-structure">Project Structure</h2>
 <ul>
-<li><strong><code>app/</code></strong>: Contains the main application code.
+<li><strong><code>app/</code></strong>: Main application code.
 <ul>
 <li><strong><code>__init__.py</code></strong>: Initializes the Flask app and extensions.</li>
-<li><strong><code>models.py</code></strong>: Defines the database models (e.g., <code>Member</code>, <code>Role</code>).</li>
-<li><strong><code>routes.py</code></strong>: Contains the route handlers for the application.</li>
-<li><strong><code>forms.py</code></strong>: Defines the forms used in the application.</li>
+<li><strong><code>models.py</code></strong>: Database models (e.g., <code>Member</code>, <code>Role</code>, <code>Booking</code>).</li>
+<li><strong><code>routes.py</code></strong>: Route handlers for the application.</li>
+<li><strong><code>forms.py</code></strong>: WTForms forms.</li>
 <li><strong><code>utils.py</code></strong>: Utility functions (e.g., email sending, token generation).</li>
-<li><strong><code>templates/</code></strong>: Jinja2 templates for rendering HTML pages.</li>
+<li><strong><code>templates/</code></strong>: Jinja2 templates for rendering HTML pages. All templates should extend <code>base.html</code>.</li>
 <li><strong><code>static/</code></strong>: Static files like CSS and images.</li>
 </ul>
 </li>
-<li><strong><code>migrations/</code></strong>: Contains Alembic migration scripts.</li>
+<li><strong><code>migrations/</code></strong>: Alembic migration scripts.</li>
 <li><strong><code>config.py</code></strong>: Configuration settings for the application.</li>
-<li><strong><code>bowls.py</code></strong>: The main entry point for running the application.</li>
+<li><strong><code>bowls.py</code></strong>: Main entry point for running the application.</li>
 </ul>
+<hr>
 <h2 id="key-features">Key Features</h2>
 <ol>
 <li>
@@ -227,27 +230,94 @@
 <p><strong>Database Migrations</strong>:</p>
 <ul>
 <li>Alembic is used to manage schema changes.</li>
-<li>Flask-Migrate is the wrapper around Alembic</li>
+<li>Flask-Migrate is the wrapper around Alembic.</li>
+</ul>
+</li>
+<li>
+<p><strong>Bookings Table</strong>:</p>
+<ul>
+<li>Dynamically generated for a selected date.</li>
+<li>Columns = rinks (1 to <code>RINKS</code> from config).</li>
+<li>Rows = sessions (from <code>DAILY_SESSIONS</code> in config).</li>
+<li>Booked cells have the <code>booked</code> class and are styled via CSS (default: red background).</li>
 </ul>
 </li>
 </ol>
+<hr>
 <h2 id="configuration">Configuration</h2>
 <ul>
 <li>Environment variables are used for sensitive settings like <code>SECRET_KEY</code>, <code>MAIL_SERVER</code>, and <code>DATABASE_URL</code>.</li>
 <li>Default database: SQLite (<code>app.db</code>).</li>
 <li>Default email settings are configured in <code>config.py</code>.</li>
-</ul>
-<h2 id="notes">Notes</h2>
-<ul>
-<li>The project includes a <code>MENU_ITEMS</code> structure in <code>config.py</code> for dynamically generating navigation menus.</li>
+<li><code>MENU_ITEMS</code> structure in <code>config.py</code> for dynamically generating navigation menus.</li>
 <li>Admin-specific features are accessible via the &quot;Admin&quot; dropdown in the navigation bar.</li>
+<li>Use configuration values from <code>config.py</code> for anything that may change (e.g., number of rinks, session times).</li>
 </ul>
+<hr>
+<h2 id="favicons">Favicons</h2>
+<ul>
+<li>Place favicon files in <code>app/static/images/</code>.</li>
+<li>Use at least <code>favicon-16x16.png</code> and <code>favicon-32x32.png</code>.</li>
+<li>Reference them in <code>base.html</code> using Flask's <code>url_for('static', ...)</code>.</li>
+<li>Example:<pre><code class="language-html"><span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">&quot;icon&quot;</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;image/png&quot;</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">&quot;32x32&quot;</span> <span class="hljs-attr">href</span>=<span class="hljs-string">&quot;{{ url_for(&#x27;static&#x27;, filename=&#x27;images/favicon-32x32.png&#x27;) }}&quot;</span>&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">link</span> <span class="hljs-attr">rel</span>=<span class="hljs-string">&quot;icon&quot;</span> <span class="hljs-attr">type</span>=<span class="hljs-string">&quot;image/png&quot;</span> <span class="hljs-attr">sizes</span>=<span class="hljs-string">&quot;16x16&quot;</span> <span class="hljs-attr">href</span>=<span class="hljs-string">&quot;{{ url_for(&#x27;static&#x27;, filename=&#x27;images/favicon-16x16.png&#x27;) }}&quot;</span>&gt;</span>
+</code></pre>
+</li>
+</ul>
+<hr>
+<h2 id="customization">Customization</h2>
+<ul>
+<li>To override Bulma styles, use more specific selectors or <code>!important</code> in <code>custom.css</code>.</li>
+<li>For link colors, override <code>a</code>, <code>.navbar-item</code>, and <code>.has-text-link</code> as needed.</li>
+<li>All forms use WTForms and are styled with Bulma classes.</li>
+<li>All pages should use Jinja2 template inheritance and extend <code>base.html</code>.</li>
+</ul>
+<hr>
+<h2 id="example-directory-structure">Example Directory Structure</h2>
+<pre><code>app/
+  static/
+    css/custom.css
+    images/favicon-16x16.png
+    images/favicon-32x32.png
+    images/apple-touch-icon.png
+    images/site.webmanifest
+  templates/
+    base.html
+    bookings_table.html
+    booking_form.html
+    ...
+  models.py
+  routes.py
+  forms.py
+config.py
+</code></pre>
+<hr>
+<h2 id="general-guidance">General Guidance</h2>
+<ul>
+<li>Always use Jinja2 template inheritance for new pages.</li>
+<li>Use Flask's <code>url_for</code> for all static and route links.</li>
+<li>Keep code changes minimal and non-breaking.</li>
+<li>Use Bulma classes for layout and form styling, and extend with custom CSS as needed.</li>
+<li>When creating new functions, provide a multi-line comment describing the purpose, inputs, outputs, and potential errors.</li>
+<li>HTML templates should contain a comment listing the routes which use that template.</li>
+</ul>
+<hr>
 <h2 id="future-enhancements">Future Enhancements</h2>
 <ul>
 <li>Add unit tests for critical functionality.</li>
 <li>Implement additional role-based permissions.</li>
 <li>Enhance the UI with more interactive elements.</li>
 </ul>
+<hr>
+<h2 id="ai-interaction">AI Interaction</h2>
+<ul>
+<li>When considering your answer you should aim to reuse the technologies and coding style contained in the project.</li>
+<li>Changes to the code should take a fine-grained approach, changing individual lines rather than replacing large blocks of code where possible.</li>
+<li>When creating new functions, provide a multi-line comment describing the purpose of the function, its inputs and outputs, and any potential errors.</li>
+<li>HTML templates should contain a comment listing the routes which use that template.</li>
+</ul>
+<hr>
+<p>This file is intended to provide context for AI assistants and developers to ensure consistency and best practices across the Bowls Club</p>
 
             
             
