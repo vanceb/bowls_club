@@ -78,15 +78,45 @@ class Post(db.Model):
 # Add the back_populates relationship to the Member class
 Member.posts = so.relationship('Post', back_populates='author')
 
+class Event(db.Model):
+    __tablename__ = 'events'
+
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    name: so.Mapped[str] = so.mapped_column(sa.String(256), nullable=False)
+    event_type: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+
+    # One-to-many relationship with bookings
+    bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
+
+    def __repr__(self):
+        return f"<Event id={self.id}, name='{self.name}', type={self.event_type}>"
+
+    def get_event_type_name(self):
+        """
+        Get the human-readable name for the event type.
+        """
+        from flask import current_app
+        event_types = current_app.config.get('EVENT_TYPES', {})
+        for name, value in event_types.items():
+            if value == self.event_type:
+                return name
+        return "Unknown"
+
+
 class Booking(db.Model):
     __tablename__ = 'bookings'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     booking_date: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     session: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
-    rink: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    rink_count: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=1)
     priority: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
+    event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
+
+    # Many-to-one relationship with event
+    event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='bookings')
 
     def __repr__(self):
-        return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink={self.rink}>"
+        return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"
 

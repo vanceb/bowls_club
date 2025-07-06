@@ -42,6 +42,7 @@ class Config:
         None,
         {"name": "Manage Roles", "link": "manage_roles"},
         None,
+        {"name": "Manage Events", "link": "manage_events"},
         {"name": "Test Create Booking", "link": "create_booking"},
 ]
 

@@ -98,9 +98,10 @@ class BookingForm(FlaskForm):
         choices=[],  # Choices will be populated dynamically
         validators=[DataRequired()]
     )
-    rink = IntegerField(
-        'Rink',
-        validators=[DataRequired()]  # NumberRange will be added dynamically
+    rink_count = IntegerField(
+        'Number of Rinks Needed',
+        validators=[DataRequired()],  # NumberRange will be added dynamically
+        default=1
     )
     priority = StringField('Priority', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Submit')
@@ -111,6 +112,74 @@ class BookingForm(FlaskForm):
         self.session.choices = [
             (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
         ]
-        # Dynamically set the max value for the rink field
+        # Dynamically set the max value for the rink_count field
         max_rinks = int(current_app.config.get('RINKS', 6))
-        self.rink.validators.append(NumberRange(min=1, max=max_rinks))
+        self.rink_count.validators.append(NumberRange(min=1, max=max_rinks))
+
+    def validate_rink_count(self, field):
+        """
+        Custom validator to check that the booking doesn't exceed available rinks
+        for the given date and session.
+        """
+        if self.booking_date.data and self.session.data:
+            from app.models import Booking
+            from app import db
+            from flask import current_app
+            import sqlalchemy as sa
+            
+            # Calculate total existing bookings for this date/session
+            existing_bookings = db.session.scalar(
+                sa.select(sa.func.sum(Booking.rink_count))
+                .where(Booking.booking_date == self.booking_date.data)
+                .where(Booking.session == self.session.data)
+            ) or 0
+            
+            total_rinks = int(current_app.config.get('RINKS', 6))
+            available_rinks = total_rinks - existing_bookings
+            
+            if field.data > available_rinks:
+                raise ValidationError(
+                    f'Only {available_rinks} rinks available for this date/session. '
+                    f'You requested {field.data} rinks.'
+                )
+
+
+class EventForm(FlaskForm):
+    event_id = HiddenField('Event ID')
+    name = StringField('Event Name', validators=[DataRequired(), Length(max=256)])
+    event_type = SelectField(
+        'Event Type',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[DataRequired()]
+    )
+    submit = SubmitField('Save Event')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate the event type choices dynamically from the app config
+        event_types = current_app.config.get('EVENT_TYPES', {})
+        self.event_type.choices = [
+            (value, name) for name, value in event_types.items()
+        ]
+
+
+class EventSelectionForm(FlaskForm):
+    selected_event = SelectField(
+        'Select Event',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[Optional()]
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate the event choices dynamically from the database
+        from app.models import Event
+        from app import db
+        import sqlalchemy as sa
+        
+        events = db.session.scalars(sa.select(Event).order_by(Event.name)).all()
+        self.selected_event.choices = [(0, 'Create New Event')] + [
+            (event.id, event.name) for event in events
+        ]
