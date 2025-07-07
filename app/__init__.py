@@ -49,4 +49,14 @@ if not app.debug:
     app.logger.setLevel(logging.INFO)
     app.logger.info('Bowls Membersite startup')
 
+# Template context processors
+@app.context_processor
+def inject_admin_menu():
+    """Make filtered admin menu available to all templates"""
+    from flask_login import current_user
+    from app.utils import filter_admin_menu_by_roles
+    
+    filtered_admin_menu = filter_admin_menu_by_roles(current_user)
+    return dict(filtered_admin_menu_items=filtered_admin_menu)
+
 from app import routes, models, errors

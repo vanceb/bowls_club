@@ -74,3 +74,66 @@ def sanitize_filename(filename):
     # Replace unsafe characters with an underscore
     sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
     return sanitized
+
+def filter_admin_menu_by_roles(user):
+    """
+    Filter admin menu items based on user roles.
+    
+    Args:
+        user: Current user object with roles attribute
+        
+    Returns:
+        List of menu items the user has access to
+    """
+    from flask import current_app
+    
+    # Get the full admin menu from config
+    admin_menu = current_app.config.get('ADMIN_MENU_ITEMS', [])
+    
+    # If user is admin, show all menu items
+    if user.is_authenticated and user.is_admin:
+        return admin_menu
+    
+    # If user is not authenticated, return empty menu
+    if not user.is_authenticated:
+        return []
+    
+    # Get user's role names
+    user_role_names = [role.name for role in user.roles]
+    
+    # Filter menu items based on roles
+    filtered_menu = []
+    for item in admin_menu:
+        # None items are separators - keep them for now
+        if item is None:
+            filtered_menu.append(item)
+        else:
+            # Check if item has role requirements
+            required_roles = item.get('roles', [])
+            
+            # If no roles specified, assume admin-only (backward compatibility)
+            if not required_roles:
+                continue
+                
+            # Check if user has any of the required roles
+            if any(role in user_role_names for role in required_roles):
+                filtered_menu.append(item)
+    
+    # Clean up consecutive separators and trailing separators
+    cleaned_menu = []
+    prev_was_separator = True  # Start as True to remove leading separators
+    
+    for item in filtered_menu:
+        if item is None:  # Separator
+            if not prev_was_separator:
+                cleaned_menu.append(item)
+                prev_was_separator = True
+        else:
+            cleaned_menu.append(item)
+            prev_was_separator = False
+    
+    # Remove trailing separator if present
+    if cleaned_menu and cleaned_menu[-1] is None:
+        cleaned_menu.pop()
+    
+    return cleaned_menu

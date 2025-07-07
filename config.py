@@ -1,31 +1,26 @@
 import os
-basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    #WTForms key to stop CSRF attacks
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'hard to guess string' 
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'a-very-long-and-complex-key-that-you-will-never-guess'
 
-    # Database settings
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + os.path.join(basedir, 'app.db')
-        
-    # Mail server settings for emailing errors to the administrator
-    # See: https://blog.miguelgrinberg.com/post/the-flask-mega-tutorial-part-vii-error-handling
+        'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
+    
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Email configuration
     MAIL_SERVER = os.environ.get('MAIL_SERVER')
-    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 25)
-    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS') is not None
+    MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'on', '1']
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
     ADMINS = ['your-email@example.com']
 
-# Menus
-    # A structure holding the menu for the site
+    # List holding the contents of the main menu
     MENU_ITEMS = [
-    {'name': 'Home', 'link': 'index'},
-    {'name': 'Members', 'link': 'members'},
-    {'name': 'Bookings', 'link': 'bookings'},
-    {'name': 'More', 'link': 'index', 'submenu': [{'name': 'Subitem 1', 'link': 'index'}, 
+        {'name': 'Announcements', 'link': 'index'},
+        {'name': 'Bookings', 'link': 'bookings'},
+        {'name': 'Menu Item', 'submenu': [{'name': 'Subitem 1', 'link': 'index'},
                                                     {'name': 'Subitem 2', 'link': 'index'},
                                                     None,
                                                     {'name': 'Subitem 3', 'link': 'index'},
@@ -34,35 +29,39 @@ class Config:
 ]
     # A List holding the contents of the Admin menu
     # Using None to create a separator
+    # Organized by role sections for logical grouping
     ADMIN_MENU_ITEMS = [
-        {"name": "Manage Members", "link": "manage_members"},
-        None, 
-        {"name": "Write Post", "link": "write_post"},
-        {"name": "Manage Posts", "link": "manage_posts"},
+        # User Management Section
+        {"name": "Manage Members", "link": "manage_members", "roles": ["User Manager"]},
+        {"name": "Manage Roles", "link": "manage_roles", "roles": ["User Manager"]},
         None,
-        {"name": "Manage Roles", "link": "manage_roles"},
+        # Content Management Section
+        {"name": "Write Post", "link": "write_post", "roles": ["Content Manager"]},
+        {"name": "Manage Posts", "link": "manage_posts", "roles": ["Content Manager"]},
         None,
-        {"name": "Manage Events", "link": "manage_events"},
-        {"name": "Test Create Booking", "link": "create_booking"},
-]
+        # Event Management Section
+        {"name": "Manage Events", "link": "manage_events", "roles": ["Event Manager"]},
+        {"name": "Test Create Booking", "link": "create_booking", "roles": ["Event Manager"]},
+    ]
 
 # Config options relating to Posts    
     POSTS_PER_PAGE = 10 # Number of posts to display per page
-    POST_EXPIRATION_DAYS = 30 # Default number of days before a post expires   
+    POST_EXPIRATION_DAYS = 30  # Number of days before posts expire
 
-    # Config options relating to bookings and competitions, etc
-    # Number of rinks
+# How many rinks are there for booking
     RINKS = 6
-    # Define daily session periods
-    DAILY_SESSIONS = {
-        1: "10:00 - 12:30",
-        2: "12:30 - 15:00",
-        3: "15:00 - 17:30",
-        4: "17:30 - 20:00"
-    }
-    EVENT_TYPES = {"County Competition": 1,
-                    "Club Competition": 2,
-                    "League": 3,
+
+# How many daily sessions are there 
+    DAILY_SESSIONS = {1: "9:30am - 12:00pm", 
+                      2: "1:00pm - 3:30pm",
+                      3: "4:00pm - 6:00pm", 
+                      4: "7:00pm - 9:30pm"
+}
+
+# Event types
+    EVENT_TYPES = {"Social": 1,
+                   "Competition": 2,
+                   "League": 3,
                     "Friendly": 4,
                     "Roll Up": 5,
                     "Other": 6

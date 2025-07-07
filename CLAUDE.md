@@ -80,7 +80,7 @@ form = EventForm()  # This will cause CSRF RuntimeError
   - Many-to-many relationship with Role via `member_roles` table
   - Many-to-many relationship with Event via `event_member_managers` table (for event management)
 - **Role**: Defines user permissions and capabilities
-  - Standard roles include: "Content Manager", "Event Manager"
+  - Standard roles include: "Content Manager", "Event Manager", "User Manager"
   - Members assigned roles determine their system capabilities
 - **Event**: Event management with member-based event managers
   - Uses Member/Role architecture instead of separate EventManager model
@@ -101,11 +101,12 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - All configurable values in `config.py` including:
   - `RINKS`: Number of bowling rinks (default: 6)
   - `DAILY_SESSIONS`: Time slots for bookings
-  - `MENU_ITEMS` and `ADMIN_MENU_ITEMS`: Navigation structure
+  - `MENU_ITEMS` and `ADMIN_MENU_ITEMS`: Navigation structure with role-based filtering
   - `POSTS_PER_PAGE`: Pagination settings
   - `EVENT_TYPES`: Enumerated event types (Social, Competition, League, etc.)
   - `EVENT_GENDERS`: Gender categories (Gents=1, Ladies=2, Mixed=3, Open=4)
   - `EVENT_FORMATS`: Game formats (Singles=1, Pairs=2, Triples=3, Fours-4Wood=4, Fours-2Wood=5)
+- **Role-Based Admin Menu**: Menu items include `roles` field for dynamic filtering
 
 ### Template Architecture
 - All templates extend `base.html` for consistent layout
@@ -159,12 +160,19 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - **Standard Roles**:
   - "Content Manager": Can create/edit posts and content
   - "Event Manager": Can manage events and be assigned as event organizers
+  - "User Manager": Can manage member accounts, roles, and user permissions
 - **Event Management**: 
   - Event managers are Members with "Event Manager" role
   - Forms dynamically populate with Members who have appropriate roles
   - No separate user management systems - everything uses Member model
 - **Role Assignment**: Available through member management interface
 - **Admin Status**: Separate from roles via `is_admin` field for system administration
+- **Dynamic Admin Menu**: Automatically filtered based on user roles
+  - Admins see all menu items regardless of roles
+  - Non-admin users only see items matching their assigned roles
+  - Menu separators cleaned up automatically (no orphaned dividers)
+  - **Organized by Role Sections**: User Management, Content Management, Event Management
+  - Clear separation between different functional areas
 
 ### Content Management
 - Posts support markdown with metadata parsing
@@ -187,7 +195,7 @@ form = EventForm()  # This will cause CSRF RuntimeError
 
 ### Test Data Structure
 - **19 Total Members**: Mix of Full (11), Social (2), Life (1), Pending (5) statuses
-- **Role Distribution**: 8 Event Managers, 6 Content Managers, 6 without specific roles
+- **Role Distribution**: 8 Event Managers, 6 Content Managers, 3 User Managers, 6 without specific roles
 - **Test Credentials**: All test members use password "password123" for development
 - **Contact Data**: Realistic names, unique emails (@example.com), sequential phone numbers
 - **Event Associations**: 10 bookings distributed across 3 events with proper event_id relationships
