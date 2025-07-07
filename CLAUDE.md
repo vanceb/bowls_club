@@ -85,6 +85,9 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - **Event**: Event management with member-based event managers
   - Uses Member/Role architecture instead of separate EventManager model
   - Event managers are Members with "Event Manager" role
+  - **Fields**: name, event_type, gender, format, scoring, created_at
+  - **Enums**: Gender (Gents/Ladies/Mixed/Open), Format (Singles/Pairs/Triples/Fours-4Wood/Fours-2Wood)
+  - **Defaults**: gender=4 (Open), format=5 (Fours - 2 Wood)
 - **Post**: Content management with markdown/HTML file storage in `app/static/posts/`
 - **Booking**: Rink reservations with date/session/rink structure linked to Events
 
@@ -100,6 +103,9 @@ form = EventForm()  # This will cause CSRF RuntimeError
   - `DAILY_SESSIONS`: Time slots for bookings
   - `MENU_ITEMS` and `ADMIN_MENU_ITEMS`: Navigation structure
   - `POSTS_PER_PAGE`: Pagination settings
+  - `EVENT_TYPES`: Enumerated event types (Social, Competition, League, etc.)
+  - `EVENT_GENDERS`: Gender categories (Gents=1, Ladies=2, Mixed=3, Open=4)
+  - `EVENT_FORMATS`: Game formats (Singles=1, Pairs=2, Triples=3, Fours-4Wood=4, Fours-2Wood=5)
 
 ### Template Architecture
 - All templates extend `base.html` for consistent layout
@@ -165,3 +171,23 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - HTML files generated from markdown for display
 - File cleanup when posts are deleted
 - Expiration dates and optional pinning functionality
+
+### UI/UX Patterns
+- **Inline Forms**: Date inputs and action buttons use horizontal Bulma columns layout
+- **Auto-calculation**: End date automatically set to start date + 7 days in bookings
+- **Auto-refresh**: Data reloads automatically when key inputs change
+- **Dynamic Forms**: Dropdown choices populated from database queries with role filtering
+- **Default Handling**: JavaScript sets appropriate defaults when clearing forms
+
+### Database Migration Practices
+- **SQLite NOT NULL Constraints**: Always use `server_default='value'` when adding NOT NULL columns
+- **Enumerated Fields**: Store as integers with human-readable mappings in config.py
+- **Default Values**: Specify sensible defaults for new columns (e.g., format=5 for "Fours - 2 Wood")
+- **Migration Patterns**: Handle existing data gracefully with server defaults before applying constraints
+
+### Test Data Structure
+- **19 Total Members**: Mix of Full (11), Social (2), Life (1), Pending (5) statuses
+- **Role Distribution**: 8 Event Managers, 6 Content Managers, 6 without specific roles
+- **Test Credentials**: All test members use password "password123" for development
+- **Contact Data**: Realistic names, unique emails (@example.com), sequential phone numbers
+- **Event Associations**: 10 bookings distributed across 3 events with proper event_id relationships
