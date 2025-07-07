@@ -18,14 +18,8 @@ class Config:
 
     # List holding the contents of the main menu
     MENU_ITEMS = [
-        {'name': 'Announcements', 'link': 'index'},
+        {'name': 'News', 'link': 'index'},
         {'name': 'Bookings', 'link': 'bookings'},
-        {'name': 'Menu Item', 'submenu': [{'name': 'Subitem 1', 'link': 'index'},
-                                                    {'name': 'Subitem 2', 'link': 'index'},
-                                                    None,
-                                                    {'name': 'Subitem 3', 'link': 'index'},
-                                                    {'name': 'Subitem 4', 'link': 'index'},
-                                                    {'name': 'Subitem 5', 'link': 'index'}]},
 ]
     # A List holding the contents of the Admin menu
     # Using None to create a separator
@@ -41,7 +35,6 @@ class Config:
         None,
         # Event Management Section
         {"name": "Manage Events", "link": "manage_events", "roles": ["Event Manager"]},
-        {"name": "Test Create Booking", "link": "create_booking", "roles": ["Event Manager"]},
     ]
 
 # Config options relating to Posts    

@@ -32,6 +32,34 @@ def admin_required(f):
     return decorated_function
 
 
+# Role-based decorators for fine-grained access control
+def role_required(*required_roles):
+    """
+    Decorator to restrict access based on user roles.
+    - Checks if the current user is authenticated and has one of the required roles.
+    - Admin users bypass role checks.
+    - Aborts with a 403 status if the user is not authorized.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                abort(403)  # Forbidden
+            
+            # Admin users bypass role checks
+            if current_user.is_admin:
+                return f(*args, **kwargs)
+            
+            # Check if user has any of the required roles
+            user_role_names = [role.name for role in current_user.roles]
+            if any(role in user_role_names for role in required_roles):
+                return f(*args, **kwargs)
+            
+            abort(403)  # Forbidden
+        return decorated_function
+    return decorator
+
+
 @app.route("/")
 @app.route("/index")
 @login_required
@@ -215,12 +243,12 @@ def search_members():
 
 
 @app.route('/admin/manage_members', methods=['GET'])
-@admin_required
+@role_required('User Manager')
 def manage_members():
     """
     Route: Manage Members
     - Displays a list of all members for administrative management.
-    - Requires admin privileges.
+    - Requires User Manager role or admin privileges.
     """
     members = db.session.scalars(sa.select(Member).order_by(Member.firstname)).all()
     return render_template(
@@ -233,7 +261,7 @@ def manage_members():
 
 
 @app.route('/admin/edit_member/<int:member_id>', methods=['GET', 'POST'])
-@admin_required
+@role_required('User Manager')
 def edit_member(member_id):
     """
     Route: Edit Member
@@ -297,13 +325,13 @@ def edit_member(member_id):
 
 
 @app.route('/admin/manage_roles', methods=['GET', 'POST'])
-@admin_required
+@role_required('User Manager')
 def manage_roles():
     """
     Route: Manage Roles
     - Allows admins to create, rename, or delete roles.
     - Displays a list of all roles.
-    - Requires admin privileges.
+    - Requires User Manager role or admin privileges.
     """
     roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
 
@@ -402,11 +430,11 @@ def pw_reset(token):
 
 
 @app.route('/admin/write_post', methods=['GET', 'POST'])
-@admin_required
+@role_required('Content Manager')
 def write_post():
     """
     Route: Write Post
-    - Allows admins to create a new post.
+    - Allows Content Managers to create a new post.
     """
     form = WritePostForm()
 
@@ -468,7 +496,7 @@ author: {current_user.username}
 
 
 @app.route('/manage_posts', methods=['GET', 'POST'])
-@login_required
+@role_required('Content Manager')
 def manage_posts():
     """
     Route: Manage Posts
@@ -596,28 +624,6 @@ author: {post.author_id}
         admin_menu_items=app.config['ADMIN_MENU_ITEMS'],
     )
 
-
-@app.route('/admin/create_booking', methods=['GET', 'POST'])
-@admin_required
-def create_booking():
-    """
-    Route: Create Booking
-    - Allows users to create a new booking.
-    - Requires login.
-    """
-    form = BookingForm()
-    if form.validate_on_submit():
-        booking = Booking(
-            booking_date=form.booking_date.data,
-            session=form.session.data,
-            rink_count=form.rink_count.data,
-            priority=form.priority.data
-        )
-        db.session.add(booking)
-        db.session.commit()
-        flash('Booking created successfully!', 'success')
-        return redirect(url_for('create_booking'))
-    return render_template('booking_form.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/bookings')
@@ -748,11 +754,11 @@ def get_availability(selected_date, session_id):
 
 
 @app.route('/admin/manage_events', methods=['GET', 'POST'])
-@admin_required
+@role_required('Event Manager')
 def manage_events():
     """
     Route: Manage Events
-    - Allows admins to create and manage events.
+    - Allows Event Managers to create and manage events.
     - Shows event form and list of bookings for selected event.
     - Allows creating bookings for events.
     """
@@ -960,11 +966,11 @@ def get_booking(booking_id):
 
 
 @app.route('/admin/edit_booking/<int:booking_id>', methods=['GET', 'POST'])
-@admin_required
+@role_required('Event Manager')
 def edit_booking(booking_id):
     """
     Route: Edit Booking
-    - Allows admins to edit existing bookings.
+    - Allows Event Managers to edit existing bookings.
     """
     booking = db.session.get(Booking, booking_id)
     if not booking:
