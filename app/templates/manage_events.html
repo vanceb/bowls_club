@@ -59,6 +59,18 @@
             </div>
 
             <div class="field">
+                <label class="label">Format</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ event_form.format() }}
+                    </div>
+                </div>
+                {% for error in event_form.format.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
                 <label class="label">Scoring</label>
                 <div class="control">
                     {{ event_form.scoring(class="input") }}
@@ -363,10 +375,12 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Clear new fields
             const genderSelect = document.getElementById('gender');
+            const formatSelect = document.getElementById('format');
             const scoringInput = document.getElementById('scoring');
             const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
             
             if (genderSelect) genderSelect.value = '4'; // Default to "Open"
+            if (formatSelect) formatSelect.value = '5'; // Default to "Fours - 2 Wood"
             if (scoringInput) scoringInput.value = '';
             
             // Clear event managers checkboxes
@@ -404,10 +418,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update new fields
                     const genderSelect = document.getElementById('gender');
+                    const formatSelect = document.getElementById('format');
                     const scoringInput = document.getElementById('scoring');
                     const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
                     
                     if (genderSelect) genderSelect.value = data.gender;
+                    if (formatSelect) formatSelect.value = data.format;
                     if (scoringInput) scoringInput.value = data.scoring || '';
                     
                     // Update event managers checkboxes

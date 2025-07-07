@@ -72,3 +72,9 @@ class Config:
                      "Mixed": 3,
                      "Open": 4
 }
+    EVENT_FORMATS = {"Singles": 1,
+                     "Pairs": 2,
+                     "Triples": 3,
+                     "Fours - 4 Wood": 4,
+                     "Fours - 2 Wood": 5
+}

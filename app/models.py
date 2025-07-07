@@ -99,6 +99,7 @@ class Event(db.Model):
     name: so.Mapped[str] = so.mapped_column(sa.String(256), nullable=False)
     event_type: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
     gender: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=4)  # Default to "Open"
+    format: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=5)  # Default to "Fours - 2 Wood"
     scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -130,6 +131,17 @@ class Event(db.Model):
         event_genders = current_app.config.get('EVENT_GENDERS', {})
         for name, value in event_genders.items():
             if value == self.gender:
+                return name
+        return "Unknown"
+
+    def get_format_name(self):
+        """
+        Get the human-readable name for the event format.
+        """
+        from flask import current_app
+        event_formats = current_app.config.get('EVENT_FORMATS', {})
+        for name, value in event_formats.items():
+            if value == self.format:
                 return name
         return "Unknown"
 

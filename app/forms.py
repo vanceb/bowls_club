@@ -159,6 +159,12 @@ class EventForm(FlaskForm):
         choices=[],  # Choices will be populated dynamically
         validators=[DataRequired()]
     )
+    format = SelectField(
+        'Format',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[DataRequired()]
+    )
     scoring = StringField('Scoring', validators=[Optional(), Length(max=64)])
     event_managers = SelectMultipleField(
         'Event Managers',
@@ -182,6 +188,12 @@ class EventForm(FlaskForm):
         event_genders = current_app.config.get('EVENT_GENDERS', {})
         self.gender.choices = [
             (value, name) for name, value in event_genders.items()
+        ]
+        
+        # Populate the format choices dynamically from the app config
+        event_formats = current_app.config.get('EVENT_FORMATS', {})
+        self.format.choices = [
+            (value, name) for name, value in event_formats.items()
         ]
         
         # Populate the event managers choices dynamically from Members with Event Manager role
