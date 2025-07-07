@@ -17,6 +17,14 @@ member_roles = Table(
     Column('role_id', Integer, ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True)
 )
 
+# Association table for many-to-many relationship between events and members (event managers)
+event_member_managers = Table(
+    'event_member_managers',
+    db.Model.metadata,
+    Column('event_id', Integer, ForeignKey('events.id', ondelete='CASCADE'), primary_key=True),
+    Column('member_id', Integer, ForeignKey('member.id', ondelete='CASCADE'), primary_key=True)
+)
+
 class Role(db.Model):
     __tablename__ = 'roles'
 
@@ -43,6 +51,9 @@ class Member(UserMixin, db.Model):
         sa.String(16), default="Pending", nullable=False
     )  # New field
     roles = relationship('Role', secondary=member_roles, back_populates='members')
+    
+    # Many-to-many relationship with events (as event manager)
+    managed_events: so.Mapped[list['Event']] = so.relationship('Event', secondary=event_member_managers, back_populates='event_managers')
 
     def __repr__(self):
         return '<User {}>'.format(self.username)
@@ -78,19 +89,27 @@ class Post(db.Model):
 # Add the back_populates relationship to the Member class
 Member.posts = so.relationship('Post', back_populates='author')
 
+# EventManager model removed - now using Member-based system with event_member_managers association table
+
+
 class Event(db.Model):
     __tablename__ = 'events'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     name: so.Mapped[str] = so.mapped_column(sa.String(256), nullable=False)
     event_type: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    gender: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=4)  # Default to "Open"
+    scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 
     # One-to-many relationship with bookings
     bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
+    
+    # Many-to-many relationship with event managers (Members with Event Manager role)
+    event_managers: so.Mapped[list['Member']] = so.relationship('Member', secondary=event_member_managers, back_populates='managed_events')
 
     def __repr__(self):
-        return f"<Event id={self.id}, name='{self.name}', type={self.event_type}>"
+        return f"<Event id={self.id}, name='{self.name}', type={self.event_type}, gender={self.gender}>"
 
     def get_event_type_name(self):
         """
@@ -100,6 +119,17 @@ class Event(db.Model):
         event_types = current_app.config.get('EVENT_TYPES', {})
         for name, value in event_types.items():
             if value == self.event_type:
+                return name
+        return "Unknown"
+
+    def get_gender_name(self):
+        """
+        Get the human-readable name for the event gender.
+        """
+        from flask import current_app
+        event_genders = current_app.config.get('EVENT_GENDERS', {})
+        for name, value in event_genders.items():
+            if value == self.gender:
                 return name
         return "Unknown"
 

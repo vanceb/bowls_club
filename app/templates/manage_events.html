@@ -47,6 +47,40 @@
             </div>
 
             <div class="field">
+                <label class="label">Gender</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ event_form.gender() }}
+                    </div>
+                </div>
+                {% for error in event_form.gender.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
+                <label class="label">Scoring</label>
+                <div class="control">
+                    {{ event_form.scoring(class="input") }}
+                </div>
+                <p class="help">Optional scoring method or format (e.g., "Best of 3 sets", "21 points")</p>
+                {% for error in event_form.scoring.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
+                <label class="label">Event Managers</label>
+                <div class="control">
+                    {{ event_form.event_managers() }}
+                </div>
+                <p class="help">Select one or more people responsible for organizing this event</p>
+                {% for error in event_form.event_managers.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
                 <div class="control">
                     {{ event_form.submit(class="button is-primary") }}
                     {% if selected_event %}
@@ -326,6 +360,22 @@ document.addEventListener('DOMContentLoaded', function() {
             eventIdInput.value = '';
             nameInput.value = '';
             typeSelect.value = '';
+            
+            // Clear new fields
+            const genderSelect = document.getElementById('gender');
+            const scoringInput = document.getElementById('scoring');
+            const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
+            
+            if (genderSelect) genderSelect.value = '4'; // Default to "Open"
+            if (scoringInput) scoringInput.value = '';
+            
+            // Clear event managers checkboxes
+            if (eventManagersCheckboxes) {
+                eventManagersCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
             eventFormTitle.textContent = 'Create New Event';
             
             // Hide bookings section content
@@ -351,6 +401,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     eventIdInput.value = data.id;
                     nameInput.value = data.name;
                     typeSelect.value = data.event_type;
+                    
+                    // Update new fields
+                    const genderSelect = document.getElementById('gender');
+                    const scoringInput = document.getElementById('scoring');
+                    const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
+                    
+                    if (genderSelect) genderSelect.value = data.gender;
+                    if (scoringInput) scoringInput.value = data.scoring || '';
+                    
+                    // Update event managers checkboxes
+                    if (eventManagersCheckboxes) {
+                        eventManagersCheckboxes.forEach(checkbox => {
+                            checkbox.checked = data.event_managers.some(manager => manager.id == checkbox.value);
+                        });
+                    }
+                    
                     eventFormTitle.textContent = `Edit Event: ${data.name}`;
                     
                     // Update bookings section

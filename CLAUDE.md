@@ -77,9 +77,16 @@ form = EventForm()  # This will cause CSRF RuntimeError
 
 ### Key Models and Relationships
 - **Member**: User accounts with roles, authentication, and admin privileges
-- **Role**: Many-to-many relationship with Member via `member_roles` table
+  - Many-to-many relationship with Role via `member_roles` table
+  - Many-to-many relationship with Event via `event_member_managers` table (for event management)
+- **Role**: Defines user permissions and capabilities
+  - Standard roles include: "Content Manager", "Event Manager"
+  - Members assigned roles determine their system capabilities
+- **Event**: Event management with member-based event managers
+  - Uses Member/Role architecture instead of separate EventManager model
+  - Event managers are Members with "Event Manager" role
 - **Post**: Content management with markdown/HTML file storage in `app/static/posts/`
-- **Booking**: Rink reservations with date/session/rink structure
+- **Booking**: Rink reservations with date/session/rink structure linked to Events
 
 ### Authentication Flow
 - Uses `@login_required` decorator for protected routes
@@ -141,10 +148,17 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - Rink count configurable via `RINKS` in config
 - Booking conflicts handled at database level
 
-### Role Management
-- Many-to-many relationship between Member and Role
-- Admin status separate from roles (`is_admin` field)
-- Role assignment available in member management interface
+### Role-Based System Architecture
+- **Core Principle**: All user capabilities managed through Member/Role relationships
+- **Standard Roles**:
+  - "Content Manager": Can create/edit posts and content
+  - "Event Manager": Can manage events and be assigned as event organizers
+- **Event Management**: 
+  - Event managers are Members with "Event Manager" role
+  - Forms dynamically populate with Members who have appropriate roles
+  - No separate user management systems - everything uses Member model
+- **Role Assignment**: Available through member management interface
+- **Admin Status**: Separate from roles via `is_admin` field for system administration
 
 ### Content Management
 - Posts support markdown with metadata parsing

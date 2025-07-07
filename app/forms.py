@@ -153,6 +153,21 @@ class EventForm(FlaskForm):
         choices=[],  # Choices will be populated dynamically
         validators=[DataRequired()]
     )
+    gender = SelectField(
+        'Gender',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[DataRequired()]
+    )
+    scoring = StringField('Scoring', validators=[Optional(), Length(max=64)])
+    event_managers = SelectMultipleField(
+        'Event Managers',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[Optional()],
+        option_widget=CheckboxInput(),
+        widget=ListWidget(prefix_label=False)
+    )
     submit = SubmitField('Save Event')
 
     def __init__(self, *args, **kwargs):
@@ -161,6 +176,29 @@ class EventForm(FlaskForm):
         event_types = current_app.config.get('EVENT_TYPES', {})
         self.event_type.choices = [
             (value, name) for name, value in event_types.items()
+        ]
+        
+        # Populate the gender choices dynamically from the app config
+        event_genders = current_app.config.get('EVENT_GENDERS', {})
+        self.gender.choices = [
+            (value, name) for name, value in event_genders.items()
+        ]
+        
+        # Populate the event managers choices dynamically from Members with Event Manager role
+        from app.models import Member, Role
+        from app import db
+        import sqlalchemy as sa
+        
+        # Get Members who have the Event Manager role
+        event_managers = db.session.scalars(
+            sa.select(Member)
+            .join(Member.roles)
+            .where(Role.name == 'Event Manager')
+            .order_by(Member.firstname, Member.lastname)
+        ).all()
+        
+        self.event_managers.choices = [
+            (manager.id, f"{manager.firstname} {manager.lastname}") for manager in event_managers
         ]
 
 

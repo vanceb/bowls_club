@@ -848,6 +848,14 @@ def manage_events():
                 if existing_event:
                     existing_event.name = event_form.name.data
                     existing_event.event_type = event_form.event_type.data
+                    existing_event.gender = event_form.gender.data
+                    existing_event.scoring = event_form.scoring.data
+                    
+                    # Update event managers (many-to-many relationship)
+                    selected_manager_ids = event_form.event_managers.data
+                    selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all() if selected_manager_ids else []
+                    existing_event.event_managers = selected_managers
+                    
                     db.session.commit()
                     flash(f'Event "{existing_event.name}" updated successfully!', 'success')
                     # Redirect with event_id to show bookings section
@@ -859,9 +867,19 @@ def manage_events():
                 # Create new event
                 new_event = Event(
                     name=event_form.name.data,
-                    event_type=event_form.event_type.data
+                    event_type=event_form.event_type.data,
+                    gender=event_form.gender.data,
+                    scoring=event_form.scoring.data
                 )
                 db.session.add(new_event)
+                db.session.flush()  # Flush to get the ID before committing
+                
+                # Add event managers (many-to-many relationship)
+                selected_manager_ids = event_form.event_managers.data
+                if selected_manager_ids:
+                    selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all()
+                    new_event.event_managers = selected_managers
+                
                 db.session.commit()
                 flash(f'Event "{new_event.name}" created successfully!', 'success')
                 # Redirect with event_id to show bookings section
@@ -875,6 +893,9 @@ def manage_events():
             event_form.event_id.data = selected_event.id
             event_form.name.data = selected_event.name
             event_form.event_type.data = selected_event.event_type
+            event_form.gender.data = selected_event.gender
+            event_form.scoring.data = selected_event.scoring
+            event_form.event_managers.data = [manager.id for manager in selected_event.event_managers]
             event_bookings = selected_event.bookings
 
     return render_template('manage_events.html', 
@@ -903,6 +924,10 @@ def get_event(event_id):
         'name': event.name,
         'event_type': event.event_type,
         'event_type_name': event.get_event_type_name(),
+        'gender': event.gender,
+        'gender_name': event.get_gender_name(),
+        'scoring': event.scoring,
+        'event_managers': [{'id': manager.id, 'name': f"{manager.firstname} {manager.lastname}"} for manager in event.event_managers],
         'created_at': event.created_at.isoformat()
     })
 
