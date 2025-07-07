@@ -7,7 +7,7 @@
     <div class="field">
         <label class="label is-size-5">Search Members</label>
         <div class="control">
-            <input id="search-input" class="input" type="text" placeholder="Search by first or last name" autofocus>
+            <input id="search-input" class="input" type="text" placeholder="Search by username, first name, last name, or email" autofocus>
         </div>
     </div>
 </div>
@@ -15,6 +15,7 @@
 <table class="table is-striped is-hoverable is-fullwidth">
     <thead>
         <tr>
+            <th>Username</th>
             <th>First Name</th>
             <th>Last Name</th>
             <th>Email</th>
@@ -41,6 +42,7 @@
                     const row = document.createElement('tr');
                     const roles = member.roles.map(role => role.name).join(', '); // Combine role names
                     row.innerHTML = `
+                        <td>${member.username}</td>
                         <td>${member.firstname}</td>
                         <td>${member.lastname}</td>
                         <td>${member.email}</td>

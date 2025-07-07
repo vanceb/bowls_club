@@ -183,12 +183,13 @@ def members():
 def search_members():
     """
     Route: Search Members
-    - Allows searching for members by first name, last name, or email.
+    - Allows searching for members by username, first name, last name, or email.
     - Returns a JSON response with member details, including roles.
     - Requires login.
     """
     query = request.args.get('q', '').strip()
     members = Member.query.filter(
+        (Member.username.ilike(f'%{query}%')) |
         (Member.firstname.ilike(f'%{query}%')) |
         (Member.lastname.ilike(f'%{query}%')) |
         (Member.email.ilike(f'%{query}%'))
@@ -849,6 +850,7 @@ def manage_events():
                     existing_event.name = event_form.name.data
                     existing_event.event_type = event_form.event_type.data
                     existing_event.gender = event_form.gender.data
+                    existing_event.format = event_form.format.data
                     existing_event.scoring = event_form.scoring.data
                     
                     # Update event managers (many-to-many relationship)
@@ -869,6 +871,7 @@ def manage_events():
                     name=event_form.name.data,
                     event_type=event_form.event_type.data,
                     gender=event_form.gender.data,
+                    format=event_form.format.data,
                     scoring=event_form.scoring.data
                 )
                 db.session.add(new_event)
@@ -894,6 +897,7 @@ def manage_events():
             event_form.name.data = selected_event.name
             event_form.event_type.data = selected_event.event_type
             event_form.gender.data = selected_event.gender
+            event_form.format.data = selected_event.format
             event_form.scoring.data = selected_event.scoring
             event_form.event_managers.data = [manager.id for manager in selected_event.event_managers]
             event_bookings = selected_event.bookings
@@ -926,6 +930,8 @@ def get_event(event_id):
         'event_type_name': event.get_event_type_name(),
         'gender': event.gender,
         'gender_name': event.get_gender_name(),
+        'format': event.format,
+        'format_name': event.get_format_name(),
         'scoring': event.scoring,
         'event_managers': [{'id': manager.id, 'name': f"{manager.firstname} {manager.lastname}"} for manager in event.event_managers],
         'created_at': event.created_at.isoformat()
