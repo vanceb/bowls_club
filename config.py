@@ -67,3 +67,8 @@ class Config:
                     "Roll Up": 5,
                     "Other": 6
 }
+    EVENT_GENDERS = {"Gents": 1,
+                     "Ladies": 2,
+                     "Mixed": 3,
+                     "Open": 4
+}
