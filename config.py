@@ -7,6 +7,11 @@ class Config:
         'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Secure file storage paths (outside web root)
+    SECURE_STORAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'secure_storage')
+    POSTS_STORAGE_PATH = os.path.join(SECURE_STORAGE_PATH, 'posts')
+    ARCHIVE_STORAGE_PATH = os.path.join(SECURE_STORAGE_PATH, 'archive')
 
     # Email configuration
     MAIL_SERVER = os.environ.get('MAIL_SERVER')

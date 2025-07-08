@@ -4,6 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail
 from flask_migrate import Migrate
 from flask_login import LoginManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import logging
 from logging.handlers import SMTPHandler, RotatingFileHandler
 import os
@@ -17,6 +19,11 @@ migrate = Migrate(app, db)
 login = LoginManager(app)
 login.login_view = 'login'
 moment = Moment(app)
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+limiter.init_app(app)
 
 # Send errors by email - Needs to be configured in config.py
 # Only works if debug is off
@@ -58,5 +65,39 @@ def inject_admin_menu():
     
     filtered_admin_menu = filter_admin_menu_by_roles(current_user)
     return dict(filtered_admin_menu_items=filtered_admin_menu)
+
+# Security headers middleware
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    # Content Security Policy
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://kit.fontawesome.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://kit.fontawesome.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    
+    # HTTP Strict Transport Security
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    # X-Content-Type-Options
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    # X-Frame-Options
+    response.headers['X-Frame-Options'] = 'DENY'
+    
+    # X-XSS-Protection
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # Referrer Policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    # Permissions Policy
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    
+    return response
 
 from app import routes, models, errors

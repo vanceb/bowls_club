@@ -7,6 +7,14 @@
 <div class="container">
     <h1 class="title">{{ post.title }}</h1>
     <p class="subtitle">Published on {{ post.publish_on }}</p>
+    
+    <!-- Summary Box -->
+    <div class="box">
+        <div class="content">
+            <p>{{ post.summary }}</p>
+        </div>
+    </div>
+    
     <div class="content">
         {{ post_content|safe }}
     </div>

@@ -82,7 +82,6 @@
                 return response.json();
             })
             .then(data => {
-                console.log("Data received from server:", data); // Debugging
                 const tableContainer = document.getElementById('bookings-table-container');
                 tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, startDate, endDate);
             })

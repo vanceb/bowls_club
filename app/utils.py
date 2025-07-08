@@ -1,7 +1,10 @@
 # Standard library imports
+import os
 import re
+import uuid
 
 # Third-party imports
+import bleach
 import markdown2
 import yaml
 from flask import current_app
@@ -123,6 +126,32 @@ def sanitize_filename(filename):
     sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
     return sanitized
 
+def generate_secure_filename(title, extension=''):
+    """
+    Generate a secure filename using UUID to prevent path traversal attacks.
+    
+    Args:
+        title (str): The original title (used for reference only).
+        extension (str): The file extension (e.g., '.md', '.html').
+        
+    Returns:
+        str: A secure UUID-based filename.
+    """
+    # Generate a UUID for the filename
+    secure_id = str(uuid.uuid4())
+    
+    # Optional: include a sanitized portion of the title for human readability
+    # But limit it to prevent path traversal
+    safe_title = re.sub(r'[^\w\-_]', '_', title)[:20]  # Limit to 20 chars
+    
+    # Create filename with UUID as primary identifier
+    if safe_title:
+        filename = f"{secure_id}_{safe_title}{extension}"
+    else:
+        filename = f"{secure_id}{extension}"
+    
+    return filename
+
 def filter_admin_menu_by_roles(user):
     """
     Filter admin menu items based on user roles.
@@ -185,3 +214,93 @@ def filter_admin_menu_by_roles(user):
         cleaned_menu.pop()
     
     return cleaned_menu
+
+def validate_secure_path(filename, base_path):
+    """
+    Validate that a filename is safe and within the allowed directory.
+    
+    Args:
+        filename (str): The filename to validate.
+        base_path (str): The base directory path that files should be within.
+        
+    Returns:
+        str: The validated full path if safe, None if unsafe.
+    """
+    # Additional sanitization beyond basic filename sanitization
+    if not filename or '..' in filename or filename.startswith('/'):
+        return None
+    
+    # Ensure the filename doesn't contain path separators
+    if os.path.sep in filename or (os.path.altsep and os.path.altsep in filename):
+        return None
+        
+    # Create the full path
+    full_path = os.path.join(base_path, filename)
+    
+    # Resolve any remaining path traversal attempts
+    normalized_path = os.path.normpath(full_path)
+    
+    # Ensure the normalized path is still within the base directory
+    if not normalized_path.startswith(os.path.normpath(base_path)):
+        return None
+        
+    return normalized_path
+
+def get_secure_post_path(filename):
+    """
+    Get a secure path for post files.
+    
+    Args:
+        filename (str): The post filename.
+        
+    Returns:
+        str: Secure path for the post file, or None if invalid.
+    """
+    from flask import current_app
+    base_path = current_app.config.get('POSTS_STORAGE_PATH')
+    return validate_secure_path(filename, base_path)
+
+def get_secure_archive_path(filename):
+    """
+    Get a secure path for archive files.
+    
+    Args:
+        filename (str): The archive filename.
+        
+    Returns:
+        str: Secure path for the archive file, or None if invalid.
+    """
+    from flask import current_app
+    base_path = current_app.config.get('ARCHIVE_STORAGE_PATH')
+    return validate_secure_path(filename, base_path)
+
+def sanitize_html_content(html_content):
+    """
+    Sanitize HTML content to prevent XSS while allowing safe formatting.
+    
+    Args:
+        html_content (str): Raw HTML content to sanitize.
+        
+    Returns:
+        str: Sanitized HTML content safe for rendering.
+    """
+    # Define allowed HTML tags for blog posts
+    allowed_tags = [
+        'p', 'br', 'strong', 'em', 'b', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'a', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 
+        'tr', 'th', 'td', 'hr', 'img', 'div', 'span'
+    ]
+    
+    # Define allowed attributes for specific tags
+    allowed_attributes = {
+        'a': ['href', 'title'],
+        'img': ['src', 'alt', 'title', 'width', 'height'],
+        'table': ['class'],
+        'th': ['class'],
+        'td': ['class'],
+        'div': ['class'],
+        'span': ['class']
+    }
+    
+    # Sanitize the HTML content
+    return bleach.clean(html_content, tags=allowed_tags, attributes=allowed_attributes)

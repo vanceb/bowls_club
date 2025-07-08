@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 # Third-party imports
 import sqlalchemy as sa
+import yaml
 from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
 from flask_login import current_user, login_user, logout_user, login_required
 from flask_paginate import Pagination, get_page_parameter
@@ -14,7 +15,7 @@ from markdown2 import markdown
 from werkzeug.security import generate_password_hash
 
 # Local application imports
-from app import app, db
+from app import app, db, limiter
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
@@ -23,7 +24,8 @@ from app.forms import (
 from app.models import Member, Role, Post, Booking, Event
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
-    sanitize_filename, parse_metadata_from_markdown
+    sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
+    get_secure_post_path, get_secure_archive_path, generate_secure_filename
 )
 
 
@@ -128,24 +130,28 @@ def view_post(post_id):
     if not post:
         abort(404)
 
-    # Load the HTML content from the static/posts directory
-    post_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
-    if not os.path.exists(post_path):
+    # Load the HTML content from secure storage
+    post_path = get_secure_post_path(post.html_filename)
+    if not post_path or not os.path.exists(post_path):
         abort(404)
 
     with open(post_path, 'r') as file:
         post_content = file.read()
 
+    # Sanitize the HTML content to prevent XSS
+    safe_post_content = sanitize_html_content(post_content)
+
     return render_template(
         'view_post.html',
         post=post,
-        post_content=post_content,
+        post_content=safe_post_content,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per minute")
 def login():
     """
     Route: Login page
@@ -186,6 +192,7 @@ def logout():
 
 
 @app.route('/add_member', methods=['GET', 'POST'])
+@limiter.limit("3 per minute")
 def add_member():
     form = MemberForm()
     if form.validate_on_submit():
@@ -399,6 +406,7 @@ def manage_roles():
 
 
 @app.route('/reset_password', methods=['GET', 'POST'])
+@limiter.limit("3 per minute")
 def pw_reset_request():
     """
     Route: Password Reset Request
@@ -459,11 +467,9 @@ def write_post():
         form.expires_on.data = date.today() + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30))
 
     if form.validate_on_submit():
-        # Generate filenames
-        timestamp = datetime.utcnow().strftime('%Y%m%d-%H%M%S')
-        safe_title = sanitize_filename(form.title.data)[:31]
-        markdown_filename = f"{timestamp}_{safe_title}.md"
-        html_filename = f"{timestamp}_{safe_title}.html"
+        # Generate secure filenames using UUID
+        markdown_filename = generate_secure_filename(form.title.data, '.md')
+        html_filename = generate_secure_filename(form.title.data, '.html')
 
         # Save metadata to the database
         post = Post(
@@ -480,22 +486,27 @@ def write_post():
         db.session.add(post)
         db.session.commit()
 
-        # Save content as a Markdown file
-        post_dir = os.path.join(current_app.static_folder, 'posts')
+        # Save content to secure storage
+        post_dir = current_app.config['POSTS_STORAGE_PATH']
         os.makedirs(post_dir, exist_ok=True)
-        markdown_path = os.path.join(post_dir, markdown_filename)
-        html_path = os.path.join(post_dir, html_filename)
+        markdown_path = get_secure_post_path(markdown_filename)
+        html_path = get_secure_post_path(html_filename)
+        
+        # Validate secure paths
+        if not markdown_path or not html_path:
+            abort(400)  # Bad request for invalid filenames
 
-        metadata = f"""---
-title: {post.title}
-summary: {post.summary}
-publish_on: {post.publish_on}
-expires_on: {post.expires_on}
-pin_until: {post.pin_until}
-tags: {post.tags}
-author: {current_user.username}
----
-"""
+        # Create metadata dictionary and serialize to YAML
+        metadata_dict = {
+            'title': post.title,
+            'summary': post.summary,
+            'publish_on': post.publish_on,
+            'expires_on': post.expires_on,
+            'pin_until': post.pin_until,
+            'tags': post.tags,
+            'author': current_user.username
+        }
+        metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
         with open(markdown_path, 'w') as md_file:
             md_file.write(metadata + '\n' + form.content.data)
 
@@ -519,7 +530,7 @@ def manage_posts():
     - Handles deletion of selected posts.
     """
     today = date.today()
-    posts_query = sa.select(Post).order_by(Post.expires_on.asc())
+    posts_query = sa.select(Post).order_by(Post.created_at.desc())
     posts = db.session.scalars(posts_query).all()
 
     if request.method == 'POST':
@@ -528,14 +539,19 @@ def manage_posts():
         for post_id in post_ids:
             post = db.session.get(Post, post_id)
             if post:
-                # Move markdown file to archive folder
-                markdown_path = os.path.join(current_app.static_folder, 'posts', post.markdown_filename)
-                html_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
-                archive_markdown_path = os.path.join(current_app.static_folder, 'archive', post.markdown_filename)
-                archive_html_path = os.path.join(current_app.static_folder, 'archive', post.html_filename)
+                # Move files to secure archive storage
+                markdown_path = get_secure_post_path(post.markdown_filename)
+                html_path = get_secure_post_path(post.html_filename)
+                archive_markdown_path = get_secure_archive_path(post.markdown_filename)
+                archive_html_path = get_secure_archive_path(post.html_filename)
+                
+                # Validate all paths
+                if not all([markdown_path, html_path, archive_markdown_path, archive_html_path]):
+                    continue  # Skip files with invalid paths
 
                 # Ensure the archive directory exists
-                os.makedirs(os.path.dirname(archive_markdown_path), exist_ok=True)
+                archive_dir = current_app.config['ARCHIVE_STORAGE_PATH']
+                os.makedirs(archive_dir, exist_ok=True)
 
                 # Move Markdown file if it exists
                 if os.path.exists(markdown_path):
@@ -573,10 +589,10 @@ def edit_post(post_id):
     if not post:
         abort(404)
 
-    # Load the post content from the markdown file
-    markdown_path = os.path.join(current_app.static_folder, 'posts', post.markdown_filename)
-    html_path = os.path.join(current_app.static_folder, 'posts', post.html_filename)
-    if not os.path.exists(markdown_path):
+    # Load the post content from secure storage
+    markdown_path = get_secure_post_path(post.markdown_filename)
+    html_path = get_secure_post_path(post.html_filename)
+    if not markdown_path or not html_path or not os.path.exists(markdown_path):
         abort(404)
 
     with open(markdown_path, 'r') as file:
@@ -606,18 +622,18 @@ def edit_post(post_id):
         post.tags = form.tags.data
 
         # Update the markdown file
-        updated_markdown = f"""---
-title: {form.title.data}
-summary: {form.summary.data}
-publish_on: {form.publish_on.data}
-expires_on: {form.expires_on.data}
-pin_until: {form.pin_until.data}
-tags: {form.tags.data}
-author: {post.author_id}
----
-
-{form.content.data}
-"""
+        # Create metadata dictionary and serialize to YAML
+        metadata_dict = {
+            'title': form.title.data,
+            'summary': form.summary.data,
+            'publish_on': form.publish_on.data,
+            'expires_on': form.expires_on.data,
+            'pin_until': form.pin_until.data,
+            'tags': form.tags.data,
+            'author': post.author_id
+        }
+        metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
+        updated_markdown = metadata + "\n" + form.content.data
         with open(markdown_path, 'w') as file:
             file.write(updated_markdown)
 

@@ -40,7 +40,19 @@
 
 /* Custom utility classes to replace inline styles */
 .brand-logo {
-  max-height: 70px;
+  max-height: 80px !important;
+  height: auto !important;
+  width: auto !important;
+}
+
+/* Override Bulma navbar constraints for larger logo */
+.navbar-brand .navbar-item {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.navbar-brand .navbar-item img {
+  max-height: 80px !important;
 }
 
 .hidden-initially {
