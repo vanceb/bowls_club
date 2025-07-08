@@ -17,23 +17,25 @@
         </div>
     </div>
 
-    <div class="field">
-        {{ form.firstname.label(class="label") }}
-        <div class="control">
-            {{ form.firstname(class="input") }}
-            {% for error in form.firstname.errors %}
-                <p class="help is-danger">{{ error }}</p>
-            {% endfor %}
+    <div class="field-body">
+        <div class="field">
+            {{ form.firstname.label(class="label") }}
+            <div class="control">
+                {{ form.firstname(class="input") }}
+                {% for error in form.firstname.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
         </div>
-    </div>
 
-    <div class="field">
-        {{ form.lastname.label(class="label") }}
-        <div class="control">
-            {{ form.lastname(class="input") }}
-            {% for error in form.lastname.errors %}
-                <p class="help is-danger">{{ error }}</p>
-            {% endfor %}
+        <div class="field">
+            {{ form.lastname.label(class="label") }}
+            <div class="control">
+                {{ form.lastname(class="input") }}
+                {% for error in form.lastname.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
         </div>
     </div>
     
@@ -106,7 +108,12 @@
     <div class="buttons">
         <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}
-        <button type="button" class="button is-danger" id="delete-button">Delete</button>
+        <button type="button" class="button is-danger" id="delete-button">
+            <span class="icon">
+                <i class="fas fa-trash"></i>
+            </span>
+            <span>Delete</span>
+        </button>
     </div>
 </form>
 

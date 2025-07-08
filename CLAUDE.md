@@ -199,3 +199,28 @@ form = EventForm()  # This will cause CSRF RuntimeError
 - **Test Credentials**: All test members use password "password123" for development
 - **Contact Data**: Realistic names, unique emails (@example.com), sequential phone numbers
 - **Event Associations**: 10 bookings distributed across 3 events with proper event_id relationships
+
+## Coding Rules and Style Fixes
+
+- **Code Quality Improvements**:
+  - Consistently use SQLAlchemy 2.0 query syntax with `sa.select(Model)` instead of legacy query methods
+  - Always use `db.session.scalars()` and `.all()` for query result retrieval
+  - Prefer type hints for function arguments and return values
+  - Use f-strings for string formatting instead of `.format()` or `%` formatting
+  - Implement proper error handling with try/except blocks
+  - Use `isinstance()` for type checking instead of `type()`
+  - Avoid direct database query modifications outside of model methods
+  - Use `@property` decorators for computed model attributes
+  - Implement clear docstrings for all functions and methods
+  - Follow PEP 8 naming conventions strictly
+  - Use context managers for database sessions and file operations
+  - Implement logging instead of print statements for debugging
+  - Use list comprehensions and generator expressions for more concise code
+  - Minimize the use of global variables and state
+  - Prefer composition over inheritance in class design
+  - Use type annotations consistently across the project
+  - Implement proper input validation for all form and API inputs
+  - Use enum classes for predefined sets of constants
+  - Implement proper dependency injection for better testability
+  - Use `pathlib` for file and path operations instead of `os.path`
+  - Implement proper error classes for custom exceptions

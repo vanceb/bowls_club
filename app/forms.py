@@ -1,12 +1,22 @@
-from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, HiddenField, SelectMultipleField, TextAreaField, DateField, IntegerField
-from wtforms.widgets import CheckboxInput, ListWidget
-from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, Length, Optional, NumberRange
+# Standard library imports
+from datetime import date, timedelta
+
+# Third-party imports
 import sqlalchemy as sa
+from flask import current_app
+from flask_wtf import FlaskForm
+from wtforms import (
+    StringField, PasswordField, BooleanField, SubmitField, SelectField, 
+    HiddenField, SelectMultipleField, TextAreaField, DateField, IntegerField
+)
+from wtforms.widgets import CheckboxInput, ListWidget
+from wtforms.validators import (
+    ValidationError, DataRequired, Email, EqualTo, Length, Optional, NumberRange
+)
+
+# Local application imports
 from app import db
 from app.models import Member
-from datetime import date, timedelta
-from flask import current_app
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])

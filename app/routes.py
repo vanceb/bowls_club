@@ -1,20 +1,30 @@
-from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
-from app import app, db
-
-from app.forms import LoginForm, MemberForm, EditMemberForm, RequestResetForm, ResetPasswordForm, WritePostForm, BookingForm, EventForm, EventSelectionForm
-from flask_login import current_user, login_user, logout_user, login_required
-from urllib.parse import urlsplit
-import sqlalchemy as sa
-from werkzeug.security import generate_password_hash
-from app.models import Member, Role, Post, Booking, Event
-from functools import wraps
-from app.utils import generate_reset_token, verify_reset_token, send_reset_email, sanitize_filename
-from datetime import datetime, timedelta, date
+# Standard library imports
 import os
-from markdown2 import markdown
-from flask_paginate import Pagination, get_page_parameter
-from app.utils import parse_metadata_from_markdown
 import shutil
+from datetime import datetime, timedelta, date
+from functools import wraps
+from urllib.parse import urlsplit
+
+# Third-party imports
+import sqlalchemy as sa
+from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
+from flask_login import current_user, login_user, logout_user, login_required
+from flask_paginate import Pagination, get_page_parameter
+from markdown2 import markdown
+from werkzeug.security import generate_password_hash
+
+# Local application imports
+from app import app, db
+from app.forms import (
+    LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
+    ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
+    EventSelectionForm
+)
+from app.models import Member, Role, Post, Booking, Event
+from app.utils import (
+    generate_reset_token, verify_reset_token, send_reset_email, 
+    sanitize_filename, parse_metadata_from_markdown
+)
 
 
 # Decorator to restrict access to admin-only routes
@@ -166,6 +176,11 @@ def login():
 
 @app.route('/logout')
 def logout():
+    """
+    Route: Logout
+    - Logs out the current user and redirects to home page.
+    - Clears the user session.
+    """
     logout_user()
     return redirect(url_for('index'))
 
@@ -216,12 +231,12 @@ def search_members():
     - Requires login.
     """
     query = request.args.get('q', '').strip()
-    members = Member.query.filter(
+    members = db.session.scalars(sa.select(Member).where(
         (Member.username.ilike(f'%{query}%')) |
         (Member.firstname.ilike(f'%{query}%')) |
         (Member.lastname.ilike(f'%{query}%')) |
         (Member.email.ilike(f'%{query}%'))
-    ).all()
+    )).all()
 
     return jsonify({
         'members': [

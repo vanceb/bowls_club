@@ -1,16 +1,40 @@
-from itsdangerous import URLSafeTimedSerializer
-from flask import current_app
-from flask_mail import Message
+# Standard library imports
+import re
+
+# Third-party imports
 import markdown2
 import yaml
-import re
+from flask import current_app
+from flask_mail import Message
+from itsdangerous import URLSafeTimedSerializer
+
+# Local application imports
 from app import mail
 
 def generate_reset_token(email):
+    """
+    Generate a secure reset token for password reset functionality.
+    
+    Args:
+        email (str): The email address to generate token for.
+        
+    Returns:
+        str: Secure token string that can be used for password reset.
+    """
     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
     return serializer.dumps(email, salt='password-reset-salt')
 
 def verify_reset_token(token, expiration=3600):
+    """
+    Verify a password reset token and extract the email address.
+    
+    Args:
+        token (str): The reset token to verify.
+        expiration (int): Token expiration time in seconds (default: 3600).
+        
+    Returns:
+        str or None: Email address if token is valid, None if invalid/expired.
+    """
     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
     try:
         email = serializer.loads(token, salt='password-reset-salt', max_age=expiration)
@@ -19,6 +43,13 @@ def verify_reset_token(token, expiration=3600):
     return email
 
 def send_reset_email(email, reset_url):
+    """
+    Send a password reset email to the specified email address.
+    
+    Args:
+        email (str): The recipient's email address.
+        reset_url (str): The password reset URL to include in the email.
+    """
     msg = Message('Password Reset Request', recipients=[email])
     msg.body = f'''To reset your password, visit the following link:
 {reset_url}
@@ -27,8 +58,16 @@ If you did not make this request, simply ignore this email.
 '''
     mail.send(msg)
 
-# Used in the Markdown rendering process in routes.py
 def render_markdown_with_metadata(markdown_path):
+    """
+    Render a Markdown file with YAML front matter to HTML.
+    
+    Args:
+        markdown_path (str): Path to the Markdown file to render.
+        
+    Returns:
+        tuple: (metadata dict, html_content str) parsed from the file.
+    """
     with open(markdown_path, 'r') as md_file:
         content = md_file.read()
 
@@ -71,6 +110,15 @@ def parse_metadata_from_markdown(markdown_content):
     return metadata, content
 
 def sanitize_filename(filename):
+    """
+    Sanitize a filename by replacing unsafe characters with underscores.
+    
+    Args:
+        filename (str): The filename to sanitize.
+        
+    Returns:
+        str: Sanitized filename safe for filesystem use.
+    """
     # Replace unsafe characters with an underscore
     sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
     return sanitized

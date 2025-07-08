@@ -2,6 +2,13 @@
 
 {% block content %}
 <div class="container">
+    <!-- Data container for JavaScript -->
+    <div id="page-data" 
+         data-selected-event-id="{{ selected_event.id if selected_event else '' }}"
+         data-selected-event-name="{{ selected_event.name if selected_event else '' }}"
+         style="display: none;">
+    </div>
+    
     <h1 class="title">Events Management</h1>
     
     <!-- Event Selection Form -->
@@ -46,28 +53,30 @@
                 {% endfor %}
             </div>
 
-            <div class="field">
-                <label class="label">Gender</label>
-                <div class="control">
-                    <div class="select is-fullwidth">
-                        {{ event_form.gender() }}
+            <div class="field-body">
+                <div class="field">
+                    <label class="label">Gender</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            {{ event_form.gender() }}
+                        </div>
                     </div>
+                    {% for error in event_form.gender.errors %}
+                        <p class="help is-danger">{{ error }}</p>
+                    {% endfor %}
                 </div>
-                {% for error in event_form.gender.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
 
-            <div class="field">
-                <label class="label">Format</label>
-                <div class="control">
-                    <div class="select is-fullwidth">
-                        {{ event_form.format() }}
+                <div class="field">
+                    <label class="label">Format</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            {{ event_form.format() }}
+                        </div>
                     </div>
+                    {% for error in event_form.format.errors %}
+                        <p class="help is-danger">{{ error }}</p>
+                    {% endfor %}
                 </div>
-                {% for error in event_form.format.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
             </div>
 
             <div class="field">
@@ -110,7 +119,7 @@
                 <h2 class="subtitle" id="bookings-title">Select an event to view bookings</h2>
             </div>
             <div class="level-right">
-                <button id="toggle-booking-form" class="button is-success" style="display: none;">
+                <button id="toggle-booking-form" class="button is-success hidden-initially">
                     <span class="icon">
                         <i class="fas fa-plus"></i>
                     </span>
@@ -120,7 +129,7 @@
         </div>
         
         <!-- Add Booking Form (initially hidden) -->
-        <div id="booking-form-section" class="box is-hidden" style="background-color: #f5f5f5;">
+        <div id="booking-form-section" class="box is-hidden booking-form-bg">
             <h3 class="subtitle is-5">Create New Booking</h3>
             <form method="POST" id="booking-form">
                 {{ booking_form.hidden_tag() }}
@@ -343,21 +352,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const bookingAvailabilityInfo = document.getElementById('booking-availability-info');
 
     // Sync dropdown with selected event on page load (when loaded via URL parameter)
-    {% if selected_event %}
-    if (eventSelect) {
-        eventSelect.value = {{ selected_event.id }};
+    const pageData = document.getElementById('page-data');
+    const selectedEventId = pageData.dataset.selectedEventId;
+    const selectedEventName = pageData.dataset.selectedEventName;
+    
+    if (selectedEventId && eventSelect) {
+        eventSelect.value = selectedEventId;
         // Also update the UI elements for selected event
         const eventFormTitle = document.getElementById('event-form-title');
         const bookingsTitle = document.getElementById('bookings-title');
         const noBookingsMessage = document.getElementById('no-bookings-message');
         const toggleBookingBtn = document.getElementById('toggle-booking-form');
         
-        if (eventFormTitle) eventFormTitle.textContent = 'Edit Event: {{ selected_event.name }}';
-        if (bookingsTitle) bookingsTitle.textContent = 'Bookings for {{ selected_event.name }}';
+        if (eventFormTitle) eventFormTitle.textContent = `Edit Event: ${selectedEventName}`;
+        if (bookingsTitle) bookingsTitle.textContent = `Bookings for ${selectedEventName}`;
         if (noBookingsMessage) noBookingsMessage.style.display = 'none';
         if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
     }
-    {% endif %}
 
     // Handle event selection change
     eventSelect.addEventListener('change', function() {

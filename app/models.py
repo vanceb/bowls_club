@@ -1,13 +1,17 @@
+# Standard library imports
 from datetime import datetime, timezone, date
 from typing import Optional
-from werkzeug.security import generate_password_hash, check_password_hash
+
+# Third-party imports
+import sqlalchemy as sa
+import sqlalchemy.orm as so
 from flask_login import UserMixin
 from sqlalchemy import Table, Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-import sqlalchemy as sa
-import sqlalchemy.orm as so
-from app import db
-from app import login
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Local application imports
+from app import db, login
 
 # Association table for many-to-many relationship
 member_roles = Table(
@@ -28,8 +32,13 @@ event_member_managers = Table(
 class Role(db.Model):
     __tablename__ = 'roles'
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), nullable=False, unique=True)
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    name: so.Mapped[str] = so.mapped_column(sa.String(50), nullable=False, unique=True)
+
+    # Relationships
+    members: so.Mapped[list['Member']] = so.relationship(
+        'Member', secondary=member_roles, back_populates='roles'
+    )
 
     def __repr__(self):
         return f"<Role {self.name}>"
@@ -67,8 +76,6 @@ class Member(UserMixin, db.Model):
 @login.user_loader
 def load_user(id):
     return db.session.get(Member, int(id))
-
-Role.members = relationship('Member', secondary=member_roles, back_populates='roles')
 
 class Post(db.Model):
     __tablename__ = 'posts'

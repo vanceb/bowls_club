@@ -45,28 +45,32 @@ class Config:
     RINKS = 6
 
 # How many daily sessions are there 
-    DAILY_SESSIONS = {1: "9:30am - 12:00pm", 
-                      2: "1:00pm - 3:30pm",
-                      3: "4:00pm - 6:00pm", 
-                      4: "7:00pm - 9:30pm"
-}
+    DAILY_SESSIONS = {
+        1: "9:30am - 12:00pm", 
+        2: "1:00pm - 3:30pm",
+        3: "4:00pm - 6:00pm", 
+        4: "7:00pm - 9:30pm"
+    }
 
 # Event types
-    EVENT_TYPES = {"Social": 1,
-                   "Competition": 2,
-                   "League": 3,
-                    "Friendly": 4,
-                    "Roll Up": 5,
-                    "Other": 6
-}
-    EVENT_GENDERS = {"Gents": 1,
-                     "Ladies": 2,
-                     "Mixed": 3,
-                     "Open": 4
-}
-    EVENT_FORMATS = {"Singles": 1,
-                     "Pairs": 2,
-                     "Triples": 3,
-                     "Fours - 4 Wood": 4,
-                     "Fours - 2 Wood": 5
-}
+    EVENT_TYPES = {
+        "Social": 1,
+        "Competition": 2,
+        "League": 3,
+        "Friendly": 4,
+        "Roll Up": 5,
+        "Other": 6
+    }
+    EVENT_GENDERS = {
+        "Gents": 1,
+        "Ladies": 2,
+        "Mixed": 3,
+        "Open": 4
+    }
+    EVENT_FORMATS = {
+        "Singles": 1,
+        "Pairs": 2,
+        "Triples": 3,
+        "Fours - 4 Wood": 4,
+        "Fours - 2 Wood": 5
+    }

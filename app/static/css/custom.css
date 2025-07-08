@@ -38,4 +38,21 @@
   }
 }
 
+/* Custom utility classes to replace inline styles */
+.brand-logo {
+  max-height: 70px;
+}
+
+.hidden-initially {
+  display: none;
+}
+
+.booking-form-bg {
+  background-color: #f5f5f5;
+}
+
+.inline-form {
+  display: inline;
+}
+
 

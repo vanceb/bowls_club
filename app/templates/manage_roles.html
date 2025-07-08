@@ -14,7 +14,12 @@
             </div>
         </div>
         <div class="control">
-            <button class="button is-primary" type="submit">Create Role</button>
+            <button class="button is-primary" type="submit">
+                <span class="icon">
+                    <i class="fas fa-plus"></i>
+                </span>
+                <span>Create Role</span>
+            </button>
         </div>
     </form>
 </div>
@@ -35,7 +40,7 @@
                 <td>
                     <div class="buttons">
                         <!-- Rename Role -->
-                        <form method="POST" style="display: inline;">
+                        <form method="POST" class="inline-form">
                             <input type="hidden" name="action" value="rename">
                             <input type="hidden" name="role_id" value="{{ role.id }}">
                             <div class="field has-addons">
@@ -43,13 +48,23 @@
                                     <input class="input" type="text" name="role_name" placeholder="New name" required>
                                 </div>
                                 <div class="control">
-                                    <button class="button is-info" type="submit">Rename</button>
+                                    <button class="button is-info" type="submit">
+                                        <span class="icon">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                        <span>Rename</span>
+                                    </button>
                                 </div>
                             </div>
                         </form>
 
                         <!-- Delete Role -->
-                        <button class="button is-danger" onclick="showDeleteModal({{ role.id }}, '{{ role.name }}')">Delete</button>
+                        <button class="button is-danger" onclick="showDeleteModal({{ role.id }}, '{{ role.name }}')">
+                            <span class="icon">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <span>Delete</span>
+                        </button>
                     </div>
                 </td>
             </tr>
