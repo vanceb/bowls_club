@@ -32,7 +32,7 @@ class Config:
     ADMIN_MENU_ITEMS = [
         # User Management Section
         {"name": "Manage Members", "link": "manage_members", "roles": ["User Manager"]},
-        {"name": "Manage Roles", "link": "manage_roles", "roles": ["User Manager"]},
+        {"name": "Manage Roles", "link": "manage_roles"},
         None,
         # Content Management Section
         {"name": "Write Post", "link": "write_post", "roles": ["Content Manager"]},

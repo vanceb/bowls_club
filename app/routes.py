@@ -347,7 +347,7 @@ def edit_member(member_id):
 
 
 @app.route('/admin/manage_roles', methods=['GET', 'POST'])
-@role_required('User Manager')
+@admin_required
 def manage_roles():
     """
     Route: Manage Roles
