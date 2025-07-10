@@ -24,8 +24,24 @@
             <tr>
                 <td>{{ member.firstname }}</td>
                 <td>{{ member.lastname }}</td>
-                <td>{{ member.phone }}</td>
-                <td>{{ member.email }}</td>
+                <td>
+                    {% if member.share_phone %}
+                        {{ member.phone }}
+                    {% else %}
+                        <span class="has-text-grey-light">
+                            <em>Private</em>
+                        </span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if member.share_email %}
+                        {{ member.email }}
+                    {% else %}
+                        <span class="has-text-grey-light">
+                            <em>Private</em>
+                        </span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -42,17 +58,24 @@
                     data.members.forEach(member => {
                         const row = document.createElement('tr');
                         
-                        // Create cells and set textContent to prevent XSS
-                        const cells = [
-                            member.firstname,
-                            member.lastname,
-                            member.phone,
-                            member.email
+                        // Create cells with proper privacy handling
+                        const cellData = [
+                            { content: member.firstname, isHtml: false },
+                            { content: member.lastname, isHtml: false },
+                            { content: member.share_phone ? member.phone : 'Private', isHtml: false, isPrivate: !member.share_phone },
+                            { content: member.share_email ? member.email : 'Private', isHtml: false, isPrivate: !member.share_email }
                         ];
                         
-                        cells.forEach(cellText => {
+                        cellData.forEach(cellInfo => {
                             const cell = document.createElement('td');
-                            cell.textContent = cellText; // Use textContent instead of innerHTML
+                            if (cellInfo.isPrivate) {
+                                const em = document.createElement('em');
+                                em.className = 'has-text-grey-light';
+                                em.textContent = cellInfo.content;
+                                cell.appendChild(em);
+                            } else {
+                                cell.textContent = cellInfo.content;
+                            }
                             row.appendChild(cell);
                         });
                         

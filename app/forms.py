@@ -33,6 +33,9 @@ class MemberForm(FlaskForm):
     password = PasswordField('Password', validators=[DataRequired(message="A password is required"), Length(min=8, message="Password must be at least 8 characters long"), EqualTo('password2', "Passwords must match.")])
     password2 = PasswordField('Repeat Password', validators=[DataRequired()])
     gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')], default='Male')  # New field
+    # Privacy settings
+    share_email = BooleanField('Share email with other members', default=True)
+    share_phone = BooleanField('Share phone number with other members', default=True)
     submit = SubmitField('Apply')
 
     def validate_username(self, username):
@@ -73,6 +76,9 @@ class EditMemberForm(FlaskForm):
         option_widget=CheckboxInput(),
         widget=ListWidget(prefix_label=False)
     )
+    # Privacy settings
+    share_email = BooleanField('Share email with other members', default=True)
+    share_phone = BooleanField('Share phone number with other members', default=True)
     submit_update = SubmitField('Update')
     submit_delete = SubmitField('Delete')
 
@@ -99,6 +105,40 @@ class WritePostForm(FlaskForm):
     tags = StringField('Tags', validators=[Optional(), Length(max=255)])
     content = TextAreaField('Content', validators=[DataRequired()])
     submit = SubmitField('Submit')
+
+
+class PolicyPageForm(FlaskForm):
+    title = StringField('Title', validators=[DataRequired(), Length(max=255)])
+    slug = StringField('URL Slug', validators=[DataRequired(), Length(max=255)])
+    description = TextAreaField('Description', validators=[DataRequired(), Length(max=255)])
+    is_active = BooleanField('Active', default=True)
+    show_in_footer = BooleanField('Show in Footer', default=True)
+    sort_order = IntegerField('Sort Order', validators=[Optional()], default=0)
+    content = TextAreaField('Content', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+class EditProfileForm(FlaskForm):
+    firstname = StringField('First Name', validators=[DataRequired(), Length(max=64)])
+    lastname = StringField('Last Name', validators=[DataRequired(), Length(max=64)])
+    email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
+    phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
+    gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
+    # Privacy settings
+    share_email = BooleanField('Share email with other members', default=True)
+    share_phone = BooleanField('Share phone number with other members', default=True)
+    submit = SubmitField('Update Profile')
+
+    def __init__(self, original_email, *args, **kwargs):
+        super(EditProfileForm, self).__init__(*args, **kwargs)
+        self.original_email = original_email
+
+    def validate_email(self, email):
+        if email.data != self.original_email:
+            user = db.session.scalar(sa.select(Member).where(Member.email == email.data))
+            if user is not None:
+                raise ValidationError('Please use a different email address.')
+
 
 class BookingForm(FlaskForm):
     booking_date = DateField('Booking Date', validators=[DataRequired()])

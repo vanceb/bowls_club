@@ -31,8 +31,7 @@
 </table>
 
 <script>
-    document.getElementById('search-input').addEventListener('input', function () {
-        const query = this.value;
+    function loadMembers(query = '') {
         fetch(`/search_members?q=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(data => {
@@ -47,8 +46,8 @@
                         member.username,
                         member.firstname,
                         member.lastname,
-                        member.email,
-                        member.phone,
+                        member.email || 'N/A',  // Show N/A if email is null (shouldn't happen for admin users)
+                        member.phone || 'N/A',  // Show N/A if phone is null (shouldn't happen for admin users)
                         member.gender,
                         member.status,
                         roles
@@ -67,6 +66,16 @@
                     tbody.appendChild(row);
                 });
             });
+    }
+
+    // Load all members when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMembers();
+    });
+
+    // Set up search functionality
+    document.getElementById('search-input').addEventListener('input', function () {
+        loadMembers(this.value);
     });
 </script>
 {% endblock %}

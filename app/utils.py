@@ -274,6 +274,20 @@ def get_secure_archive_path(filename):
     base_path = current_app.config.get('ARCHIVE_STORAGE_PATH')
     return validate_secure_path(filename, base_path)
 
+def get_secure_policy_page_path(filename):
+    """
+    Get a secure path for policy page files.
+    
+    Args:
+        filename (str): The policy page filename.
+        
+    Returns:
+        str: Secure path for the policy page file, or None if invalid.
+    """
+    from flask import current_app
+    base_path = current_app.config.get('POLICY_PAGES_STORAGE_PATH')
+    return validate_secure_path(filename, base_path)
+
 def sanitize_html_content(html_content):
     """
     Sanitize HTML content to prevent XSS while allowing safe formatting.

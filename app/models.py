@@ -59,6 +59,8 @@ class Member(UserMixin, db.Model):
     status: so.Mapped[str] = so.mapped_column(
         sa.String(16), default="Pending", nullable=False
     )  # New field
+    share_email: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
+    share_phone: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
     roles = relationship('Role', secondary=member_roles, back_populates='members')
     
     # Many-to-many relationship with events (as event manager)
@@ -95,6 +97,7 @@ class Post(db.Model):
 
 # Add the back_populates relationship to the Member class
 Member.posts = so.relationship('Post', back_populates='author')
+Member.policy_pages = so.relationship('PolicyPage', back_populates='author')
 
 # EventManager model removed - now using Member-based system with event_member_managers association table
 
@@ -168,4 +171,26 @@ class Booking(db.Model):
 
     def __repr__(self):
         return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"
+
+
+class PolicyPage(db.Model):
+    __tablename__ = 'policy_pages'
+    
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    title: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    slug: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False, unique=True)
+    description: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    is_active: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=True)
+    show_in_footer: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=True)
+    sort_order: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=0)
+    author_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
+    markdown_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    html_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    author: so.Mapped['Member'] = so.relationship('Member', back_populates='policy_pages')
+
+    def __repr__(self):
+        return f"<PolicyPage id={self.id}, title='{self.title}', slug='{self.slug}', active={self.is_active}>"
 

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}{{ policy_page.title }} - Bowls Club{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-8 is-offset-2">
+            <div class="box">
+                <h1 class="title">{{ policy_page.title }}</h1>
+                
+                {% if policy_page.description %}
+                <p class="subtitle has-text-grey">{{ policy_page.description }}</p>
+                {% endif %}
+                
+                <div class="content">
+                    {{ content|safe }}
+                </div>
+                
+                <hr>
+                
+                <div class="has-text-grey is-size-7">
+                    <p>
+                        <strong>Last updated:</strong> {{ policy_page.updated_at.strftime('%B %d, %Y') }}
+                    </p>
+                    {% if current_user.is_authenticated and current_user.is_admin %}
+                    <p class="mt-2">
+                        <a href="{{ url_for('edit_policy_page', policy_page_id=policy_page.id) }}" class="button is-small is-outlined">
+                            <span class="icon is-small">
+                                <i class="fas fa-edit"></i>
+                            </span>
+                            <span>Edit Page</span>
+                        </a>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

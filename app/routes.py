@@ -19,13 +19,14 @@ from app import app, db, limiter
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
-    EventSelectionForm
+    EventSelectionForm, PolicyPageForm, EditProfileForm
 )
-from app.models import Member, Role, Post, Booking, Event
+from app.models import Member, Role, Post, Booking, Event, PolicyPage
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
-    get_secure_post_path, get_secure_archive_path, generate_secure_filename
+    get_secure_post_path, get_secure_archive_path, generate_secure_filename,
+    get_secure_policy_page_path
 )
 
 
@@ -204,7 +205,10 @@ def add_member():
             email=form.email.data,
             phone=form.phone.data,
             password_hash=generate_password_hash(form.password.data),
-            status="Pending"  # Set default status
+            status="Pending",  # Set default status
+            gender=form.gender.data,
+            share_email=form.share_email.data,
+            share_phone=form.share_phone.data
         )
         # Add to the database
         db.session.add(new_member)
@@ -228,38 +232,73 @@ def members():
     return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
-@app.route('/search_members', methods=['GET'])
-@login_required
-def search_members():
+def _get_member_data(member, show_private_data=False):
     """
-    Route: Search Members
-    - Allows searching for members by username, first name, last name, or email.
-    - Returns a JSON response with member details, including roles.
-    - Requires login.
+    Helper function to get member data with optional privacy filtering.
+    
+    This is the single source of truth for member data formatting. It ensures
+    consistent behavior across all routes while allowing admin/User Manager
+    access to all data and respecting privacy settings for regular users.
+    
+    Args:
+        member: Member object from database
+        show_private_data: Boolean - if True, shows all data regardless of privacy settings
+                          (for admins/user managers), if False, respects privacy settings
+    
+    Returns:
+        Dictionary with member data
     """
-    query = request.args.get('q', '').strip()
-    members = db.session.scalars(sa.select(Member).where(
+    return {
+        'id': member.id,
+        'firstname': member.firstname,
+        'lastname': member.lastname,
+        'username': member.username,
+        'email': member.email if (show_private_data or member.share_email) else None,
+        'phone': member.phone if (show_private_data or member.share_phone) else None,
+        'gender': member.gender,
+        'status': member.status,
+        'share_email': member.share_email,
+        'share_phone': member.share_phone,
+        'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
+    }
+
+
+def _search_members_base(query):
+    """
+    Base function to search members by various criteria.
+    
+    Args:
+        query: Search string
+        
+    Returns:
+        List of Member objects matching the search criteria
+    """
+    return db.session.scalars(sa.select(Member).where(
         (Member.username.ilike(f'%{query}%')) |
         (Member.firstname.ilike(f'%{query}%')) |
         (Member.lastname.ilike(f'%{query}%')) |
         (Member.email.ilike(f'%{query}%'))
     )).all()
 
+
+@app.route('/search_members', methods=['GET'])
+@login_required
+def search_members():
+    """
+    Route: Search Members
+    - Allows searching for members by username, first name, last name, or email.
+    - Returns a JSON response with member details, respecting privacy settings.
+    - Requires login.
+    """
+    query = request.args.get('q', '').strip()
+    members = _search_members_base(query)
+    
+    # Check if current user has admin privileges (User Manager role or is_admin)
+    show_private_data = (current_user.is_admin or 
+                        any(role.name == 'User Manager' for role in current_user.roles))
+
     return jsonify({
-        'members': [
-            {
-                'id': member.id,
-                'firstname': member.firstname,
-                'lastname': member.lastname,
-                'username': member.username,
-                'email': member.email,
-                'phone': member.phone,
-                'gender': member.gender,
-                'status': member.status,
-                'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
-            }
-            for member in members
-        ]
+        'members': [_get_member_data(member, show_private_data) for member in members]
     })
 
 
@@ -321,6 +360,8 @@ def edit_member(member_id):
             member.is_admin = form.is_admin.data
             member.gender = form.gender.data
             member.status = form.status.data
+            member.share_email = form.share_email.data
+            member.share_phone = form.share_phone.data
 
             selected_role_ids = form.roles.data
             selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
@@ -1028,5 +1069,287 @@ def edit_booking(booking_id):
     return render_template('booking_form.html', 
                          form=form, 
                          title=f"Edit Booking #{booking.id}",
+                         menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+# Policy Page Management Routes
+
+@app.route('/policy/<slug>')
+def view_policy_page(slug):
+    """
+    Route: View Policy Page
+    - Displays a policy page by its slug.
+    - Only shows active policy pages.
+    """
+    policy_page = db.session.scalar(
+        sa.select(PolicyPage).where(PolicyPage.slug == slug, PolicyPage.is_active == True)
+    )
+    
+    if not policy_page:
+        abort(404)
+    
+    # Read the HTML content from secure storage
+    html_path = get_secure_policy_page_path(policy_page.html_filename)
+    if not html_path or not os.path.exists(html_path):
+        abort(404)
+    
+    with open(html_path, 'r') as html_file:
+        content = html_file.read()
+    
+    return render_template(
+        'view_policy_page.html',
+        policy_page=policy_page,
+        content=content,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
+
+
+@app.route('/admin/manage_policy_pages', methods=['GET', 'POST'])
+@admin_required
+def manage_policy_pages():
+    """
+    Route: Manage Policy Pages
+    - Allows admins to view and manage all policy pages.
+    """
+    policy_pages = db.session.scalars(
+        sa.select(PolicyPage).order_by(PolicyPage.sort_order, PolicyPage.title)
+    ).all()
+    
+    return render_template(
+        'manage_policy_pages.html',
+        policy_pages=policy_pages,
+        menu_items=app.config['MENU_ITEMS'],
+        admin_menu_items=app.config['ADMIN_MENU_ITEMS']
+    )
+
+
+@app.route('/admin/create_policy_page', methods=['GET', 'POST'])
+@admin_required
+def create_policy_page():
+    """
+    Route: Create Policy Page
+    - Allows admins to create a new policy page.
+    """
+    form = PolicyPageForm()
+    
+    if form.validate_on_submit():
+        # Check if slug already exists
+        existing_page = db.session.scalar(
+            sa.select(PolicyPage).where(PolicyPage.slug == form.slug.data)
+        )
+        if existing_page:
+            flash('A policy page with this URL slug already exists. Please choose a different slug.', 'error')
+            return render_template('policy_page_form.html', form=form, title="Create Policy Page",
+                                 menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+        
+        # Generate secure filenames using UUID
+        markdown_filename = generate_secure_filename(form.title.data, '.md')
+        html_filename = generate_secure_filename(form.title.data, '.html')
+        
+        # Save metadata to the database
+        policy_page = PolicyPage(
+            title=form.title.data,
+            slug=form.slug.data,
+            description=form.description.data,
+            is_active=form.is_active.data,
+            show_in_footer=form.show_in_footer.data,
+            sort_order=form.sort_order.data or 0,
+            author_id=current_user.id,
+            markdown_filename=markdown_filename,
+            html_filename=html_filename
+        )
+        db.session.add(policy_page)
+        db.session.commit()
+        
+        # Save content to secure storage
+        policy_dir = current_app.config['POLICY_PAGES_STORAGE_PATH']
+        os.makedirs(policy_dir, exist_ok=True)
+        markdown_path = get_secure_policy_page_path(markdown_filename)
+        html_path = get_secure_policy_page_path(html_filename)
+        
+        # Validate secure paths
+        if not markdown_path or not html_path:
+            abort(400)  # Bad request for invalid filenames
+        
+        # Create metadata dictionary and serialize to YAML
+        metadata_dict = {
+            'title': policy_page.title,
+            'slug': policy_page.slug,
+            'description': policy_page.description,
+            'is_active': policy_page.is_active,
+            'show_in_footer': policy_page.show_in_footer,
+            'sort_order': policy_page.sort_order,
+            'author': current_user.username
+        }
+        metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
+        with open(markdown_path, 'w') as md_file:
+            md_file.write(metadata + '\n' + form.content.data)
+        
+        # Convert Markdown to HTML and save
+        html_content = markdown(form.content.data, extras=["tables"])
+        with open(html_path, 'w') as html_file:
+            html_file.write(html_content)
+        
+        flash('Policy page created successfully!', 'success')
+        return redirect(url_for('manage_policy_pages'))
+    
+    return render_template('policy_page_form.html', form=form, title="Create Policy Page",
+                         menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/admin/edit_policy_page/<int:policy_page_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_policy_page(policy_page_id):
+    """
+    Route: Edit Policy Page
+    - Allows admins to edit an existing policy page.
+    """
+    policy_page = db.session.get(PolicyPage, policy_page_id)
+    if not policy_page:
+        abort(404)
+    
+    form = PolicyPageForm()
+    
+    if form.validate_on_submit():
+        # Check if slug already exists (excluding current page)
+        existing_page = db.session.scalar(
+            sa.select(PolicyPage).where(PolicyPage.slug == form.slug.data, PolicyPage.id != policy_page_id)
+        )
+        if existing_page:
+            flash('A policy page with this URL slug already exists. Please choose a different slug.', 'error')
+            return render_template('policy_page_form.html', form=form, title="Edit Policy Page",
+                                 menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+        
+        # Update policy page metadata
+        policy_page.title = form.title.data
+        policy_page.slug = form.slug.data
+        policy_page.description = form.description.data
+        policy_page.is_active = form.is_active.data
+        policy_page.show_in_footer = form.show_in_footer.data
+        policy_page.sort_order = form.sort_order.data or 0
+        db.session.commit()
+        
+        # Update content files
+        markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+        html_path = get_secure_policy_page_path(policy_page.html_filename)
+        
+        # Validate secure paths
+        if not markdown_path or not html_path:
+            abort(400)  # Bad request for invalid filenames
+        
+        # Create metadata dictionary and serialize to YAML
+        metadata_dict = {
+            'title': policy_page.title,
+            'slug': policy_page.slug,
+            'description': policy_page.description,
+            'is_active': policy_page.is_active,
+            'show_in_footer': policy_page.show_in_footer,
+            'sort_order': policy_page.sort_order,
+            'author': current_user.username
+        }
+        metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
+        with open(markdown_path, 'w') as md_file:
+            md_file.write(metadata + '\n' + form.content.data)
+        
+        # Convert Markdown to HTML and save
+        html_content = markdown(form.content.data, extras=["tables"])
+        with open(html_path, 'w') as html_file:
+            html_file.write(html_content)
+        
+        flash('Policy page updated successfully!', 'success')
+        return redirect(url_for('manage_policy_pages'))
+    
+    # Pre-populate form with existing data
+    if request.method == 'GET':
+        form.title.data = policy_page.title
+        form.slug.data = policy_page.slug
+        form.description.data = policy_page.description
+        form.is_active.data = policy_page.is_active
+        form.show_in_footer.data = policy_page.show_in_footer
+        form.sort_order.data = policy_page.sort_order
+        
+        # Load content from markdown file
+        markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+        if markdown_path and os.path.exists(markdown_path):
+            with open(markdown_path, 'r') as md_file:
+                content = md_file.read()
+                # Remove YAML front matter
+                if content.startswith('---'):
+                    parts = content.split('---', 2)
+                    if len(parts) >= 3:
+                        form.content.data = parts[2].strip()
+                    else:
+                        form.content.data = content
+                else:
+                    form.content.data = content
+    
+    return render_template('policy_page_form.html', form=form, title="Edit Policy Page",
+                         menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/admin/delete_policy_page/<int:policy_page_id>', methods=['POST'])
+@admin_required
+def delete_policy_page(policy_page_id):
+    """
+    Route: Delete Policy Page
+    - Allows admins to delete a policy page and its associated files.
+    """
+    policy_page = db.session.get(PolicyPage, policy_page_id)
+    if not policy_page:
+        abort(404)
+    
+    # Delete files from secure storage
+    markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+    html_path = get_secure_policy_page_path(policy_page.html_filename)
+    
+    if markdown_path and os.path.exists(markdown_path):
+        os.remove(markdown_path)
+    if html_path and os.path.exists(html_path):
+        os.remove(html_path)
+    
+    # Delete from database
+    db.session.delete(policy_page)
+    db.session.commit()
+    
+    flash('Policy page deleted successfully!', 'success')
+    return redirect(url_for('manage_policy_pages'))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    """
+    Route: Edit Profile
+    - Allows users to edit their own profile information.
+    - Users can update personal details and privacy settings.
+    """
+    form = EditProfileForm(current_user.email)
+    
+    if form.validate_on_submit():
+        current_user.firstname = form.firstname.data
+        current_user.lastname = form.lastname.data
+        current_user.email = form.email.data
+        current_user.phone = form.phone.data
+        current_user.gender = form.gender.data
+        current_user.share_email = form.share_email.data
+        current_user.share_phone = form.share_phone.data
+        
+        db.session.commit()
+        flash('Your profile has been updated successfully!', 'success')
+        return redirect(url_for('edit_profile'))
+    
+    # Pre-populate form with current user data
+    elif request.method == 'GET':
+        form.firstname.data = current_user.firstname
+        form.lastname.data = current_user.lastname
+        form.email.data = current_user.email
+        form.phone.data = current_user.phone
+        form.gender.data = current_user.gender
+        form.share_email.data = current_user.share_email
+        form.share_phone.data = current_user.share_phone
+    
+    return render_template('edit_profile.html', form=form,
                          menu_items=app.config['MENU_ITEMS'], 
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
