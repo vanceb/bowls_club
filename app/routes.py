@@ -961,8 +961,34 @@ def manage_events():
                     selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all() if selected_manager_ids else []
                     existing_event.event_managers = selected_managers
                     
+                    # Handle team count changes
+                    current_team_count = len(existing_event.event_teams)
+                    new_team_count = event_form.number_of_teams.data or current_team_count
+                    
+                    if new_team_count != current_team_count:
+                        if new_team_count > current_team_count:
+                            # Add new teams
+                            for team_num in range(current_team_count + 1, new_team_count + 1):
+                                team_name = f"Team {chr(64 + team_num)}"  # Team A, Team B, etc.
+                                event_team = EventTeam(
+                                    event_id=existing_event.id,
+                                    team_name=team_name,
+                                    team_number=team_num
+                                )
+                                db.session.add(event_team)
+                        elif new_team_count < current_team_count:
+                            # Remove excess teams (remove teams with highest numbers first)
+                            teams_to_remove = db.session.scalars(
+                                sa.select(EventTeam)
+                                .where(EventTeam.event_id == existing_event.id)
+                                .order_by(EventTeam.team_number.desc())
+                                .limit(current_team_count - new_team_count)
+                            ).all()
+                            for team in teams_to_remove:
+                                db.session.delete(team)
+                    
                     db.session.commit()
-                    flash(f'Event "{existing_event.name}" updated successfully!', 'success')
+                    flash(f'Event "{existing_event.name}" updated successfully with {new_team_count} teams!', 'success')
                     # Redirect with event_id to show bookings section
                     return redirect(url_for('manage_events') + f'?event_id={existing_event.id}')
                 else:
