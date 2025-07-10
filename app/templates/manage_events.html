@@ -102,6 +102,17 @@
             </div>
 
             <div class="field">
+                <label class="label">Number of Teams</label>
+                <div class="control">
+                    {{ event_form.number_of_teams(class="input") }}
+                </div>
+                <p class="help">How many teams will participate in this event? (1-20)</p>
+                {% for error in event_form.number_of_teams.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
                 <div class="control">
                     {{ event_form.submit(class="button is-primary") }}
                     {% if selected_event %}
@@ -332,6 +343,87 @@
             <p>Select an event from the dropdown above to view and manage its bookings.</p>
         </div>
     </div>
+
+    <!-- Teams Section -->
+    <div class="box" id="teams-section">
+        <div class="level">
+            <div class="level-left">
+                <h2 class="subtitle" id="teams-title">Select an event to view teams</h2>
+            </div>
+            <div class="level-right">
+                <button id="toggle-team-management" class="button is-info hidden-initially">
+                    <span class="icon">
+                        <i class="fas fa-users"></i>
+                    </span>
+                    <span>Manage Teams</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Teams List -->
+        {% if event_teams %}
+        <div class="columns is-multiline">
+            {% for team in event_teams %}
+            <div class="column is-half">
+                <div class="card">
+                    <div class="card-header">
+                        <p class="card-header-title">
+                            {{ team.team_name }}
+                            <span class="tag is-light ml-2">
+                                {% if selected_event %}
+                                    {{ team_positions.get(selected_event.format, []) | length }} players
+                                {% endif %}
+                            </span>
+                        </p>
+                        <button class="card-header-icon edit-team-btn" 
+                                data-team-id="{{ team.id }}" 
+                                aria-label="Edit team">
+                            <span class="icon">
+                                <i class="fas fa-edit"></i>
+                            </span>
+                        </button>
+                    </div>
+                    <div class="card-content">
+                        {% if team.team_members %}
+                            <div class="content">
+                                {% for member in team.team_members %}
+                                <div class="field">
+                                    <label class="label is-small">{{ member.position }}</label>
+                                    <p>{{ member.member.firstname }} {{ member.member.lastname }}</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="content">
+                                <p class="has-text-grey">
+                                    <em>No players assigned yet</em>
+                                </p>
+                                {% if selected_event and team_positions.get(selected_event.format) %}
+                                <p class="is-size-7">
+                                    Positions needed: 
+                                    {% for position in team_positions.get(selected_event.format, []) %}
+                                        <span class="tag is-small">{{ position }}</span>
+                                    {% endfor %}
+                                </p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="notification is-info">
+            <p>No teams found for this event. Teams are created automatically when you save an event.</p>
+        </div>
+        {% endif %}
+        
+        <!-- Default message when no event is selected -->
+        <div id="no-teams-message" class="notification is-info">
+            <p>Select an event from the dropdown above to view and manage its teams.</p>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -368,6 +460,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (bookingsTitle) bookingsTitle.textContent = `Bookings for ${selectedEventName}`;
         if (noBookingsMessage) noBookingsMessage.style.display = 'none';
         if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
+        
+        // Update teams section
+        const teamsTitle = document.getElementById('teams-title');
+        const noTeamsMessage = document.getElementById('no-teams-message');
+        const toggleTeamBtn = document.getElementById('toggle-team-management');
+        
+        if (teamsTitle) teamsTitle.textContent = `Teams for ${selectedEventName}`;
+        if (noTeamsMessage) noTeamsMessage.style.display = 'none';
+        if (toggleTeamBtn) toggleTeamBtn.style.display = 'inline-flex';
     }
 
     // Handle event selection change
@@ -388,11 +489,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const genderSelect = document.getElementById('gender');
             const formatSelect = document.getElementById('format');
             const scoringInput = document.getElementById('scoring');
+            const numberOfTeamsInput = document.getElementById('number_of_teams');
             const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
             
             if (genderSelect) genderSelect.value = '4'; // Default to "Open"
             if (formatSelect) formatSelect.value = '5'; // Default to "Fours - 2 Wood"
             if (scoringInput) scoringInput.value = '';
+            if (numberOfTeamsInput) numberOfTeamsInput.value = '2'; // Default to 2 teams
             
             // Clear event managers checkboxes
             if (eventManagersCheckboxes) {
@@ -411,6 +514,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide existing bookings table
             const bookingsTable = document.querySelector('.table-container');
             if (bookingsTable) bookingsTable.style.display = 'none';
+            
+            // Hide teams section content
+            const teamsTitle = document.getElementById('teams-title');
+            const noTeamsMessage = document.getElementById('no-teams-message');
+            const toggleTeamBtn = document.getElementById('toggle-team-management');
+            
+            if (teamsTitle) teamsTitle.textContent = 'Select an event to view teams';
+            if (noTeamsMessage) noTeamsMessage.style.display = 'block';
+            if (toggleTeamBtn) toggleTeamBtn.style.display = 'none';
+            
+            // Hide existing teams display
+            const teamsContainer = document.querySelector('.columns.is-multiline');
+            if (teamsContainer) teamsContainer.style.display = 'none';
             
         } else if (eventId > 0) {
             // Load selected event data via AJAX
@@ -431,11 +547,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     const genderSelect = document.getElementById('gender');
                     const formatSelect = document.getElementById('format');
                     const scoringInput = document.getElementById('scoring');
+                    const numberOfTeamsInput = document.getElementById('number_of_teams');
                     const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
                     
                     if (genderSelect) genderSelect.value = data.gender;
                     if (formatSelect) formatSelect.value = data.format;
                     if (scoringInput) scoringInput.value = data.scoring || '';
+                    if (numberOfTeamsInput) numberOfTeamsInput.value = data.number_of_teams || '2';
                     
                     // Update event managers checkboxes
                     if (eventManagersCheckboxes) {
@@ -450,6 +568,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     bookingsTitle.textContent = `Bookings for ${data.name}`;
                     if (noBookingsMessage) noBookingsMessage.style.display = 'none';
                     if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
+                    
+                    // Update teams section
+                    const teamsTitle = document.getElementById('teams-title');
+                    const noTeamsMessage = document.getElementById('no-teams-message');
+                    const toggleTeamBtn = document.getElementById('toggle-team-management');
+                    
+                    if (teamsTitle) teamsTitle.textContent = `Teams for ${data.name}`;
+                    if (noTeamsMessage) noTeamsMessage.style.display = 'none';
+                    if (toggleTeamBtn) toggleTeamBtn.style.display = 'inline-flex';
                     
                     // Load bookings for this event
                     loadEventBookings(eventId);

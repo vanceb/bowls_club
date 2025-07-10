@@ -21,7 +21,7 @@ from app.forms import (
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
     EventSelectionForm, PolicyPageForm, EditProfileForm
 )
-from app.models import Member, Role, Post, Booking, Event, PolicyPage
+from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
@@ -961,8 +961,19 @@ def manage_events():
                     selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all()
                     new_event.event_managers = selected_managers
                 
+                # Create default teams for the event
+                number_of_teams = event_form.number_of_teams.data or 2
+                for team_num in range(1, number_of_teams + 1):
+                    team_name = f"Team {chr(64 + team_num)}"  # Team A, Team B, etc.
+                    event_team = EventTeam(
+                        event_id=new_event.id,
+                        team_name=team_name,
+                        team_number=team_num
+                    )
+                    db.session.add(event_team)
+                
                 db.session.commit()
-                flash(f'Event "{new_event.name}" created successfully!', 'success')
+                flash(f'Event "{new_event.name}" created successfully with {number_of_teams} teams!', 'success')
                 # Redirect with event_id to show bookings section
                 return redirect(url_for('manage_events') + f'?event_id={new_event.id}')
 
@@ -978,6 +989,7 @@ def manage_events():
             event_form.format.data = selected_event.format
             event_form.scoring.data = selected_event.scoring
             event_form.event_managers.data = [manager.id for manager in selected_event.event_managers]
+            event_form.number_of_teams.data = len(selected_event.event_teams)
             event_bookings = selected_event.bookings
 
     return render_template('manage_events.html', 
@@ -986,6 +998,8 @@ def manage_events():
                          booking_form=booking_form,
                          selected_event=selected_event,
                          event_bookings=event_bookings,
+                         event_teams=selected_event.event_teams if selected_event else [],
+                         team_positions=app.config.get('TEAM_POSITIONS', {}),
                          menu_items=app.config['MENU_ITEMS'], 
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
@@ -1012,6 +1026,7 @@ def get_event(event_id):
         'format_name': event.get_format_name(),
         'scoring': event.scoring,
         'event_managers': [{'id': manager.id, 'name': f"{manager.firstname} {manager.lastname}"} for manager in event.event_managers],
+        'number_of_teams': len(event.event_teams),
         'created_at': event.created_at.isoformat()
     })
 

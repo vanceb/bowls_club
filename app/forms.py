@@ -16,7 +16,7 @@ from wtforms.validators import (
 
 # Local application imports
 from app import db
-from app.models import Member
+from app.models import Member, Event
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -224,6 +224,11 @@ class EventForm(FlaskForm):
         option_widget=CheckboxInput(),
         widget=ListWidget(prefix_label=False)
     )
+    number_of_teams = IntegerField(
+        'Number of Teams',
+        validators=[DataRequired(), NumberRange(min=1, max=20)],
+        default=2
+    )
     submit = SubmitField('Save Event')
 
     def __init__(self, *args, **kwargs):
@@ -283,3 +288,44 @@ class EventSelectionForm(FlaskForm):
         self.selected_event.choices = [(0, 'Create New Event')] + [
             (event.id, event.name) for event in events
         ]
+
+
+class TeamMemberForm(FlaskForm):
+    """Form for assigning members to team positions"""
+    team_id = HiddenField('Team ID')
+    team_name = StringField('Team Name', validators=[DataRequired(), Length(max=100)])
+    
+    # Dynamic fields for team member positions will be added in __init__
+    def __init__(self, event_format=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        if event_format:
+            # Get available positions for this format
+            from flask import current_app
+            team_positions = current_app.config.get('TEAM_POSITIONS', {})
+            positions = team_positions.get(event_format, [])
+            
+            # Get all members for selection
+            from app.models import Member
+            from app import db
+            import sqlalchemy as sa
+            
+            members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Social', 'Life']))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            
+            member_choices = [(0, 'Select a player...')] + [
+                (member.id, f"{member.firstname} {member.lastname}") for member in members
+            ]
+            
+            # Dynamically create fields for each position
+            for position in positions:
+                field_name = f"position_{position.lower().replace(' ', '_')}"
+                setattr(self, field_name, SelectField(
+                    f"{position}",
+                    coerce=int,
+                    choices=member_choices,
+                    validators=[Optional()]
+                ))
