@@ -11,6 +11,27 @@
     
     <h1 class="title">Events Management</h1>
     
+    <!-- Workflow Overview -->
+    {% if selected_event %}
+    <div class="notification is-info is-light">
+        <h4 class="title is-6">
+            <span class="icon">
+                <i class="fas fa-info-circle"></i>
+            </span>
+            <span>Event Management Workflow</span>
+        </h4>
+        <div class="content">
+            <p><strong>Understanding Event Teams vs Booking Teams:</strong></p>
+            <ul>
+                <li><strong>Event Teams</strong> (below) are <em>templates</em> that define the standard teams for this event type</li>
+                <li><strong>Booking Teams</strong> are <em>copies</em> of event teams, created automatically when you schedule a game</li>
+                <li>Event Managers can make substitutions on booking teams without affecting the original event templates</li>
+                <li>This allows you to have consistent team templates while managing game-specific changes</li>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Event Selection Form -->
     <div class="box">
         <h2 class="subtitle">Select Event</h2>
@@ -25,7 +46,17 @@
 
     <!-- Event Details Form -->
     <div class="box">
-        <h2 class="subtitle" id="event-form-title">Create New Event</h2>
+        <h2 class="subtitle" id="event-form-title">
+            {% if selected_event %}
+                Step 1: Edit Event Details
+                <span class="tag is-success ml-2">
+                    <span class="icon is-small"><i class="fas fa-check"></i></span>
+                    <span>Complete</span>
+                </span>
+            {% else %}
+                Step 1: Create New Event
+            {% endif %}
+        </h2>
         
         <form method="POST" id="event-form">
             {{ event_form.hidden_tag() }}
@@ -101,16 +132,6 @@
                 {% endfor %}
             </div>
 
-            <div class="field">
-                <label class="label">Number of Teams</label>
-                <div class="control">
-                    {{ event_form.number_of_teams(class="input") }}
-                </div>
-                <p class="help">How many teams will participate in this event? (1-20)</p>
-                {% for error in event_form.number_of_teams.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
 
             <div class="field">
                 <div class="control">
@@ -123,14 +144,156 @@
         </form>
     </div>
 
-    <!-- Bookings Section -->
-    <div class="box" id="bookings-section">
+    <!-- Teams Section -->
+    <div class="box" id="teams-section" {% if not selected_event %}style="opacity: 0.6;"{% endif %}>
         <div class="level">
             <div class="level-left">
-                <h2 class="subtitle" id="bookings-title">Select an event to view bookings</h2>
+                <div>
+                    <h2 class="subtitle" id="teams-title">
+                        {% if selected_event %}
+                            Step 2: Teams for {{ selected_event.name }}
+                        {% else %}
+                            Step 2: Event Teams
+                        {% endif %}
+                        {% if selected_event %}
+                            {% if selected_event.has_teams() %}
+                                <span class="tag is-success ml-2">
+                                    <span class="icon is-small"><i class="fas fa-check"></i></span>
+                                    <span>{{ selected_event.event_teams | length }} team(s)</span>
+                                </span>
+                            {% else %}
+                                <span class="tag is-warning ml-2">
+                                    <span class="icon is-small"><i class="fas fa-exclamation"></i></span>
+                                    <span>No teams</span>
+                                </span>
+                            {% endif %}
+                        {% endif %}
+                    </h2>
+                    {% if not selected_event %}
+                        <p class="help">Create an event first to manage teams</p>
+                    {% elif not selected_event.has_teams() %}
+                        <p class="help">Add at least one team before creating bookings</p>
+                    {% endif %}
+                </div>
             </div>
             <div class="level-right">
-                <button id="toggle-booking-form" class="button is-success hidden-initially">
+                <a href="#" id="add-team-btn" class="button is-success hidden-initially">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Add Team</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Teams List -->
+        {% if event_teams %}
+        <div class="columns is-multiline">
+            {% for team in event_teams %}
+            <div class="column is-half">
+                <div class="card">
+                    <div class="card-header">
+                        <p class="card-header-title">
+                            {{ team.team_name }}
+                            <span class="tag is-light ml-2">
+                                {% if selected_event %}
+                                    {{ team_positions.get(selected_event.format, []) | length }} players
+                                {% endif %}
+                            </span>
+                        </p>
+                        <div class="card-header-icon">
+                            <a href="{{ url_for('edit_event_team', team_id=team.id) }}" 
+                               class="button is-small is-info mr-1"
+                               aria-label="Edit team">
+                                <span class="icon is-small">
+                                    <i class="fas fa-edit"></i>
+                                </span>
+                            </a>
+                            <button class="button is-small is-danger delete-team-btn" 
+                                    data-team-id="{{ team.id }}" 
+                                    data-team-name="{{ team.team_name }}"
+                                    aria-label="Delete team">
+                                <span class="icon is-small">
+                                    <i class="fas fa-trash"></i>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        {% if team.team_members %}
+                            <div class="content">
+                                {% for member in team.team_members %}
+                                <div class="field">
+                                    <label class="label is-small">{{ member.position }}</label>
+                                    <p>{{ member.member.firstname }} {{ member.member.lastname }}</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="content">
+                                <p class="has-text-grey">
+                                    <em>No players assigned yet</em>
+                                </p>
+                                {% if selected_event and team_positions.get(selected_event.format) %}
+                                <p class="is-size-7">
+                                    Positions needed: 
+                                    {% for position in team_positions.get(selected_event.format, []) %}
+                                        <span class="tag is-small">{{ position }}</span>
+                                    {% endfor %}
+                                </p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="notification is-info">
+            <p><strong>No teams found for this event.</strong></p>
+            <p>Use the "Add Team" button above to create your first team. Each team will need to be assigned players for the {{ selected_event.get_format_name() if selected_event else 'selected' }} format.</p>
+            <p class="is-size-7 mt-2"><strong>Note:</strong> These are template teams. When you create bookings, copies of these teams will be made for each game, allowing individual substitutions without affecting the original templates.</p>
+        </div>
+        {% endif %}
+        
+        <!-- Default message when no event is selected -->
+        <div id="no-teams-message" class="notification is-info">
+            <p>Select an event from the dropdown above to view and manage its teams.</p>
+        </div>
+    </div>
+
+    <!-- Bookings Section -->
+    <div class="box" id="bookings-section" {% if not can_create_bookings %}style="opacity: 0.6;"{% endif %}>
+        <div class="level">
+            <div class="level-left">
+                <div>
+                    <h2 class="subtitle" id="bookings-title">
+                        {% if selected_event %}
+                            Step 3: Bookings for {{ selected_event.name }}
+                        {% else %}
+                            Step 3: Event Bookings
+                        {% endif %}
+                        {% if selected_event and event_bookings %}
+                            <span class="tag is-success ml-2">
+                                <span class="icon is-small"><i class="fas fa-check"></i></span>
+                                <span>{{ event_bookings | length }} booking(s)</span>
+                            </span>
+                        {% endif %}
+                    </h2>
+                    {% if not selected_event %}
+                        <p class="help">Create an event and add teams first</p>
+                    {% elif not can_create_bookings %}
+                        <p class="help">Add at least one team before creating bookings</p>
+                    {% elif not event_bookings %}
+                        <p class="help">Schedule games using your event teams</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="level-right">
+                <button id="toggle-booking-form" 
+                        class="button {% if can_create_bookings %}is-success{% else %}is-success{% endif %} hidden-initially"
+                        {% if not can_create_bookings %}disabled title="Add teams first before creating bookings"{% endif %}>
                     <span class="icon">
                         <i class="fas fa-plus"></i>
                     </span>
@@ -220,6 +383,13 @@
         </div>
         
         <!-- Bookings List -->
+        {% if can_create_bookings and not event_bookings %}
+        <div class="notification is-success is-light">
+            <p><strong>Ready to schedule games!</strong></p>
+            <p>Your event teams are set up. When you create a booking, these teams will be automatically copied and can be managed separately for each scheduled game.</p>
+        </div>
+        {% endif %}
+        
         {% if event_bookings %}
         <div class="table-container">
             <table class="table is-fullwidth is-striped is-hoverable">
@@ -349,86 +519,6 @@
         </div>
     </div>
 
-    <!-- Teams Section -->
-    <div class="box" id="teams-section">
-        <div class="level">
-            <div class="level-left">
-                <h2 class="subtitle" id="teams-title">Select an event to view teams</h2>
-            </div>
-            <div class="level-right">
-                <button id="toggle-team-management" class="button is-info hidden-initially">
-                    <span class="icon">
-                        <i class="fas fa-users"></i>
-                    </span>
-                    <span>Manage Teams</span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Teams List -->
-        {% if event_teams %}
-        <div class="columns is-multiline">
-            {% for team in event_teams %}
-            <div class="column is-half">
-                <div class="card">
-                    <div class="card-header">
-                        <p class="card-header-title">
-                            {{ team.team_name }}
-                            <span class="tag is-light ml-2">
-                                {% if selected_event %}
-                                    {{ team_positions.get(selected_event.format, []) | length }} players
-                                {% endif %}
-                            </span>
-                        </p>
-                        <button class="card-header-icon edit-team-btn" 
-                                data-team-id="{{ team.id }}" 
-                                aria-label="Edit team">
-                            <span class="icon">
-                                <i class="fas fa-edit"></i>
-                            </span>
-                        </button>
-                    </div>
-                    <div class="card-content">
-                        {% if team.team_members %}
-                            <div class="content">
-                                {% for member in team.team_members %}
-                                <div class="field">
-                                    <label class="label is-small">{{ member.position }}</label>
-                                    <p>{{ member.member.firstname }} {{ member.member.lastname }}</p>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="content">
-                                <p class="has-text-grey">
-                                    <em>No players assigned yet</em>
-                                </p>
-                                {% if selected_event and team_positions.get(selected_event.format) %}
-                                <p class="is-size-7">
-                                    Positions needed: 
-                                    {% for position in team_positions.get(selected_event.format, []) %}
-                                        <span class="tag is-small">{{ position }}</span>
-                                    {% endfor %}
-                                </p>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="notification is-info">
-            <p>No teams found for this event. Teams are created automatically when you save an event.</p>
-        </div>
-        {% endif %}
-        
-        <!-- Default message when no event is selected -->
-        <div id="no-teams-message" class="notification is-info">
-            <p>Select an event from the dropdown above to view and manage its teams.</p>
-        </div>
-    </div>
 </div>
 
 <script>
@@ -469,11 +559,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update teams section
         const teamsTitle = document.getElementById('teams-title');
         const noTeamsMessage = document.getElementById('no-teams-message');
-        const toggleTeamBtn = document.getElementById('toggle-team-management');
+        const addTeamBtn = document.getElementById('add-team-btn');
         
         if (teamsTitle) teamsTitle.textContent = `Teams for ${selectedEventName}`;
         if (noTeamsMessage) noTeamsMessage.style.display = 'none';
-        if (toggleTeamBtn) toggleTeamBtn.style.display = 'inline-flex';
+        if (addTeamBtn) addTeamBtn.style.display = 'inline-flex';
     }
 
     // Handle event selection change
@@ -494,13 +584,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const genderSelect = document.getElementById('gender');
             const formatSelect = document.getElementById('format');
             const scoringInput = document.getElementById('scoring');
-            const numberOfTeamsInput = document.getElementById('number_of_teams');
             const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
             
             if (genderSelect) genderSelect.value = '4'; // Default to "Open"
             if (formatSelect) formatSelect.value = '5'; // Default to "Fours - 2 Wood"
             if (scoringInput) scoringInput.value = '';
-            if (numberOfTeamsInput) numberOfTeamsInput.value = '2'; // Default to 2 teams
             
             // Clear event managers checkboxes
             if (eventManagersCheckboxes) {
@@ -509,10 +597,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
             
-            eventFormTitle.textContent = 'Create New Event';
+            eventFormTitle.textContent = 'Step 1: Create New Event';
             
             // Hide bookings section content
-            bookingsTitle.textContent = 'Select an event to view bookings';
+            bookingsTitle.textContent = 'Step 3: Event Bookings';
             if (noBookingsMessage) noBookingsMessage.style.display = 'block';
             if (toggleBookingBtn) toggleBookingBtn.style.display = 'none';
             
@@ -523,11 +611,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide teams section content
             const teamsTitle = document.getElementById('teams-title');
             const noTeamsMessage = document.getElementById('no-teams-message');
-            const toggleTeamBtn = document.getElementById('toggle-team-management');
+            const addTeamBtn = document.getElementById('add-team-btn');
             
-            if (teamsTitle) teamsTitle.textContent = 'Select an event to view teams';
+            if (teamsTitle) teamsTitle.textContent = 'Step 2: Event Teams';
             if (noTeamsMessage) noTeamsMessage.style.display = 'block';
-            if (toggleTeamBtn) toggleTeamBtn.style.display = 'none';
+            if (addTeamBtn) addTeamBtn.style.display = 'none';
             
             // Hide existing teams display
             const teamsContainer = document.querySelector('.columns.is-multiline');
@@ -552,13 +640,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const genderSelect = document.getElementById('gender');
                     const formatSelect = document.getElementById('format');
                     const scoringInput = document.getElementById('scoring');
-                    const numberOfTeamsInput = document.getElementById('number_of_teams');
-                    const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
+                            const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
                     
                     if (genderSelect) genderSelect.value = data.gender;
                     if (formatSelect) formatSelect.value = data.format;
                     if (scoringInput) scoringInput.value = data.scoring || '';
-                    if (numberOfTeamsInput) numberOfTeamsInput.value = data.number_of_teams || '2';
                     
                     // Update event managers checkboxes
                     if (eventManagersCheckboxes) {
@@ -567,21 +653,37 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     }
                     
-                    eventFormTitle.textContent = `Edit Event: ${data.name}`;
+                    eventFormTitle.textContent = `Step 1: Edit Event Details`;
+                    // Add completion indicator safely
+                    const completionTag = document.createElement('span');
+                    completionTag.className = 'tag is-success ml-2';
+                    completionTag.innerHTML = '<span class="icon is-small"><i class="fas fa-check"></i></span><span>Complete</span>';
+                    eventFormTitle.appendChild(completionTag);
                     
-                    // Update bookings section
-                    bookingsTitle.textContent = `Bookings for ${data.name}`;
+                    // Update bookings section  
+                    bookingsTitle.textContent = `Step 3: Bookings for ${data.name}`;
                     if (noBookingsMessage) noBookingsMessage.style.display = 'none';
-                    if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
+                    if (toggleBookingBtn) {
+                        toggleBookingBtn.style.display = 'inline-flex';
+                        toggleBookingBtn.disabled = true; // Will be updated when teams are loaded
+                        toggleBookingBtn.title = 'Add teams first before creating bookings';
+                    }
                     
                     // Update teams section
                     const teamsTitle = document.getElementById('teams-title');
                     const noTeamsMessage = document.getElementById('no-teams-message');
-                    const toggleTeamBtn = document.getElementById('toggle-team-management');
+                    const addTeamBtn = document.getElementById('add-team-btn');
                     
-                    if (teamsTitle) teamsTitle.textContent = `Teams for ${data.name}`;
+                    if (teamsTitle) {
+                        teamsTitle.textContent = `Step 2: Teams for ${data.name}`;
+                        // Add warning indicator safely
+                        const warningTag = document.createElement('span');
+                        warningTag.className = 'tag is-warning ml-2';
+                        warningTag.innerHTML = '<span class="icon is-small"><i class="fas fa-exclamation"></i></span><span>Add teams</span>';
+                        teamsTitle.appendChild(warningTag);
+                    }
                     if (noTeamsMessage) noTeamsMessage.style.display = 'none';
-                    if (toggleTeamBtn) toggleTeamBtn.style.display = 'inline-flex';
+                    if (addTeamBtn) addTeamBtn.style.display = 'inline-flex';
                     
                     // Load bookings for this event
                     loadEventBookings(eventId);
@@ -603,6 +705,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle booking form toggle
     if (toggleBookingFormBtn && bookingFormSection) {
         toggleBookingFormBtn.addEventListener('click', function() {
+            // Prevent action if button is disabled
+            if (this.disabled) {
+                return;
+            }
+            
             bookingFormSection.classList.toggle('is-hidden');
             if (!bookingFormSection.classList.contains('is-hidden')) {
                 this.textContent = 'Cancel';
@@ -788,6 +895,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 deleteInput.name = 'delete_booking';
                 deleteInput.value = 'true';
                 form.appendChild(deleteInput);
+                
+                // Submit form
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+        
+        // Handle add team button
+        if (e.target.closest('#add-team-btn')) {
+            const eventId = document.getElementById('event_id').value;
+            if (eventId) {
+                window.location.href = `/admin/add_event_team/${eventId}`;
+            }
+        }
+        
+        // Handle delete team button
+        if (e.target.closest('.delete-team-btn')) {
+            const button = e.target.closest('.delete-team-btn');
+            const teamId = button.dataset.teamId;
+            const teamName = button.dataset.teamName;
+            
+            if (confirm(`Are you sure you want to delete team "${teamName}"? This will also remove all player assignments and cannot be undone.`)) {
+                // Create a form for deletion
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = `/admin/delete_event_team/${teamId}`;
+                form.style.display = 'none';
+                
+                // Add CSRF token
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
                 
                 // Submit form
                 document.body.appendChild(form);

@@ -7,6 +7,7 @@
     <h1 class="title">Manage Posts</h1>
 
     <form method="POST" id="manage-posts-form">
+        {{ csrf_form.hidden_tag() }}
         <table class="table is-fullwidth is-striped">
             <thead>
                 <tr>

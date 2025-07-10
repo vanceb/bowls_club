@@ -6,7 +6,42 @@
     <p class="subtitle">View and confirm your availability for upcoming team assignments</p>
 
     {% if assignments %}
+    <!-- Group assignments by status and date -->
+    {% set pending_games = [] %}
+    {% set confirmed_games = [] %}
+    {% set unavailable_games = [] %}
+    {% set played_games = [] %}
+    
+    {% for assignment in assignments %}
+        {% set game_date = assignment.booking_team.booking.booking_date %}
+        {% if game_date < today %}
+            {% set _ = played_games.append(assignment) %}
+        {% elif assignment.availability_status == 'pending' %}
+            {% set _ = pending_games.append(assignment) %}
+        {% elif assignment.availability_status == 'available' %}
+            {% set _ = confirmed_games.append(assignment) %}
+        {% elif assignment.availability_status == 'unavailable' %}
+            {% set _ = unavailable_games.append(assignment) %}
+        {% endif %}
+    {% endfor %}
+
+    <!-- Sort each group by date (nearest first) -->
+    {% set pending_games = pending_games | sort(attribute='booking_team.booking.booking_date') %}
+    {% set confirmed_games = confirmed_games | sort(attribute='booking_team.booking.booking_date') %}
+    {% set unavailable_games = unavailable_games | sort(attribute='booking_team.booking.booking_date') %}
+    {% set played_games = played_games | sort(attribute='booking_team.booking.booking_date', reverse=true) %}
+
+    <!-- Pending Games Section -->
+    {% if pending_games %}
     <div class="box">
+        <h3 class="title is-4 has-text-warning">
+            <span class="icon">
+                <i class="fas fa-clock"></i>
+            </span>
+            <span>Pending Confirmation ({{ pending_games | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Games awaiting your availability confirmation</p>
+        
         <div class="table-container">
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
@@ -16,16 +51,15 @@
                         <th>Session</th>
                         <th>Team</th>
                         <th>Position</th>
-                        <th>Availability</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for assignment in assignments %}
-                    <tr {% if assignment.confirmed_available %}class="has-background-success-light"{% endif %}>
+                    {% for assignment in pending_games %}
+                    <tr>
                         <td>
                             <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
-                            <span class="tag is-small">{{ assignment.booking_team.booking.event.get_event_type_name() }}</span>
+                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
                         </td>
                         <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
                         <td>
@@ -33,48 +67,224 @@
                             {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
                         </td>
                         <td>{{ assignment.booking_team.team_name }}</td>
+                        <td><strong>{{ assignment.position }}</strong></td>
                         <td>
-                            <span class="tag is-info">{{ assignment.position }}</span>
+                            <div class="buttons are-small">
+                                <form method="POST" style="display: inline;">
+                                    {{ csrf_form.hidden_tag() }}
+                                    <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
+                                    <input type="hidden" name="action" value="confirm_available">
+                                    <button type="submit" class="button is-small is-success" 
+                                            onclick="return confirm('Confirm your availability for this game? You will not be able to change this once confirmed.')">
+                                        <span class="icon">
+                                            <i class="fas fa-check"></i>
+                                        </span>
+                                        <span>Available</span>
+                                    </button>
+                                </form>
+                                <form method="POST" style="display: inline;">
+                                    {{ csrf_form.hidden_tag() }}
+                                    <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
+                                    <input type="hidden" name="action" value="confirm_unavailable">
+                                    <button type="submit" class="button is-small is-danger" 
+                                            onclick="return confirm('Confirm you are unavailable for this game? You will not be able to change this once confirmed.')">
+                                        <span class="icon">
+                                            <i class="fas fa-times"></i>
+                                        </span>
+                                        <span>Unavailable</span>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Confirmed Games Section -->
+    {% if confirmed_games %}
+    <div class="box">
+        <h3 class="title is-4 has-text-success">
+            <span class="icon">
+                <i class="fas fa-check-circle"></i>
+            </span>
+            <span>Confirmed Games ({{ confirmed_games | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Games you've confirmed to play</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Date</th>
+                        <th>Session</th>
+                        <th>Team</th>
+                        <th>Position</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in confirmed_games %}
+                    <tr class="has-background-success-light">
                         <td>
-                            {% if assignment.confirmed_available %}
-                                <span class="tag is-success">
+                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
+                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                        </td>
+                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
+                        </td>
+                        <td>{{ assignment.booking_team.team_name }}</td>
+                        <td><strong>{{ assignment.position }}</strong></td>
+                        <td>
+                            <span class="tag is-success">
+                                <span class="icon">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <span>Available</span>
+                            </span>
+                            <br>
+                            <small class="has-text-grey">
+                                {{ assignment.confirmed_at.strftime('%b %d at %I:%M %p') }}
+                            </small>
+                            <br>
+                            <small class="has-text-grey">
+                                Contact event organizer to make changes
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Unavailable Games Section -->
+    {% if unavailable_games %}
+    <div class="box">
+        <h3 class="title is-4 has-text-danger">
+            <span class="icon">
+                <i class="fas fa-times-circle"></i>
+            </span>
+            <span>Unavailable Games ({{ unavailable_games | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Games you've indicated you cannot play</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Date</th>
+                        <th>Session</th>
+                        <th>Team</th>
+                        <th>Position</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in unavailable_games %}
+                    <tr class="has-background-danger-light">
+                        <td>
+                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
+                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                        </td>
+                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
+                        </td>
+                        <td>{{ assignment.booking_team.team_name }}</td>
+                        <td><strong>{{ assignment.position }}</strong></td>
+                        <td>
+                            <span class="tag is-danger">
+                                <span class="icon">
+                                    <i class="fas fa-times"></i>
+                                </span>
+                                <span>Unavailable</span>
+                            </span>
+                            <br>
+                            <small class="has-text-grey">
+                                {{ assignment.confirmed_at.strftime('%b %d at %I:%M %p') }}
+                            </small>
+                            <br>
+                            <small class="has-text-grey">
+                                Contact event organizer to make changes
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Played Games Section -->
+    {% if played_games %}
+    <div class="box">
+        <h3 class="title is-4 has-text-grey">
+            <span class="icon">
+                <i class="fas fa-history"></i>
+            </span>
+            <span>Played Games ({{ played_games | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Games that have already taken place</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>Date</th>
+                        <th>Session</th>
+                        <th>Team</th>
+                        <th>Position</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for assignment in played_games %}
+                    <tr>
+                        <td>
+                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
+                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                        </td>
+                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
+                        </td>
+                        <td>{{ assignment.booking_team.team_name }}</td>
+                        <td><strong>{{ assignment.position }}</strong></td>
+                        <td>
+                            {% if assignment.availability_status == 'available' %}
+                                <span class="tag is-light">
                                     <span class="icon">
                                         <i class="fas fa-check"></i>
                                     </span>
-                                    <span>Confirmed</span>
+                                    <span>Played</span>
                                 </span>
-                                <br>
-                                <small class="has-text-grey">
-                                    {{ assignment.confirmed_at.strftime('%b %d at %I:%M %p') }}
-                                </small>
+                            {% elif assignment.availability_status == 'unavailable' %}
+                                <span class="tag is-light">
+                                    <span class="icon">
+                                        <i class="fas fa-times"></i>
+                                    </span>
+                                    <span>Missed</span>
+                                </span>
                             {% else %}
-                                <span class="tag is-warning">
+                                <span class="tag is-light">
                                     <span class="icon">
                                         <i class="fas fa-question"></i>
                                     </span>
-                                    <span>Pending</span>
+                                    <span>No Response</span>
                                 </span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if not assignment.confirmed_available %}
-                            <form method="POST" style="display: inline;">
-                                {{ csrf_token() }}
-                                <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
-                                <input type="hidden" name="action" value="confirm_available">
-                                <button type="submit" class="button is-small is-success" 
-                                        onclick="return confirm('Confirm your availability for this game? You will not be able to cancel once confirmed.')">
-                                    <span class="icon">
-                                        <i class="fas fa-check"></i>
-                                    </span>
-                                    <span>Confirm</span>
-                                </button>
-                            </form>
-                            {% else %}
-                            <span class="has-text-grey">
-                                <small>Contact event organizer to make changes</small>
-                            </span>
                             {% endif %}
                         </td>
                     </tr>
@@ -82,6 +292,8 @@
                 </tbody>
             </table>
         </div>
+    </div>
+    {% endif %}
         
         <div class="content mt-4">
             <div class="notification is-info is-light">
@@ -124,24 +336,26 @@
         <div class="columns">
             <div class="column">
                 <div class="has-text-centered">
-                    <p class="heading">Total Games</p>
-                    <p class="title is-4">{{ assignments | length }}</p>
+                    <p class="heading">Pending</p>
+                    <p class="title is-4 has-text-warning">{{ pending_games | length }}</p>
                 </div>
             </div>
             <div class="column">
                 <div class="has-text-centered">
                     <p class="heading">Confirmed</p>
-                    <p class="title is-4 has-text-success">
-                        {{ assignments | selectattr('confirmed_available') | list | length }}
-                    </p>
+                    <p class="title is-4 has-text-success">{{ confirmed_games | length }}</p>
                 </div>
             </div>
             <div class="column">
                 <div class="has-text-centered">
-                    <p class="heading">Pending</p>
-                    <p class="title is-4 has-text-warning">
-                        {{ (assignments | length) - (assignments | selectattr('confirmed_available') | list | length) }}
-                    </p>
+                    <p class="heading">Unavailable</p>
+                    <p class="title is-4 has-text-danger">{{ unavailable_games | length }}</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Played</p>
+                    <p class="title is-4 has-text-grey">{{ played_games | length }}</p>
                 </div>
             </div>
         </div>

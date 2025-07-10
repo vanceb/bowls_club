@@ -158,6 +158,28 @@ class Event(db.Model):
                 return name
         return "Unknown"
 
+    def has_teams(self):
+        """Check if the event has any teams defined"""
+        return len(self.event_teams) > 0
+    
+    def has_complete_teams(self):
+        """Check if the event has at least one team with all positions filled"""
+        if not self.has_teams():
+            return False
+        
+        from flask import current_app
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        required_positions = len(team_positions.get(self.format, []))
+        
+        for team in self.event_teams:
+            if len(team.team_members) == required_positions:
+                return True
+        return False
+    
+    def is_ready_for_bookings(self):
+        """Check if the event is ready for booking creation"""
+        return self.has_teams()  # At minimum, need teams defined
+
 
 class Booking(db.Model):
     __tablename__ = 'bookings'
@@ -290,7 +312,7 @@ class BookingTeamMember(db.Model):
     member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
     position: so.Mapped[str] = so.mapped_column(sa.String(20), nullable=False)  # Lead, Second, Third, Skip, Player
     is_substitute: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False, nullable=False)
-    confirmed_available: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False, nullable=False)
+    availability_status: so.Mapped[str] = so.mapped_column(sa.String(20), default='pending', nullable=False)  # 'pending', 'available', 'unavailable'
     confirmed_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
     substituted_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)

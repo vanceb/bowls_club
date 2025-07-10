@@ -224,11 +224,6 @@ class EventForm(FlaskForm):
         option_widget=CheckboxInput(),
         widget=ListWidget(prefix_label=False)
     )
-    number_of_teams = IntegerField(
-        'Number of Teams',
-        validators=[DataRequired(), NumberRange(min=1, max=20)],
-        default=2
-    )
     submit = SubmitField('Save Event')
 
     def __init__(self, *args, **kwargs):
@@ -290,42 +285,53 @@ class EventSelectionForm(FlaskForm):
         ]
 
 
-class TeamMemberForm(FlaskForm):
-    """Form for assigning members to team positions"""
-    team_id = HiddenField('Team ID')
-    team_name = StringField('Team Name', validators=[DataRequired(), Length(max=100)])
+class AddTeamForm(FlaskForm):
+    """Form for adding a new team to an event"""
+    team_name = StringField(
+        'Team Name', 
+        validators=[DataRequired(), Length(min=1, max=100)],
+        render_kw={'placeholder': 'Enter team name (e.g. "The Misfits", "Team Alpha")'} 
+    )
+    submit = SubmitField('Add Team')
+
+
+def create_team_member_form(event_format):
+    """Factory function to create a TeamMemberForm with dynamic fields"""
     
-    # Dynamic fields for team member positions will be added in __init__
-    def __init__(self, event_format=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    class TeamMemberForm(FlaskForm):
+        team_id = HiddenField('Team ID')
+        team_name = StringField('Team Name', validators=[DataRequired(), Length(max=100)])
+        submit = SubmitField('Save Team')
+    
+    if event_format:
+        from flask import current_app
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(event_format, [])
         
-        if event_format:
-            # Get available positions for this format
-            from flask import current_app
-            team_positions = current_app.config.get('TEAM_POSITIONS', {})
-            positions = team_positions.get(event_format, [])
-            
-            # Get all members for selection
-            from app.models import Member
-            from app import db
-            import sqlalchemy as sa
-            
-            members = db.session.scalars(
-                sa.select(Member)
-                .where(Member.status.in_(['Full', 'Social', 'Life']))
-                .order_by(Member.firstname, Member.lastname)
-            ).all()
-            
-            member_choices = [(0, 'Select a player...')] + [
-                (member.id, f"{member.firstname} {member.lastname}") for member in members
-            ]
-            
-            # Dynamically create fields for each position
-            for position in positions:
-                field_name = f"position_{position.lower().replace(' ', '_')}"
-                setattr(self, field_name, SelectField(
-                    f"{position}",
-                    coerce=int,
-                    choices=member_choices,
-                    validators=[Optional()]
-                ))
+        # Get all members for selection
+        from app.models import Member
+        from app import db
+        import sqlalchemy as sa
+        
+        members = db.session.scalars(
+            sa.select(Member)
+            .where(Member.status.in_(['Full', 'Social', 'Life']))
+            .order_by(Member.firstname, Member.lastname)
+        ).all()
+        
+        member_choices = [(0, 'Select a player...')] + [
+            (member.id, f"{member.firstname} {member.lastname}") for member in members
+        ]
+        
+        # Dynamically create fields for each position
+        for position in positions:
+            field_name = f"position_{position.lower().replace(' ', '_')}"
+            field = SelectField(
+                f"{position}",
+                coerce=int,
+                choices=member_choices,
+                validators=[Optional()]
+            )
+            setattr(TeamMemberForm, field_name, field)
+    
+    return TeamMemberForm

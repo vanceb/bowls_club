@@ -93,6 +93,7 @@
                             <form method="POST" action="{{ url_for('delete_policy_page', policy_page_id=page.id) }}" 
                                   style="display: inline-block;"
                                   onsubmit="return confirm('Are you sure you want to delete this policy page? This action cannot be undone.');">
+                                {{ csrf_form.hidden_tag() }}
                                 <button type="submit" 
                                         class="button is-danger is-outlined" 
                                         title="Delete Page">
