@@ -82,3 +82,15 @@ class Config:
         "Fours - 4 Wood": 4,
         "Fours - 2 Wood": 5
     }
+    
+    # Team positions based on bowls format
+    TEAM_POSITIONS = {
+        1: ["Player"],  # Singles
+        2: ["Lead", "Skip"],  # Pairs
+        3: ["Lead", "Second", "Skip"],  # Triples
+        4: ["Lead", "Second", "Third", "Skip"],  # Fours - 4 Wood
+        5: ["Lead", "Second", "Third", "Skip"]   # Fours - 2 Wood
+    }
+    
+    # Team availability settings
+    AVAILABILITY_DEADLINE_DAYS = 7  # Days before game that players must confirm availability
