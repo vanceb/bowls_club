@@ -232,40 +232,73 @@ def members():
     return render_template('members.html', members=members, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
-@app.route('/search_members', methods=['GET'])
-@login_required
-def search_members():
+def _get_member_data(member, show_private_data=False):
     """
-    Route: Search Members
-    - Allows searching for members by username, first name, last name, or email.
-    - Returns a JSON response with member details, including roles.
-    - Requires login.
+    Helper function to get member data with optional privacy filtering.
+    
+    This is the single source of truth for member data formatting. It ensures
+    consistent behavior across all routes while allowing admin/User Manager
+    access to all data and respecting privacy settings for regular users.
+    
+    Args:
+        member: Member object from database
+        show_private_data: Boolean - if True, shows all data regardless of privacy settings
+                          (for admins/user managers), if False, respects privacy settings
+    
+    Returns:
+        Dictionary with member data
     """
-    query = request.args.get('q', '').strip()
-    members = db.session.scalars(sa.select(Member).where(
+    return {
+        'id': member.id,
+        'firstname': member.firstname,
+        'lastname': member.lastname,
+        'username': member.username,
+        'email': member.email if (show_private_data or member.share_email) else None,
+        'phone': member.phone if (show_private_data or member.share_phone) else None,
+        'gender': member.gender,
+        'status': member.status,
+        'share_email': member.share_email,
+        'share_phone': member.share_phone,
+        'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
+    }
+
+
+def _search_members_base(query):
+    """
+    Base function to search members by various criteria.
+    
+    Args:
+        query: Search string
+        
+    Returns:
+        List of Member objects matching the search criteria
+    """
+    return db.session.scalars(sa.select(Member).where(
         (Member.username.ilike(f'%{query}%')) |
         (Member.firstname.ilike(f'%{query}%')) |
         (Member.lastname.ilike(f'%{query}%')) |
         (Member.email.ilike(f'%{query}%'))
     )).all()
 
+
+@app.route('/search_members', methods=['GET'])
+@login_required
+def search_members():
+    """
+    Route: Search Members
+    - Allows searching for members by username, first name, last name, or email.
+    - Returns a JSON response with member details, respecting privacy settings.
+    - Requires login.
+    """
+    query = request.args.get('q', '').strip()
+    members = _search_members_base(query)
+    
+    # Check if current user has admin privileges (User Manager role or is_admin)
+    show_private_data = (current_user.is_admin or 
+                        any(role.name == 'User Manager' for role in current_user.roles))
+
     return jsonify({
-        'members': [
-            {
-                'id': member.id,
-                'firstname': member.firstname,
-                'lastname': member.lastname,
-                'username': member.username,
-                'email': member.email if member.share_email else None,
-                'phone': member.phone if member.share_phone else None,
-                'gender': member.gender,
-                'status': member.status,
-                'share_email': member.share_email,
-                'share_phone': member.share_phone,
-                'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
-            }
-            for member in members
-        ]
+        'members': [_get_member_data(member, show_private_data) for member in members]
     })
 
 
