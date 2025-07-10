@@ -243,6 +243,11 @@
                         <td>{{ booking.rink_count }}</td>
                         <td>{{ booking.priority or '-' }}</td>
                         <td>
+                            <a href="{{ url_for('manage_booking_teams', booking_id=booking.id) }}" 
+                               class="button is-small is-primary">
+                                <span class="icon"><i class="fas fa-users"></i></span>
+                                <span>Teams</span>
+                            </a>
                             <button class="button is-small is-info edit-booking-btn" 
                                     data-booking-id="{{ booking.id }}">
                                 <span class="icon"><i class="fas fa-edit"></i></span>

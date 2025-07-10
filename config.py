@@ -27,6 +27,7 @@ class Config:
         {'name': 'News', 'link': 'index'},
         {'name': 'Members', 'link': 'members'},
         {'name': 'Bookings', 'link': 'bookings'},
+        {'name': 'My Games', 'link': 'my_games'},
 ]
     # A List holding the contents of the Admin menu
     # Using None to create a separator

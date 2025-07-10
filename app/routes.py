@@ -21,7 +21,7 @@ from app.forms import (
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
     EventSelectionForm, PolicyPageForm, EditProfileForm
 )
-from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember
+from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember, BookingTeam, BookingTeamMember
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
@@ -858,8 +858,33 @@ def manage_events():
                         event_id=selected_event.id
                     )
                     db.session.add(new_booking)
+                    db.session.flush()  # Flush to get the booking ID
+                    
+                    # Copy event teams to booking teams
+                    from app.models import BookingTeam, BookingTeamMember
+                    for event_team in selected_event.event_teams:
+                        booking_team = BookingTeam(
+                            booking_id=new_booking.id,
+                            event_team_id=event_team.id,
+                            team_name=event_team.team_name,
+                            team_number=event_team.team_number
+                        )
+                        db.session.add(booking_team)
+                        db.session.flush()  # Flush to get the booking team ID
+                        
+                        # Copy team members to booking team members
+                        for team_member in event_team.team_members:
+                            booking_team_member = BookingTeamMember(
+                                booking_team_id=booking_team.id,
+                                member_id=team_member.member_id,
+                                position=team_member.position,
+                                is_substitute=False,
+                                confirmed_available=False
+                            )
+                            db.session.add(booking_team_member)
+                    
                     db.session.commit()
-                    flash(f'Booking created successfully for "{selected_event.name}"!', 'success')
+                    flash(f'Booking created successfully for "{selected_event.name}" with {len(selected_event.event_teams)} teams!', 'success')
                     
                     # Reload the page with the selected event
                     return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
@@ -1001,6 +1026,139 @@ def manage_events():
                          event_teams=selected_event.event_teams if selected_event else [],
                          team_positions=app.config.get('TEAM_POSITIONS', {}),
                          menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/my_games', methods=['GET', 'POST'])
+@login_required
+def my_games():
+    """
+    Route: My Games Dashboard
+    - Shows the current user's upcoming booking team assignments
+    - Allows players to confirm availability for upcoming games
+    - Displays game details including event, date, session, and team position
+    """
+    from datetime import date
+    
+    # Get all upcoming booking team assignments for the current user
+    upcoming_assignments = db.session.scalars(
+        sa.select(BookingTeamMember)
+        .join(BookingTeam)
+        .join(Booking)
+        .join(Event)
+        .where(
+            BookingTeamMember.member_id == current_user.id,
+            Booking.booking_date >= date.today()
+        )
+        .order_by(Booking.booking_date, Booking.session)
+    ).all()
+    
+    # Handle availability confirmation
+    if request.method == 'POST':
+        assignment_id = request.form.get('assignment_id')
+        action = request.form.get('action')
+        
+        if assignment_id and action == 'confirm_available':
+            assignment = db.session.get(BookingTeamMember, int(assignment_id))
+            if assignment and assignment.member_id == current_user.id and not assignment.confirmed_available:
+                assignment.confirmed_available = True
+                assignment.confirmed_at = datetime.utcnow()
+                db.session.commit()
+                flash('Availability confirmed successfully!', 'success')
+            else:
+                flash('Unable to confirm availability for this assignment.', 'error')
+        
+        return redirect(url_for('my_games'))
+    
+    return render_template('my_games.html',
+                         assignments=upcoming_assignments,
+                         menu_items=app.config['MENU_ITEMS'],
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
+@role_required('Event Manager')
+def manage_booking_teams(booking_id):
+    """
+    Route: Manage Booking Teams
+    - Allows Event Managers to view and modify teams for a specific booking
+    - Handles substitutions and team member assignments
+    - Shows availability status of all team members
+    """
+    booking = db.session.get(Booking, booking_id)
+    if not booking:
+        abort(404)
+    
+    # Check if current user is an event manager for this event
+    if not current_user.is_admin:
+        user_role_names = [role.name for role in current_user.roles]
+        if 'Event Manager' not in user_role_names:
+            abort(403)
+        # Additional check: is user an event manager for this specific event?
+        if current_user not in booking.event.event_managers:
+            abort(403)
+    
+    # Handle substitution
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'substitute_player':
+            booking_team_member_id = request.form.get('booking_team_member_id')
+            new_member_id = request.form.get('new_member_id')
+            
+            if booking_team_member_id and new_member_id:
+                booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                new_member = db.session.get(Member, int(new_member_id))
+                
+                if booking_team_member and new_member:
+                    # Log the substitution
+                    substitution_log = {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'action': 'substitution',
+                        'original_player': f"{booking_team_member.member.firstname} {booking_team_member.member.lastname}",
+                        'substitute_player': f"{new_member.firstname} {new_member.lastname}",
+                        'position': booking_team_member.position,
+                        'made_by': f"{current_user.firstname} {current_user.lastname}",
+                        'reason': request.form.get('reason', 'No reason provided')
+                    }
+                    
+                    # Update the booking team member
+                    booking_team_member.member_id = new_member.id
+                    booking_team_member.is_substitute = True
+                    booking_team_member.substituted_at = datetime.utcnow()
+                    booking_team_member.confirmed_available = False  # New player needs to confirm
+                    booking_team_member.confirmed_at = None
+                    
+                    # Update the substitution log on the booking team
+                    import json
+                    booking_team = booking_team_member.booking_team
+                    current_log = json.loads(booking_team.substitution_log or '[]')
+                    current_log.append(substitution_log)
+                    booking_team.substitution_log = json.dumps(current_log)
+                    
+                    db.session.commit()
+                    flash(f'Successfully substituted {substitution_log["original_player"]} with {substitution_log["substitute_player"]} for {booking_team_member.position}', 'success')
+                else:
+                    flash('Invalid player selection for substitution', 'error')
+        
+        return redirect(url_for('manage_booking_teams', booking_id=booking_id))
+    
+    # Get available members for substitutions (excluding current team members)
+    current_member_ids = [btm.member_id for team in booking.booking_teams for btm in team.booking_team_members]
+    available_members = db.session.scalars(
+        sa.select(Member)
+        .where(
+            Member.status.in_(['Full', 'Social', 'Life']),
+            ~Member.id.in_(current_member_ids)
+        )
+        .order_by(Member.firstname, Member.lastname)
+    ).all()
+    
+    return render_template('manage_booking_teams.html',
+                         booking=booking,
+                         available_members=available_members,
+                         team_positions=app.config.get('TEAM_POSITIONS', {}),
+                         menu_items=app.config['MENU_ITEMS'],
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
