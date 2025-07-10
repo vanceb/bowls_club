@@ -1,0 +1,669 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <!-- Data container for JavaScript -->
+    <div id="page-data" 
+         data-selected-event-id="{{ selected_event.id if selected_event else '' }}"
+         data-selected-event-name="{{ selected_event.name if selected_event else '' }}"
+         style="display: none;">
+    </div>
+    
+    <h1 class="title">Events Management</h1>
+    
+    <!-- Event Selection Form -->
+    <div class="box">
+        <h2 class="subtitle">Select Event</h2>
+        <div class="field">
+            <div class="control">
+                <div class="select is-fullwidth">
+                    {{ selection_form.selected_event() }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Details Form -->
+    <div class="box">
+        <h2 class="subtitle" id="event-form-title">Create New Event</h2>
+        
+        <form method="POST" id="event-form">
+            {{ event_form.hidden_tag() }}
+            {{ event_form.event_id() }}
+            
+            <div class="field">
+                <label class="label">Event Name</label>
+                <div class="control">
+                    {{ event_form.name(class="input") }}
+                </div>
+                {% for error in event_form.name.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
+                <label class="label">Event Type</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ event_form.event_type() }}
+                    </div>
+                </div>
+                {% for error in event_form.event_type.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field-body">
+                <div class="field">
+                    <label class="label">Gender</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            {{ event_form.gender() }}
+                        </div>
+                    </div>
+                    {% for error in event_form.gender.errors %}
+                        <p class="help is-danger">{{ error }}</p>
+                    {% endfor %}
+                </div>
+
+                <div class="field">
+                    <label class="label">Format</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            {{ event_form.format() }}
+                        </div>
+                    </div>
+                    {% for error in event_form.format.errors %}
+                        <p class="help is-danger">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Scoring</label>
+                <div class="control">
+                    {{ event_form.scoring(class="input") }}
+                </div>
+                <p class="help">Optional scoring method or format (e.g., "Best of 3 sets", "21 points")</p>
+                {% for error in event_form.scoring.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
+                <label class="label">Event Managers</label>
+                <div class="control">
+                    {{ event_form.event_managers() }}
+                </div>
+                <p class="help">Select one or more people responsible for organizing this event</p>
+                {% for error in event_form.event_managers.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            <div class="field">
+                <div class="control">
+                    {{ event_form.submit(class="button is-primary") }}
+                    {% if selected_event %}
+                        <a href="{{ url_for('manage_events') }}" class="button is-light">Cancel</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bookings Section -->
+    <div class="box" id="bookings-section">
+        <div class="level">
+            <div class="level-left">
+                <h2 class="subtitle" id="bookings-title">Select an event to view bookings</h2>
+            </div>
+            <div class="level-right">
+                <button id="toggle-booking-form" class="button is-success hidden-initially">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Add Booking</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Add Booking Form (initially hidden) -->
+        <div id="booking-form-section" class="box is-hidden booking-form-bg">
+            <h3 class="subtitle is-5">Create New Booking</h3>
+            <form method="POST" id="booking-form">
+                {{ booking_form.hidden_tag() }}
+                <input type="hidden" name="event_id" value="{{ selected_event.id }}">
+                
+                <div class="columns">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Booking Date</label>
+                            <div class="control">
+                                {{ booking_form.booking_date(class="input") }}
+                            </div>
+                            {% for error in booking_form.booking_date.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Session</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    {{ booking_form.session() }}
+                                </div>
+                            </div>
+                            {% for error in booking_form.session.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="columns">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Number of Rinks Needed</label>
+                            <div class="control">
+                                {{ booking_form.rink_count(class="input") }}
+                            </div>
+                            <p class="help">Enter the number of rinks needed for this booking (1-6)</p>
+                            <div id="booking-availability-info" class="notification is-hidden">
+                                <!-- Availability information will be displayed here -->
+                            </div>
+                            {% for error in booking_form.rink_count.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Priority</label>
+                            <div class="control">
+                                {{ booking_form.priority(class="input") }}
+                            </div>
+                            {% for error in booking_form.priority.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button type="submit" name="create_booking" class="button is-primary">
+                            Create Booking
+                        </button>
+                    </div>
+                    <div class="control">
+                        <button type="button" id="cancel-booking" class="button is-light">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Bookings List -->
+        {% if event_bookings %}
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Session</th>
+                        <th>Rinks Needed</th>
+                        <th>Priority</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in event_bookings %}
+                    <tr id="booking-row-{{ booking.id }}" class="booking-display-row">
+                        <td>{{ booking.booking_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            {{ sessions.get(booking.session, 'Unknown') }}
+                        </td>
+                        <td>{{ booking.rink_count }}</td>
+                        <td>{{ booking.priority or '-' }}</td>
+                        <td>
+                            <button class="button is-small is-info edit-booking-btn" 
+                                    data-booking-id="{{ booking.id }}">
+                                <span class="icon"><i class="fas fa-edit"></i></span>
+                                <span>Edit</span>
+                            </button>
+                            <button class="button is-small is-danger delete-booking-btn" 
+                                    data-booking-id="{{ booking.id }}">
+                                <span class="icon"><i class="fas fa-trash"></i></span>
+                                <span>Delete</span>
+                            </button>
+                        </td>
+                    </tr>
+                    <!-- Inline Edit Form (initially hidden) -->
+                    <tr id="booking-edit-row-{{ booking.id }}" class="booking-edit-row is-hidden">
+                        <td colspan="5">
+                            <form method="POST" class="booking-edit-form" data-booking-id="{{ booking.id }}">
+                                {{ booking_form.hidden_tag() }}
+                                <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                <input type="hidden" name="event_id" value="{{ selected_event.id }}">
+                                
+                                <div class="columns is-vcentered">
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Date</label>
+                                            <div class="control">
+                                                <input type="date" name="booking_date" class="input is-small" 
+                                                       value="{{ booking.booking_date.strftime('%Y-%m-%d') }}" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Session</label>
+                                            <div class="control">
+                                                <div class="select is-small is-fullwidth">
+                                                    <select name="session" required>
+                                                        {% for session_id, session_name in config['DAILY_SESSIONS'].items() %}
+                                                        <option value="{{ session_id }}" 
+                                                                {% if booking.session == session_id %}selected{% endif %}>
+                                                            {{ session_name }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Rinks</label>
+                                            <div class="control">
+                                                <input type="number" name="rink_count" class="input is-small" 
+                                                       value="{{ booking.rink_count }}" min="1" max="6" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Priority</label>
+                                            <div class="control">
+                                                <input type="text" name="priority" class="input is-small" 
+                                                       value="{{ booking.priority or '' }}" maxlength="50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="column is-narrow">
+                                        <div class="field is-grouped">
+                                            <div class="control">
+                                                <button type="submit" name="update_booking" 
+                                                        class="button is-small is-success">
+                                                    <span class="icon"><i class="fas fa-check"></i></span>
+                                                    <span>Save</span>
+                                                </button>
+                                            </div>
+                                            <div class="control">
+                                                <button type="button" class="button is-small is-light cancel-edit-btn">
+                                                    <span class="icon"><i class="fas fa-times"></i></span>
+                                                    <span>Cancel</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="notification is-info">
+            <p>No bookings found for this event. Click "Add Booking" to create the first booking.</p>
+        </div>
+        {% endif %}
+        <!-- Default message when no event is selected -->
+        <div id="no-bookings-message" class="notification is-info">
+            <p>Select an event from the dropdown above to view and manage its bookings.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const eventSelect = document.getElementById('selected_event');
+    const eventForm = document.getElementById('event-form');
+    const eventIdInput = document.getElementById('event_id');
+    const nameInput = document.getElementById('name');
+    const typeSelect = document.getElementById('event_type');
+    
+    // Booking form elements
+    const toggleBookingFormBtn = document.getElementById('toggle-booking-form');
+    const bookingFormSection = document.getElementById('booking-form-section');
+    const cancelBookingBtn = document.getElementById('cancel-booking');
+    const bookingDateInput = document.getElementById('booking_date');
+    const bookingSessionSelect = document.getElementById('session');
+    const bookingRinkCountInput = document.getElementById('rink_count');
+    const bookingAvailabilityInfo = document.getElementById('booking-availability-info');
+
+    // Sync dropdown with selected event on page load (when loaded via URL parameter)
+    const pageData = document.getElementById('page-data');
+    const selectedEventId = pageData.dataset.selectedEventId;
+    const selectedEventName = pageData.dataset.selectedEventName;
+    
+    if (selectedEventId && eventSelect) {
+        eventSelect.value = selectedEventId;
+        // Also update the UI elements for selected event
+        const eventFormTitle = document.getElementById('event-form-title');
+        const bookingsTitle = document.getElementById('bookings-title');
+        const noBookingsMessage = document.getElementById('no-bookings-message');
+        const toggleBookingBtn = document.getElementById('toggle-booking-form');
+        
+        if (eventFormTitle) eventFormTitle.textContent = `Edit Event: ${selectedEventName}`;
+        if (bookingsTitle) bookingsTitle.textContent = `Bookings for ${selectedEventName}`;
+        if (noBookingsMessage) noBookingsMessage.style.display = 'none';
+        if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
+    }
+
+    // Handle event selection change
+    eventSelect.addEventListener('change', function() {
+        const eventId = this.value;
+        const eventFormTitle = document.getElementById('event-form-title');
+        const bookingsTitle = document.getElementById('bookings-title');
+        const noBookingsMessage = document.getElementById('no-bookings-message');
+        const toggleBookingBtn = document.getElementById('toggle-booking-form');
+        
+        if (eventId == 0) {
+            // Clear form for new event
+            eventIdInput.value = '';
+            nameInput.value = '';
+            typeSelect.value = '';
+            
+            // Clear new fields
+            const genderSelect = document.getElementById('gender');
+            const formatSelect = document.getElementById('format');
+            const scoringInput = document.getElementById('scoring');
+            const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
+            
+            if (genderSelect) genderSelect.value = '4'; // Default to "Open"
+            if (formatSelect) formatSelect.value = '5'; // Default to "Fours - 2 Wood"
+            if (scoringInput) scoringInput.value = '';
+            
+            // Clear event managers checkboxes
+            if (eventManagersCheckboxes) {
+                eventManagersCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+            }
+            
+            eventFormTitle.textContent = 'Create New Event';
+            
+            // Hide bookings section content
+            bookingsTitle.textContent = 'Select an event to view bookings';
+            if (noBookingsMessage) noBookingsMessage.style.display = 'block';
+            if (toggleBookingBtn) toggleBookingBtn.style.display = 'none';
+            
+            // Hide existing bookings table
+            const bookingsTable = document.querySelector('.table-container');
+            if (bookingsTable) bookingsTable.style.display = 'none';
+            
+        } else if (eventId > 0) {
+            // Load selected event data via AJAX
+            fetch(`/api/event/${eventId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Update event form
+                    eventIdInput.value = data.id;
+                    nameInput.value = data.name;
+                    typeSelect.value = data.event_type;
+                    
+                    // Update new fields
+                    const genderSelect = document.getElementById('gender');
+                    const formatSelect = document.getElementById('format');
+                    const scoringInput = document.getElementById('scoring');
+                    const eventManagersCheckboxes = document.querySelectorAll('input[name="event_managers"]');
+                    
+                    if (genderSelect) genderSelect.value = data.gender;
+                    if (formatSelect) formatSelect.value = data.format;
+                    if (scoringInput) scoringInput.value = data.scoring || '';
+                    
+                    // Update event managers checkboxes
+                    if (eventManagersCheckboxes) {
+                        eventManagersCheckboxes.forEach(checkbox => {
+                            checkbox.checked = data.event_managers.some(manager => manager.id == checkbox.value);
+                        });
+                    }
+                    
+                    eventFormTitle.textContent = `Edit Event: ${data.name}`;
+                    
+                    // Update bookings section
+                    bookingsTitle.textContent = `Bookings for ${data.name}`;
+                    if (noBookingsMessage) noBookingsMessage.style.display = 'none';
+                    if (toggleBookingBtn) toggleBookingBtn.style.display = 'inline-flex';
+                    
+                    // Load bookings for this event
+                    loadEventBookings(eventId);
+                })
+                .catch(error => {
+                    console.error('Error loading event:', error);
+                    alert('Error loading event data. Please try again.');
+                });
+        }
+    });
+    
+    // Function to load bookings for an event
+    function loadEventBookings(eventId) {
+        // For now, we'll reload the page with the event_id parameter
+        // This ensures all the bookings are loaded with proper server-side rendering
+        window.location.href = `/admin/manage_events?event_id=${eventId}`;
+    }
+
+    // Handle booking form toggle
+    if (toggleBookingFormBtn && bookingFormSection) {
+        toggleBookingFormBtn.addEventListener('click', function() {
+            bookingFormSection.classList.toggle('is-hidden');
+            if (!bookingFormSection.classList.contains('is-hidden')) {
+                this.textContent = 'Cancel';
+                this.classList.remove('is-success');
+                this.classList.add('is-warning');
+            } else {
+                this.innerHTML = '<span class="icon"><i class="fas fa-plus"></i></span><span>Add Booking</span>';
+                this.classList.remove('is-warning');
+                this.classList.add('is-success');
+            }
+        });
+    }
+
+    // Handle cancel booking button
+    if (cancelBookingBtn && bookingFormSection) {
+        cancelBookingBtn.addEventListener('click', function() {
+            bookingFormSection.classList.add('is-hidden');
+            toggleBookingFormBtn.innerHTML = '<span class="icon"><i class="fas fa-plus"></i></span><span>Add Booking</span>';
+            toggleBookingFormBtn.classList.remove('is-warning');
+            toggleBookingFormBtn.classList.add('is-success');
+            
+            // Clear the booking form
+            document.getElementById('booking-form').reset();
+            hideBookingAvailability();
+        });
+    }
+
+    // Booking availability checking (reuse logic from booking form)
+    function updateBookingAvailability() {
+        const date = bookingDateInput?.value;
+        const session = bookingSessionSelect?.value;
+        
+        if (date && session) {
+            fetch(`/get_availability/${date}/${session}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    displayBookingAvailability(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching availability:', error);
+                    hideBookingAvailability();
+                });
+        } else {
+            hideBookingAvailability();
+        }
+    }
+
+    function displayBookingAvailability(data) {
+        const availableRinks = data.available_rinks;
+        const bookedRinks = data.booked_rinks;
+        const totalRinks = data.total_rinks;
+        
+        let message = '';
+        let notificationClass = '';
+        
+        if (availableRinks === totalRinks) {
+            message = `All ${totalRinks} rinks are available for this session.`;
+            notificationClass = 'is-success';
+        } else if (availableRinks > 0) {
+            message = `${availableRinks} of ${totalRinks} rinks available (${bookedRinks} already booked).`;
+            notificationClass = 'is-warning';
+        } else {
+            message = `This session is fully booked (${bookedRinks}/${totalRinks} rinks).`;
+            notificationClass = 'is-danger';
+        }
+        
+        bookingAvailabilityInfo.innerHTML = `
+            <div class="has-text-weight-bold">Availability Status:</div>
+            ${message}
+        `;
+        
+        bookingAvailabilityInfo.className = `notification ${notificationClass}`;
+        
+        // Update the max value for rink count input
+        bookingRinkCountInput.setAttribute('max', Math.max(0, availableRinks));
+        
+        // If current value exceeds available rinks, show warning
+        const currentValue = parseInt(bookingRinkCountInput.value) || 0;
+        if (currentValue > availableRinks) {
+            const warningDiv = document.createElement('div');
+            warningDiv.className = 'has-text-danger';
+            warningDiv.innerHTML = `<br><strong>Warning:</strong> You've requested ${currentValue} rinks, but only ${availableRinks} are available.`;
+            bookingAvailabilityInfo.appendChild(warningDiv);
+        }
+    }
+
+    function hideBookingAvailability() {
+        if (bookingAvailabilityInfo) {
+            bookingAvailabilityInfo.className = 'notification is-hidden';
+            bookingAvailabilityInfo.innerHTML = '';
+        }
+        if (bookingRinkCountInput) {
+            bookingRinkCountInput.removeAttribute('max');
+        }
+    }
+
+    // Add event listeners for booking availability checking
+    if (bookingDateInput) {
+        bookingDateInput.addEventListener('change', updateBookingAvailability);
+    }
+    if (bookingSessionSelect) {
+        bookingSessionSelect.addEventListener('change', updateBookingAvailability);
+    }
+    if (bookingRinkCountInput) {
+        bookingRinkCountInput.addEventListener('input', function() {
+            if (bookingDateInput?.value && bookingSessionSelect?.value) {
+                updateBookingAvailability();
+            }
+        });
+    }
+
+    // Inline booking editing functionality
+    document.addEventListener('click', function(e) {
+        // Handle edit booking button
+        if (e.target.closest('.edit-booking-btn')) {
+            const button = e.target.closest('.edit-booking-btn');
+            const bookingId = button.dataset.bookingId;
+            const displayRow = document.getElementById(`booking-row-${bookingId}`);
+            const editRow = document.getElementById(`booking-edit-row-${bookingId}`);
+            
+            if (displayRow && editRow) {
+                displayRow.classList.add('is-hidden');
+                editRow.classList.remove('is-hidden');
+            }
+        }
+        
+        // Handle cancel edit button
+        if (e.target.closest('.cancel-edit-btn')) {
+            const button = e.target.closest('.cancel-edit-btn');
+            const form = button.closest('.booking-edit-form');
+            const bookingId = form.dataset.bookingId;
+            const displayRow = document.getElementById(`booking-row-${bookingId}`);
+            const editRow = document.getElementById(`booking-edit-row-${bookingId}`);
+            
+            if (displayRow && editRow) {
+                editRow.classList.add('is-hidden');
+                displayRow.classList.remove('is-hidden');
+            }
+        }
+        
+        // Handle delete booking button
+        if (e.target.closest('.delete-booking-btn')) {
+            const button = e.target.closest('.delete-booking-btn');
+            const bookingId = button.dataset.bookingId;
+            
+            if (confirm('Are you sure you want to delete this booking?')) {
+                // Create a form for deletion
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.style.display = 'none';
+                
+                // Add CSRF token
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                
+                // Add booking ID
+                const bookingIdInput = document.createElement('input');
+                bookingIdInput.type = 'hidden';
+                bookingIdInput.name = 'booking_id';
+                bookingIdInput.value = bookingId;
+                form.appendChild(bookingIdInput);
+                
+                // Add event ID
+                const eventId = document.getElementById('event_id').value;
+                const eventIdInput = document.createElement('input');
+                eventIdInput.type = 'hidden';
+                eventIdInput.name = 'event_id';
+                eventIdInput.value = eventId;
+                form.appendChild(eventIdInput);
+                
+                // Add delete action
+                const deleteInput = document.createElement('input');
+                deleteInput.type = 'hidden';
+                deleteInput.name = 'delete_booking';
+                deleteInput.value = 'true';
+                form.appendChild(deleteInput);
+                
+                // Submit form
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}

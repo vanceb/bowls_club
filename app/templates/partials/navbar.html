@@ -3,7 +3,7 @@
   <!-- Brand is placed left of the navbar and stays when screens are small -->
   <div class="navbar-brand">
     <a class="navbar-item" href="{{ url_for('index') }}">
-      <img src="{{ url_for('static', filename='images/brand.svg') }}" alt="" style="max-height: 70px", class="py-2">
+      <img src="{{ url_for('static', filename='images/brand.svg') }}" alt="" class="brand-logo py-2">
     </a>
 
     <!-- these spans below are needed by bulma to make the navbar menu work -->
@@ -54,13 +54,13 @@
 
     <!-- navbar-end sits to the right -->
     <div class="navbar-end">
-      {% if current_user.is_authenticated and current_user.is_admin %}
+      {% if current_user.is_authenticated and (current_user.is_admin or filtered_admin_menu_items) %}
         <div class="navbar-item has-dropdown is-hoverable">
           <a class="navbar-link">
             Admin
           </a>
           <div class="navbar-dropdown is-right">
-            {% for admin_item in admin_menu_items %}
+            {% for admin_item in filtered_admin_menu_items %}
               {% if admin_item is none %}
                 <hr class="navbar-divider">
               {% else %}

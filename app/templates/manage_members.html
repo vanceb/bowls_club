@@ -7,7 +7,7 @@
     <div class="field">
         <label class="label is-size-5">Search Members</label>
         <div class="control">
-            <input id="search-input" class="input" type="text" placeholder="Search by first or last name" autofocus>
+            <input id="search-input" class="input" type="text" placeholder="Search by username, first name, last name, or email" autofocus>
         </div>
     </div>
 </div>
@@ -15,6 +15,7 @@
 <table class="table is-striped is-hoverable is-fullwidth">
     <thead>
         <tr>
+            <th>Username</th>
             <th>First Name</th>
             <th>Last Name</th>
             <th>Email</th>
@@ -40,15 +41,25 @@
                 data.members.forEach(member => {
                     const row = document.createElement('tr');
                     const roles = member.roles.map(role => role.name).join(', '); // Combine role names
-                    row.innerHTML = `
-                        <td>${member.firstname}</td>
-                        <td>${member.lastname}</td>
-                        <td>${member.email}</td>
-                        <td>${member.phone}</td>
-                        <td>${member.gender}</td>
-                        <td>${member.status}</td>
-                        <td>${roles}</td>
-                    `;
+                    
+                    // Create cells and set textContent to prevent XSS
+                    const cells = [
+                        member.username,
+                        member.firstname,
+                        member.lastname,
+                        member.email,
+                        member.phone,
+                        member.gender,
+                        member.status,
+                        roles
+                    ];
+                    
+                    cells.forEach(cellText => {
+                        const cell = document.createElement('td');
+                        cell.textContent = cellText; // Use textContent instead of innerHTML
+                        row.appendChild(cell);
+                    });
+                    
                     row.dataset.memberId = member.id; // Store the member ID
                     row.addEventListener('click', () => {
                         window.location.href = `/admin/edit_member/${member.id}`;

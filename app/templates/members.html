@@ -41,12 +41,21 @@
                     tbody.innerHTML = ''; // Clear the table body
                     data.members.forEach(member => {
                         const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${member.firstname}</td>
-                            <td>${member.lastname}</td>
-                            <td>${member.phone}</td>
-                            <td>${member.email}</td>
-                        `;
+                        
+                        // Create cells and set textContent to prevent XSS
+                        const cells = [
+                            member.firstname,
+                            member.lastname,
+                            member.phone,
+                            member.email
+                        ];
+                        
+                        cells.forEach(cellText => {
+                            const cell = document.createElement('td');
+                            cell.textContent = cellText; // Use textContent instead of innerHTML
+                            row.appendChild(cell);
+                        });
+                        
                         tbody.appendChild(row);
                     });
                 });

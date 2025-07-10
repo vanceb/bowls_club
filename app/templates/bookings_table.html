@@ -3,10 +3,35 @@
 {% block content %}
 <div class="container">
     <h1 class="title">Bookings</h1>
-    <div class="field">
-        <label class="label">Select Date</label>
-        <div class="control">
-            <input id="booking-date" class="input" type="date" value="{{ today }}">
+    <div class="columns is-vcentered">
+        <div class="column">
+            <div class="field">
+                <label class="label">Start Date</label>
+                <div class="control">
+                    <input id="start-date" class="input" type="date" value="{{ today }}">
+                </div>
+            </div>
+        </div>
+        <div class="column">
+            <div class="field">
+                <label class="label">End Date</label>
+                <div class="control">
+                    <input id="end-date" class="input" type="date" value="{{ today }}">
+                </div>
+            </div>
+        </div>
+        <div class="column is-narrow">
+            <div class="field">
+                <label class="label">&nbsp;</label>
+                <div class="control">
+                    <button id="load-bookings" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-sync-alt"></i>
+                        </span>
+                        <span>Refresh Bookings</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     <div id="bookings-table-container">
@@ -14,24 +39,42 @@
     </div>
 </div>
 
-
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         // Get today's date from the server-rendered value
-        const dateInput = document.getElementById('booking-date');
-        const today = dateInput.value;
+        const startDateInput = document.getElementById('start-date');
+        const endDateInput = document.getElementById('end-date');
+        const refreshButton = document.getElementById('load-bookings');
+        
+        // Calculate end date as 7 days from today
+        const today = new Date(startDateInput.value);
+        const endDate = new Date(today);
+        endDate.setDate(today.getDate() + 6); // 7 days total
+        endDateInput.value = endDate.toISOString().split('T')[0];
 
-        // Fetch bookings for today's date when the page loads
-        fetchBookings(today);
+        // Load bookings for the initial date range
+        fetchBookingsRange(startDateInput.value, endDateInput.value);
 
-        // Add event listener for date changes
-        dateInput.addEventListener('change', function () {
-            fetchBookings(this.value);
+        // Add event listener for start date changes
+        startDateInput.addEventListener('change', function () {
+            // When start date changes, set end date to start date + 7 days
+            const newStartDate = new Date(this.value);
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setDate(newStartDate.getDate() + 6); // 7 days total (including start date)
+            endDateInput.value = newEndDate.toISOString().split('T')[0];
+            
+            // Optionally auto-load the new date range
+            fetchBookingsRange(startDateInput.value, endDateInput.value);
+        });
+
+        // Add event listener for the refresh button
+        refreshButton.addEventListener('click', function () {
+            fetchBookingsRange(startDateInput.value, endDateInput.value);
         });
     });
 
-    function fetchBookings(selectedDate) {
-        fetch(`/get_bookings/${selectedDate}`)
+    function fetchBookingsRange(startDate, endDate) {
+        fetch(`/get_bookings_range/${startDate}/${endDate}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -39,26 +82,60 @@
                 return response.json();
             })
             .then(data => {
-                console.log("Data received from server:", data); // Debugging
                 const tableContainer = document.getElementById('bookings-table-container');
-                tableContainer.innerHTML = buildTable(data.bookings, data.rinks, data.sessions);
+                tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, startDate, endDate);
             })
-            .catch(error => console.error("Error fetching bookings:", error)); // Debugging
+            .catch(error => console.error("Error fetching bookings:", error));
     }
 
-    function buildTable(bookings, rinks, sessions) {
+    function buildBookingsTable(bookings, totalRinks, sessions, startDate, endDate) {
+        // Generate date range
+        const dates = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(new Date(d).toISOString().split('T')[0]);
+        }
+
+        // Build table header
         let table = '<table class="table is-bordered is-striped is-hoverable is-fullwidth">';
-        table += '<thead><tr><th>Session / Rink</th>';
-        for (let rink = 1; rink <= rinks; rink++) {
-            table += `<th>Rink ${rink}</th>`;
+        table += '<thead><tr><th>Date</th>';
+        
+        // Add session headers
+        for (const [sessionId, sessionTime] of Object.entries(sessions)) {
+            table += `<th>${sessionTime}</th>`;
         }
         table += '</tr></thead><tbody>';
 
-        for (const [sessionId, sessionTime] of Object.entries(sessions)) {
-            table += `<tr><td>${sessionTime}</td>`;
-            for (let rink = 1; rink <= rinks; rink++) {
-                const isBooked = bookings.some(booking => booking.rink === rink && booking.session === parseInt(sessionId));
-                table += `<td class="${isBooked ? 'has-background-primary' : ''}"></td>`;
+        // Build table rows - one per date
+        for (const date of dates) {
+            const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+            const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            table += `<tr><td><strong>${dayName}</strong><br>${formattedDate}</td>`;
+            
+            // Add cells for each session
+            for (const [sessionId, sessionTime] of Object.entries(sessions)) {
+                const sessionNum = parseInt(sessionId);
+                const bookedCount = bookings[date] && bookings[date][sessionNum] ? bookings[date][sessionNum] : 0;
+                const availableRinks = totalRinks - bookedCount;
+                
+                let cellClass = '';
+                let cellContent = '';
+                
+                if (bookedCount === 0) {
+                    cellContent = `${totalRinks} available`;
+                    cellClass = 'has-background-light';
+                } else if (bookedCount < totalRinks) {
+                    cellContent = `${bookedCount} booked<br>${availableRinks} available`;
+                    cellClass = 'has-background-warning-light';
+                } else {
+                    cellContent = 'Fully booked';
+                    cellClass = 'has-background-danger-light';
+                }
+                
+                table += `<td class="${cellClass}">${cellContent}</td>`;
             }
             table += '</tr>';
         }
