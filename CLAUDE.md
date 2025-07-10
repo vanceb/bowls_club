@@ -224,3 +224,8 @@ form = EventForm()  # This will cause CSRF RuntimeError
   - Implement proper dependency injection for better testability
   - Use `pathlib` for file and path operations instead of `os.path`
   - Implement proper error classes for custom exceptions
+
+## Development Guidelines
+
+- **Code Reuse**:
+  - Re-use code when appropriate
