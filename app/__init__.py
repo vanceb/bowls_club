@@ -66,6 +66,20 @@ def inject_admin_menu():
     filtered_admin_menu = filter_admin_menu_by_roles(current_user)
     return dict(filtered_admin_menu_items=filtered_admin_menu)
 
+@app.context_processor
+def inject_footer_policy_pages():
+    """Make footer policy pages available to all templates"""
+    import sqlalchemy as sa
+    from app.models import PolicyPage
+    
+    footer_policy_pages = db.session.scalars(
+        sa.select(PolicyPage)
+        .where(PolicyPage.is_active == True, PolicyPage.show_in_footer == True)
+        .order_by(PolicyPage.sort_order, PolicyPage.title)
+    ).all()
+    
+    return dict(footer_policy_pages=footer_policy_pages)
+
 # Security headers middleware
 @app.after_request
 def add_security_headers(response):

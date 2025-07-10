@@ -105,6 +105,24 @@
         {% endfor %}
     </div>
 
+    <!-- Privacy Settings Section -->
+    <div class="field">
+        <label class="label">Privacy Settings</label>
+        <div class="control">
+            <label class="checkbox">
+                {{ form.share_email }}
+                {{ form.share_email.label.text }}
+            </label>
+        </div>
+        <div class="control">
+            <label class="checkbox">
+                {{ form.share_phone }}
+                {{ form.share_phone.label.text }}
+            </label>
+        </div>
+        <p class="help">Control whether other members can see your contact information</p>
+    </div>
+
     <div class="buttons">
         <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}

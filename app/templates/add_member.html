@@ -81,6 +81,25 @@
                 {% endfor %}
             </div>
         </div>
+        
+        <!-- Privacy Settings Section -->
+        <div class="field">
+            <label class="label">Privacy Settings</label>
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.share_email(checked=true) }}
+                    {{ form.share_email.label.text }}
+                </label>
+            </div>
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.share_phone(checked=true) }}
+                    {{ form.share_phone.label.text }}
+                </label>
+            </div>
+            <p class="help">Control whether other members can see your contact information (you can change this later)</p>
+        </div>
+        
         <div class="field">
             <div class="control">
                 {{ form.submit(class_="button is-primary") }}

@@ -12,6 +12,7 @@ class Config:
     SECURE_STORAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'secure_storage')
     POSTS_STORAGE_PATH = os.path.join(SECURE_STORAGE_PATH, 'posts')
     ARCHIVE_STORAGE_PATH = os.path.join(SECURE_STORAGE_PATH, 'archive')
+    POLICY_PAGES_STORAGE_PATH = os.path.join(SECURE_STORAGE_PATH, 'policy_pages')
 
     # Email configuration
     MAIL_SERVER = os.environ.get('MAIL_SERVER')
@@ -38,6 +39,7 @@ class Config:
         # Content Management Section
         {"name": "Write Post", "link": "write_post", "roles": ["Content Manager"]},
         {"name": "Manage Posts", "link": "manage_posts", "roles": ["Content Manager"]},
+        {"name": "Manage Policy Pages", "link": "manage_policy_pages"},
         None,
         # Event Management Section
         {"name": "Manage Events", "link": "manage_events", "roles": ["Event Manager"]},

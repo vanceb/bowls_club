@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Manage Policy Pages</h1>
+    
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <p class="subtitle">
+                    Manage static policy pages that appear in the site footer
+                </p>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <a href="{{ url_for('create_policy_page') }}" class="button is-primary">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Create Policy Page</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if policy_pages %}
+    <div class="box">
+        <table class="table is-fullwidth is-striped is-hoverable">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Slug</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Footer</th>
+                    <th>Sort Order</th>
+                    <th>Author</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for page in policy_pages %}
+                <tr>
+                    <td>
+                        <strong>{{ page.title }}</strong>
+                    </td>
+                    <td>
+                        <span class="tag is-light">{{ page.slug }}</span>
+                    </td>
+                    <td>{{ page.description[:50] }}{% if page.description|length > 50 %}...{% endif %}</td>
+                    <td>
+                        {% if page.is_active %}
+                            <span class="tag is-success">Active</span>
+                        {% else %}
+                            <span class="tag is-warning">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if page.show_in_footer %}
+                            <span class="icon has-text-success">
+                                <i class="fas fa-check"></i>
+                            </span>
+                        {% else %}
+                            <span class="icon has-text-grey-light">
+                                <i class="fas fa-times"></i>
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>{{ page.sort_order }}</td>
+                    <td>{{ page.author.firstname }} {{ page.author.lastname }}</td>
+                    <td>{{ page.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        <div class="buttons are-small">
+                            {% if page.is_active %}
+                            <a href="{{ url_for('view_policy_page', slug=page.slug) }}" 
+                               class="button is-info is-outlined" 
+                               target="_blank"
+                               title="View Page">
+                                <span class="icon">
+                                    <i class="fas fa-eye"></i>
+                                </span>
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('edit_policy_page', policy_page_id=page.id) }}" 
+                               class="button is-warning is-outlined"
+                               title="Edit Page">
+                                <span class="icon">
+                                    <i class="fas fa-edit"></i>
+                                </span>
+                            </a>
+                            <form method="POST" action="{{ url_for('delete_policy_page', policy_page_id=page.id) }}" 
+                                  style="display: inline-block;"
+                                  onsubmit="return confirm('Are you sure you want to delete this policy page? This action cannot be undone.');">
+                                <button type="submit" 
+                                        class="button is-danger is-outlined" 
+                                        title="Delete Page">
+                                    <span class="icon">
+                                        <i class="fas fa-trash"></i>
+                                    </span>
+                                </button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="box has-text-centered">
+        <p class="subtitle has-text-grey">No policy pages have been created yet.</p>
+        <a href="{{ url_for('create_policy_page') }}" class="button is-primary">
+            <span class="icon">
+                <i class="fas fa-plus"></i>
+            </span>
+            <span>Create First Policy Page</span>
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="content">
+        <h3 class="title is-5">About Policy Pages</h3>
+        <ul>
+            <li><strong>Secure Storage:</strong> Policy pages are stored as markdown files outside the web root for security</li>
+            <li><strong>Markdown Support:</strong> Write content in markdown with full formatting support</li>
+            <li><strong>URL Slug:</strong> The slug determines the URL path (e.g., "privacy-policy" becomes "/policy/privacy-policy")</li>
+            <li><strong>Footer Links:</strong> Pages marked to show in footer will appear at the bottom of every page</li>
+            <li><strong>Sort Order:</strong> Controls the order of links in the footer (lower numbers appear first)</li>
+            <li><strong>Admin Only:</strong> Only administrators can create, edit, or delete policy pages</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

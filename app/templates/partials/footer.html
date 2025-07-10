@@ -1,0 +1,16 @@
+<!-- Footer -->
+<footer class="footer has-background-light">
+    <div class="content has-text-centered">
+        {% if footer_policy_pages %}
+        <div class="block">
+            {% for page in footer_policy_pages %}
+                <a href="{{ url_for('view_policy_page', slug=page.slug) }}" class="has-text-grey">{{ page.title }}</a>
+                {% if not loop.last %} | {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+        <p class="has-text-grey-light">
+            <small>&copy; {% set current_year = moment().format('YYYY') if moment else '2025' %}{{ current_year }} Bowls Club. All rights reserved.</small>
+        </p>
+    </div>
+</footer>
