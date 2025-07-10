@@ -24,6 +24,7 @@ class Config:
     # List holding the contents of the main menu
     MENU_ITEMS = [
         {'name': 'News', 'link': 'index'},
+        {'name': 'Members', 'link': 'members'},
         {'name': 'Bookings', 'link': 'bookings'},
 ]
     # A List holding the contents of the Admin menu
