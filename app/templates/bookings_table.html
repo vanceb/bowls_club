@@ -82,6 +82,7 @@
                 return response.json();
             })
             .then(data => {
+                console.log('Bookings data received:', data);
                 const tableContainer = document.getElementById('bookings-table-container');
                 tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, startDate, endDate);
             })
@@ -119,7 +120,19 @@
             for (const [sessionId, sessionTime] of Object.entries(sessions)) {
                 const sessionNum = parseInt(sessionId);
                 const sessionData = bookings[date] && bookings[date][sessionNum] ? bookings[date][sessionNum] : null;
-                const bookedCount = sessionData ? sessionData.total_rinks : 0;
+                
+                // Handle both new detailed format and old count format
+                let bookedCount = 0;
+                if (sessionData) {
+                    if (typeof sessionData === 'object' && sessionData.total_rinks !== undefined) {
+                        // New detailed format
+                        bookedCount = sessionData.total_rinks;
+                    } else if (typeof sessionData === 'number') {
+                        // Old count format (fallback)
+                        bookedCount = sessionData;
+                    }
+                }
+                
                 const availableRinks = totalRinks - bookedCount;
                 
                 let cellClass = '';
@@ -129,24 +142,28 @@
                     cellContent = `${totalRinks} available`;
                     cellClass = 'has-background-light';
                 } else if (bookedCount < totalRinks) {
-                    // Show booking titles instead of just count
-                    let bookingsList = '';
-                    if (sessionData && sessionData.bookings) {
-                        bookingsList = sessionData.bookings.map(booking => 
+                    // Show booking titles if available, otherwise show count
+                    if (sessionData && sessionData.bookings && Array.isArray(sessionData.bookings)) {
+                        let bookingsList = sessionData.bookings.map(booking => 
                             `• ${booking.event_name}${booking.rink_count > 1 ? ` (${booking.rink_count} rinks)` : ''}`
                         ).join('<br>');
+                        cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">${availableRinks} available</small>`;
+                    } else {
+                        // Fallback to old format
+                        cellContent = `${bookedCount} booked<br><small class="has-text-weight-semibold">${availableRinks} available</small>`;
                     }
-                    cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">${availableRinks} available</small>`;
                     cellClass = 'has-background-warning-light';
                 } else {
-                    // Show booking titles even when fully booked
-                    let bookingsList = '';
-                    if (sessionData && sessionData.bookings) {
-                        bookingsList = sessionData.bookings.map(booking => 
+                    // Show booking titles if available, otherwise show fully booked
+                    if (sessionData && sessionData.bookings && Array.isArray(sessionData.bookings)) {
+                        let bookingsList = sessionData.bookings.map(booking => 
                             `• ${booking.event_name}${booking.rink_count > 1 ? ` (${booking.rink_count} rinks)` : ''}`
                         ).join('<br>');
+                        cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">Fully booked</small>`;
+                    } else {
+                        // Fallback to old format
+                        cellContent = `<small class="has-text-weight-semibold">Fully booked</small>`;
                     }
-                    cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">Fully booked</small>`;
                     cellClass = 'has-background-danger-light';
                 }
                 
