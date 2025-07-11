@@ -1,4 +1,6 @@
 # Standard library imports
+import csv
+import io
 import os
 import shutil
 from datetime import datetime, timedelta, date
@@ -19,7 +21,8 @@ from app import app, db, limiter
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
-    EventSelectionForm, PolicyPageForm, EditProfileForm, create_team_member_form, AddTeamForm
+    EventSelectionForm, PolicyPageForm, EditProfileForm, create_team_member_form, AddTeamForm,
+    ImportUsersForm
 )
 from flask_wtf import FlaskForm
 from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember, BookingTeam, BookingTeamMember
@@ -1740,4 +1743,136 @@ def edit_profile():
     
     return render_template('edit_profile.html', form=form,
                          menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/import_users', methods=['GET', 'POST'])
+@admin_required
+def import_users():
+    """
+    Route: Import Users from CSV
+    - Admin-only route for importing user data from CSV files.
+    - Required columns: firstname, lastname, email, phone
+    - Optional columns: username, gender
+    - Imported users get 'pending' status and no roles
+    """
+    form = ImportUsersForm()
+    results = None
+    
+    if form.validate_on_submit():
+        csv_file = form.csv_file.data
+        
+        # Read CSV content
+        try:
+            # Decode the file content
+            csv_content = csv_file.read().decode('utf-8')
+            csv_file.seek(0)  # Reset file pointer
+            
+            # Parse CSV
+            csv_reader = csv.DictReader(io.StringIO(csv_content))
+            
+            # Validate required columns
+            required_columns = {'firstname', 'lastname', 'email', 'phone'}
+            csv_columns = set(csv_reader.fieldnames or [])
+            
+            if not required_columns.issubset(csv_columns):
+                missing_columns = required_columns - csv_columns
+                flash(f'CSV file is missing required columns: {", ".join(missing_columns)}', 'error')
+                return render_template('import_users.html', form=form, results=results,
+                                     menu_items=app.config['MENU_ITEMS'],
+                                     admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+            
+            # Process rows
+            success_count = 0
+            error_count = 0
+            errors = []
+            
+            for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 to account for header
+                try:
+                    # Extract required fields
+                    firstname = row['firstname'].strip()
+                    lastname = row['lastname'].strip()
+                    email = row['email'].strip().lower()
+                    phone = row['phone'].strip()
+                    
+                    # Validate required fields
+                    if not all([firstname, lastname, email, phone]):
+                        errors.append(f'Row {row_num}: Missing required data')
+                        error_count += 1
+                        continue
+                    
+                    # Check if email already exists
+                    existing_user = db.session.scalar(sa.select(Member).where(Member.email == email))
+                    if existing_user:
+                        errors.append(f'Row {row_num}: Email {email} already exists')
+                        error_count += 1
+                        continue
+                    
+                    # Generate username if not provided
+                    username = row.get('username', '').strip()
+                    if not username:
+                        username = f"{firstname.lower()}_{lastname.lower()}"
+                        # Make username unique if it already exists
+                        base_username = username
+                        counter = 1
+                        while db.session.scalar(sa.select(Member).where(Member.username == username)):
+                            username = f"{base_username}_{counter}"
+                            counter += 1
+                    else:
+                        # Check if provided username already exists
+                        existing_username = db.session.scalar(sa.select(Member).where(Member.username == username))
+                        if existing_username:
+                            errors.append(f'Row {row_num}: Username {username} already exists')
+                            error_count += 1
+                            continue
+                    
+                    # Get gender, default to 'unknown' if not provided
+                    gender = row.get('gender', '').strip()
+                    if gender.lower() not in ['male', 'female', 'other']:
+                        gender = 'Other'
+                    else:
+                        gender = gender.capitalize()
+                    
+                    # Create new member
+                    member = Member(
+                        username=username,
+                        firstname=firstname,
+                        lastname=lastname,
+                        email=email,
+                        phone=phone,
+                        gender=gender,
+                        status='Pending',  # All imported users get pending status
+                        is_admin=False,    # No admin privileges
+                        share_email=True,  # Default privacy settings
+                        share_phone=True
+                    )
+                    
+                    db.session.add(member)
+                    success_count += 1
+                    
+                except Exception as e:
+                    errors.append(f'Row {row_num}: {str(e)}')
+                    error_count += 1
+                    continue
+            
+            # Commit all successful imports
+            if success_count > 0:
+                db.session.commit()
+                flash(f'Successfully imported {success_count} users.', 'success')
+            
+            if error_count > 0:
+                flash(f'{error_count} errors occurred during import.', 'warning')
+            
+            results = {
+                'success_count': success_count,
+                'error_count': error_count,
+                'errors': errors
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error processing CSV file: {str(e)}', 'error')
+    
+    return render_template('import_users.html', form=form, results=results,
+                         menu_items=app.config['MENU_ITEMS'],
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])

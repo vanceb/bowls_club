@@ -7,7 +7,7 @@ from flask import current_app
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, PasswordField, BooleanField, SubmitField, SelectField, 
-    HiddenField, SelectMultipleField, TextAreaField, DateField, IntegerField
+    HiddenField, SelectMultipleField, TextAreaField, DateField, IntegerField, FileField
 )
 from wtforms.widgets import CheckboxInput, ListWidget
 from wtforms.validators import (
@@ -348,3 +348,9 @@ def create_team_member_form(event_format):
             setattr(TeamMemberForm, field_name, field)
     
     return TeamMemberForm
+
+
+class ImportUsersForm(FlaskForm):
+    """Form for importing users from CSV file"""
+    csv_file = FileField('CSV File', validators=[DataRequired()])
+    submit = SubmitField('Import Users')
