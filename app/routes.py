@@ -913,7 +913,7 @@ def manage_events():
                                 member_id=team_member.member_id,
                                 position=team_member.position,
                                 is_substitute=False,
-                                confirmed_available=False
+                                availability_status='pending'
                             )
                             db.session.add(booking_team_member)
                     
@@ -1164,7 +1164,7 @@ def manage_booking_teams(booking_id):
                     booking_team_member.member_id = new_member.id
                     booking_team_member.is_substitute = True
                     booking_team_member.substituted_at = datetime.utcnow()
-                    booking_team_member.confirmed_available = False  # New player needs to confirm
+                    booking_team_member.availability_status = 'pending'  # New player needs to confirm
                     booking_team_member.confirmed_at = None
                     
                     # Update the substitution log on the booking team

@@ -52,7 +52,7 @@
                                                 {% endif %}
                                             </p>
                                             <p class="subtitle is-7">
-                                                {% if member.confirmed_available %}
+                                                {% if member.availability_status == 'available' %}
                                                     <span class="tag is-success is-small">
                                                         <span class="icon">
                                                             <i class="fas fa-check"></i>

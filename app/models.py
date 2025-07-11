@@ -324,7 +324,7 @@ class BookingTeamMember(db.Model):
     member: so.Mapped['Member'] = so.relationship('Member', back_populates='booking_team_memberships')
 
     def __repr__(self):
-        return f"<BookingTeamMember id={self.id}, member_id={self.member_id}, position='{self.position}', confirmed={self.confirmed_available}>"
+        return f"<BookingTeamMember id={self.id}, member_id={self.member_id}, position='{self.position}', status='{self.availability_status}'>"
 
 
 # Add team-related relationships to Member model
