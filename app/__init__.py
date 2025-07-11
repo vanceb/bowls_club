@@ -80,6 +80,18 @@ def inject_footer_policy_pages():
     
     return dict(footer_policy_pages=footer_policy_pages)
 
+# Custom template filters
+@app.template_filter('from_json')
+def from_json_filter(json_str):
+    """Convert JSON string to Python object"""
+    if not json_str:
+        return []
+    try:
+        import json
+        return json.loads(json_str)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
 # Security headers middleware
 @app.after_request
 def add_security_headers(response):
