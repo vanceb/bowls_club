@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="title">My Upcoming Games</h1>
-    <p class="subtitle">View and confirm your availability for upcoming team assignments</p>
+    <h1 class="title">My Games</h1>
+    <p class="subtitle">View and confirm your availability for upcoming team assignments. Please confirm your availability at least {{ config.get('AVAILABILITY_DEADLINE_DAYS', 7) }} days before each game date. Once confirmed, contact the event organizer to make changes.</p>
 
     {% if assignments %}
     <!-- Group assignments by status and date -->
@@ -46,9 +46,9 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Event</th>
-                        <th>Date</th>
-                        <th>Session</th>
+                        <th>Game Details</th>
+                        <th style="display: none;">Date</th>
+                        <th style="display: none;">Session</th>
                         <th>Team</th>
                         <th>Position</th>
                         <th>Actions</th>
@@ -58,11 +58,17 @@
                     {% for assignment in pending_games %}
                     <tr>
                         <td>
-                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
-                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.booking_team.booking.home_away -%}
+                                {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
+                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                {%- endfor -%}
+                            {%- endif -%}</span>
                         </td>
-                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
-                        <td>
+                        <td style="display: none;">{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td style="display: none;">
                             {% set sessions = config['DAILY_SESSIONS'] %}
                             {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
                         </td>
@@ -119,9 +125,9 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Event</th>
-                        <th>Date</th>
-                        <th>Session</th>
+                        <th>Game Details</th>
+                        <th style="display: none;">Date</th>
+                        <th style="display: none;">Session</th>
                         <th>Team</th>
                         <th>Position</th>
                         <th>Status</th>
@@ -131,11 +137,17 @@
                     {% for assignment in confirmed_games %}
                     <tr class="has-background-success-light">
                         <td>
-                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
-                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.booking_team.booking.home_away -%}
+                                {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
+                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                {%- endfor -%}
+                            {%- endif -%}</span>
                         </td>
-                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
-                        <td>
+                        <td style="display: none;">{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td style="display: none;">
                             {% set sessions = config['DAILY_SESSIONS'] %}
                             {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
                         </td>
@@ -180,9 +192,9 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Event</th>
-                        <th>Date</th>
-                        <th>Session</th>
+                        <th>Game Details</th>
+                        <th style="display: none;">Date</th>
+                        <th style="display: none;">Session</th>
                         <th>Team</th>
                         <th>Position</th>
                         <th>Status</th>
@@ -192,11 +204,17 @@
                     {% for assignment in unavailable_games %}
                     <tr class="has-background-danger-light">
                         <td>
-                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
-                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.booking_team.booking.home_away -%}
+                                {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
+                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                {%- endfor -%}
+                            {%- endif -%}</span>
                         </td>
-                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
-                        <td>
+                        <td style="display: none;">{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td style="display: none;">
                             {% set sessions = config['DAILY_SESSIONS'] %}
                             {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
                         </td>
@@ -241,9 +259,9 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Event</th>
-                        <th>Date</th>
-                        <th>Session</th>
+                        <th>Game Details</th>
+                        <th style="display: none;">Date</th>
+                        <th style="display: none;">Session</th>
                         <th>Team</th>
                         <th>Position</th>
                         <th>Status</th>
@@ -253,11 +271,17 @@
                     {% for assignment in played_games %}
                     <tr>
                         <td>
-                            <strong>{{ assignment.booking_team.booking.event.name }}</strong><br>
-                            <small class="has-text-grey">{{ assignment.booking_team.booking.event.get_event_type_name() }}</small>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.booking_team.booking.home_away -%}
+                                {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
+                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                {%- endfor -%}
+                            {%- endif -%}</span>
                         </td>
-                        <td>{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
-                        <td>
+                        <td style="display: none;">{{ assignment.booking_team.booking.booking_date.strftime('%A, %B %d, %Y') }}</td>
+                        <td style="display: none;">
                             {% set sessions = config['DAILY_SESSIONS'] %}
                             {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}
                         </td>
@@ -295,22 +319,6 @@
     </div>
     {% endif %}
         
-        <div class="content mt-4">
-            <div class="notification is-info is-light">
-                <h4 class="title is-6">
-                    <span class="icon">
-                        <i class="fas fa-info-circle"></i>
-                    </span>
-                    <span>Important Information</span>
-                </h4>
-                <ul>
-                    <li><strong>Availability Confirmation:</strong> Please confirm your availability as soon as possible to help with team planning.</li>
-                    <li><strong>Cannot Cancel:</strong> Once you confirm availability, you cannot cancel through this system. Contact the event organizer if you need to make changes.</li>
-                    <li><strong>Deadline:</strong> Please confirm your availability at least {{ config.get('AVAILABILITY_DEADLINE_DAYS', 7) }} days before the game date.</li>
-                    <li><strong>Substitutions:</strong> If you cannot play, the event organizer will arrange for a substitute.</li>
-                </ul>
-            </div>
-        </div>
     </div>
     {% else %}
     <div class="box">

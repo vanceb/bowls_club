@@ -367,6 +367,34 @@
                     </div>
                 </div>
                 
+                <div class="columns">
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Opposition Team</label>
+                            <div class="control">
+                                {{ booking_form.vs(class="input", placeholder="e.g., Riverdale Bowls Club") }}
+                            </div>
+                            {% for error in booking_form.vs.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="column is-half">
+                        <div class="field">
+                            <label class="label">Venue</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    {{ booking_form.home_away() }}
+                                </div>
+                            </div>
+                            {% for error in booking_form.home_away.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="field is-grouped">
                     <div class="control">
                         <button type="submit" name="create_booking" class="button is-primary">
@@ -397,8 +425,10 @@
                     <tr>
                         <th>Date</th>
                         <th>Session</th>
-                        <th>Rinks Needed</th>
+                        <th>Rinks</th>
                         <th>Priority</th>
+                        <th>Opposition</th>
+                        <th>Venue</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -412,6 +442,16 @@
                         </td>
                         <td>{{ booking.rink_count }}</td>
                         <td>{{ booking.priority or '-' }}</td>
+                        <td>{{ booking.vs or '-' }}</td>
+                        <td>
+                            {% if booking.home_away %}
+                                {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
+                                    {% if value == booking.home_away %}{{ key }}{% endif %}
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                         <td>
                             <a href="{{ url_for('manage_booking_teams', booking_id=booking.id) }}" 
                                class="button is-small is-primary">
@@ -432,7 +472,7 @@
                     </tr>
                     <!-- Inline Edit Form (initially hidden) -->
                     <tr id="booking-edit-row-{{ booking.id }}" class="booking-edit-row is-hidden">
-                        <td colspan="5">
+                        <td colspan="7">
                             <form method="POST" class="booking-edit-form" data-booking-id="{{ booking.id }}">
                                 {{ booking_form.hidden_tag() }}
                                 <input type="hidden" name="booking_id" value="{{ booking.id }}">
@@ -480,6 +520,37 @@
                                             <div class="control">
                                                 <input type="text" name="priority" class="input is-small" 
                                                        value="{{ booking.priority or '' }}" maxlength="50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="columns is-vcentered">
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Opposition Team</label>
+                                            <div class="control">
+                                                <input type="text" name="vs" class="input is-small" 
+                                                       value="{{ booking.vs or '' }}" maxlength="128" 
+                                                       placeholder="e.g., Riverdale Bowls Club">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="column">
+                                        <div class="field">
+                                            <label class="label is-small">Venue</label>
+                                            <div class="control">
+                                                <div class="select is-small is-fullwidth">
+                                                    <select name="home_away">
+                                                        <option value="">Select venue...</option>
+                                                        {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
+                                                        <option value="{{ value }}" 
+                                                                {% if booking.home_away == value %}selected{% endif %}>
+                                                            {{ key }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

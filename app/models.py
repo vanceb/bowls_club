@@ -189,6 +189,8 @@ class Booking(db.Model):
     session: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
     rink_count: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=1)
     priority: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
+    vs: so.Mapped[Optional[str]] = so.mapped_column(sa.String(128), nullable=True)  # Opposition team name
+    home_away: so.Mapped[Optional[str]] = so.mapped_column(sa.String(10), nullable=True)  # 'home', 'away', or 'neutral'
     event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
 
     # Many-to-one relationship with event

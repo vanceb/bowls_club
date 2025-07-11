@@ -13,6 +13,7 @@ from itsdangerous import URLSafeTimedSerializer
 
 # Local application imports
 from app import mail
+import sqlalchemy as sa
 
 def generate_reset_token(email):
     """
@@ -245,6 +246,23 @@ def validate_secure_path(filename, base_path):
         return None
         
     return normalized_path
+
+
+def add_home_games_filter(query):
+    """
+    Add a filter to a SQLAlchemy query to exclude away games from bookings.
+    
+    This utility function centralizes the logic for filtering out away games
+    from booking queries used in calendar display and rink availability calculations.
+    
+    Args:
+        query: SQLAlchemy query object that includes Booking model
+        
+    Returns:
+        Modified query with home games filter applied
+    """
+    from app.models import Booking
+    return query.where(sa.or_(Booking.home_away != 'away', Booking.home_away == None))
 
 def get_secure_post_path(filename):
     """

@@ -27,7 +27,7 @@ from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
     get_secure_post_path, get_secure_archive_path, generate_secure_filename,
-    get_secure_policy_page_path
+    get_secure_policy_page_path, add_home_games_filter
 )
 
 
@@ -740,12 +740,15 @@ def get_bookings(selected_date):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Query booking counts grouped by session for the selected date
+    # Exclude away games from calendar display
     booking_counts_query = sa.select(
         Booking.session,
         sa.func.sum(Booking.rink_count).label('total_rinks')
     ).where(
         Booking.booking_date == selected_date
-    ).group_by(Booking.session)
+    )
+    booking_counts_query = add_home_games_filter(booking_counts_query)
+    booking_counts_query = booking_counts_query.group_by(Booking.session)
     
     booking_counts = db.session.execute(booking_counts_query).all()
 
@@ -782,6 +785,7 @@ def get_bookings_range(start_date, end_date):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Query booking counts grouped by date and session for the date range
+    # Exclude away games from calendar display
     booking_counts_query = sa.select(
         Booking.booking_date,
         Booking.session,
@@ -789,7 +793,9 @@ def get_bookings_range(start_date, end_date):
     ).where(
         Booking.booking_date >= start_date,
         Booking.booking_date <= end_date
-    ).group_by(Booking.booking_date, Booking.session)
+    )
+    booking_counts_query = add_home_games_filter(booking_counts_query)
+    booking_counts_query = booking_counts_query.group_by(Booking.booking_date, Booking.session)
     
     booking_counts = db.session.execute(booking_counts_query).all()
 
@@ -826,11 +832,13 @@ def get_availability(selected_date, session_id):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Calculate total existing bookings for this date/session
-    existing_bookings = db.session.scalar(
-        sa.select(sa.func.sum(Booking.rink_count))
-        .where(Booking.booking_date == selected_date)
-        .where(Booking.session == session_id)
-    ) or 0
+    # Exclude away games from rink availability calculations
+    availability_query = sa.select(sa.func.sum(Booking.rink_count)).where(
+        Booking.booking_date == selected_date,
+        Booking.session == session_id
+    )
+    availability_query = add_home_games_filter(availability_query)
+    existing_bookings = db.session.scalar(availability_query) or 0
     
     total_rinks = int(current_app.config.get('RINKS', 6))
     available_rinks = total_rinks - existing_bookings
@@ -879,6 +887,8 @@ def manage_events():
                         session=booking_form.session.data,
                         rink_count=booking_form.rink_count.data,
                         priority=booking_form.priority.data,
+                        vs=booking_form.vs.data,
+                        home_away=booking_form.home_away.data,
                         event_id=selected_event.id
                     )
                     db.session.add(new_booking)
@@ -938,6 +948,8 @@ def manage_events():
                 booking.session = int(request.form.get('session'))
                 booking.rink_count = int(request.form.get('rink_count'))
                 booking.priority = request.form.get('priority') or None
+                booking.vs = request.form.get('vs') or None
+                booking.home_away = request.form.get('home_away') or None
                 
                 db.session.commit()
                 flash(f'Booking updated successfully!', 'success')
@@ -1097,6 +1109,7 @@ def my_games():
                          assignments=all_assignments,
                          csrf_form=csrf_form,
                          today=date.today(),
+                         config=app.config,
                          menu_items=app.config['MENU_ITEMS'],
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
@@ -1257,6 +1270,8 @@ def edit_booking(booking_id):
         booking.session = form.session.data
         booking.rink_count = form.rink_count.data
         booking.priority = form.priority.data
+        booking.vs = form.vs.data
+        booking.home_away = form.home_away.data
         
         db.session.commit()
         flash('Booking updated successfully!', 'success')

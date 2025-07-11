@@ -95,3 +95,10 @@ class Config:
     
     # Team availability settings
     AVAILABILITY_DEADLINE_DAYS = 7  # Days before game that players must confirm availability
+    
+    # Booking venue options
+    HOME_AWAY_OPTIONS = {
+        "Home": "home",
+        "Away": "away", 
+        "Neutral": "neutral"
+    }
