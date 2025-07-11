@@ -27,6 +27,7 @@ class Config:
         {'name': 'News', 'link': 'index'},
         {'name': 'Members', 'link': 'members'},
         {'name': 'Bookings', 'link': 'bookings'},
+        {'name': 'My Games', 'link': 'my_games'},
 ]
     # A List holding the contents of the Admin menu
     # Using None to create a separator
@@ -82,3 +83,30 @@ class Config:
         "Fours - 4 Wood": 4,
         "Fours - 2 Wood": 5
     }
+    
+    # Team positions based on bowls format
+    TEAM_POSITIONS = {
+        1: ["Player"],  # Singles
+        2: ["Lead", "Skip"],  # Pairs
+        3: ["Lead", "Second", "Skip"],  # Triples
+        4: ["Lead", "Second", "Third", "Skip"],  # Fours - 4 Wood
+        5: ["Lead", "Second", "Third", "Skip"]   # Fours - 2 Wood
+    }
+    
+    # Team availability settings
+    AVAILABILITY_DEADLINE_DAYS = 7  # Days before game that players must confirm availability
+    
+    # Booking venue options
+    HOME_AWAY_OPTIONS = {
+        "Home": "home",
+        "Away": "away", 
+        "Neutral": "neutral"
+    }
+    
+    # Standard roles for club management
+    STANDARD_ROLES = [
+        'User Manager',
+        'Content Manager', 
+        'Event Manager'
+    ]
+    

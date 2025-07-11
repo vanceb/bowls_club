@@ -19,14 +19,15 @@ from app import app, db, limiter
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
-    EventSelectionForm, PolicyPageForm, EditProfileForm
+    EventSelectionForm, PolicyPageForm, EditProfileForm, create_team_member_form, AddTeamForm
 )
-from app.models import Member, Role, Post, Booking, Event, PolicyPage
+from flask_wtf import FlaskForm
+from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember, BookingTeam, BookingTeamMember
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
     get_secure_post_path, get_secure_archive_path, generate_secure_filename,
-    get_secure_policy_page_path
+    get_secure_policy_page_path, add_home_games_filter
 )
 
 
@@ -196,6 +197,8 @@ def logout():
 @limiter.limit("3 per minute")
 def add_member():
     form = MemberForm()
+    is_bootstrap = Member.is_bootstrap_mode()
+    
     if form.validate_on_submit():
         # Create a new Member instance
         new_member = Member(
@@ -205,19 +208,24 @@ def add_member():
             email=form.email.data,
             phone=form.phone.data,
             password_hash=generate_password_hash(form.password.data),
-            status="Pending",  # Set default status
+            status="Full" if is_bootstrap else "Pending",  # First user gets Full status
             gender=form.gender.data,
             share_email=form.share_email.data,
-            share_phone=form.share_phone.data
+            share_phone=form.share_phone.data,
+            is_admin=is_bootstrap  # First user becomes admin
         )
         # Add to the database
         db.session.add(new_member)
         db.session.commit()
-        flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
+        
+        if is_bootstrap:
+            flash(f'Bootstrap admin user created: {form.firstname.data} {form.lastname.data}. You can now log in with full admin privileges.', 'success')
+        else:
+            flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
         return redirect(url_for('login'))  # Redirect to the homepage or another page
     if form.errors:
         flash(f'There are errors in your application. Please review your application and try again.', 'danger')
-    return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    return render_template('add_member.html', form=form, is_bootstrap=is_bootstrap, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/members')
@@ -399,6 +407,11 @@ def manage_roles():
     roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
 
     if request.method == 'POST':
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            abort(400)  # Bad request if CSRF validation fails
+            
         action = request.form.get('action')
         role_id = request.form.get('role_id')
         role_name = request.form.get('role_name', '').strip()
@@ -438,9 +451,13 @@ def manage_roles():
 
         return redirect(url_for('manage_roles'))
 
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
     return render_template(
         'manage_roles.html',
         roles=roles,
+        csrf_form=csrf_form,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
@@ -575,6 +592,11 @@ def manage_posts():
     posts = db.session.scalars(posts_query).all()
 
     if request.method == 'POST':
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            abort(400)  # Bad request if CSRF validation fails
+            
         # Handle deletion of selected posts
         post_ids = request.form.getlist('post_ids')
         for post_id in post_ids:
@@ -608,11 +630,15 @@ def manage_posts():
         flash(f"{len(post_ids)} post(s) deleted successfully!", "success")
         return redirect(url_for('manage_posts'))
 
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
     return render_template(
         'manage_posts.html',
         title='Manage Posts',
         posts=posts,
         today=today,
+        csrf_form=csrf_form,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS'],
     )
@@ -721,12 +747,15 @@ def get_bookings(selected_date):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Query booking counts grouped by session for the selected date
+    # Exclude away games from calendar display
     booking_counts_query = sa.select(
         Booking.session,
         sa.func.sum(Booking.rink_count).label('total_rinks')
     ).where(
         Booking.booking_date == selected_date
-    ).group_by(Booking.session)
+    )
+    booking_counts_query = add_home_games_filter(booking_counts_query)
+    booking_counts_query = booking_counts_query.group_by(Booking.session)
     
     booking_counts = db.session.execute(booking_counts_query).all()
 
@@ -763,6 +792,7 @@ def get_bookings_range(start_date, end_date):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Query booking counts grouped by date and session for the date range
+    # Exclude away games from calendar display
     booking_counts_query = sa.select(
         Booking.booking_date,
         Booking.session,
@@ -770,7 +800,9 @@ def get_bookings_range(start_date, end_date):
     ).where(
         Booking.booking_date >= start_date,
         Booking.booking_date <= end_date
-    ).group_by(Booking.booking_date, Booking.session)
+    )
+    booking_counts_query = add_home_games_filter(booking_counts_query)
+    booking_counts_query = booking_counts_query.group_by(Booking.booking_date, Booking.session)
     
     booking_counts = db.session.execute(booking_counts_query).all()
 
@@ -807,11 +839,13 @@ def get_availability(selected_date, session_id):
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
     # Calculate total existing bookings for this date/session
-    existing_bookings = db.session.scalar(
-        sa.select(sa.func.sum(Booking.rink_count))
-        .where(Booking.booking_date == selected_date)
-        .where(Booking.session == session_id)
-    ) or 0
+    # Exclude away games from rink availability calculations
+    availability_query = sa.select(sa.func.sum(Booking.rink_count)).where(
+        Booking.booking_date == selected_date,
+        Booking.session == session_id
+    )
+    availability_query = add_home_games_filter(availability_query)
+    existing_bookings = db.session.scalar(availability_query) or 0
     
     total_rinks = int(current_app.config.get('RINKS', 6))
     available_rinks = total_rinks - existing_bookings
@@ -849,20 +883,52 @@ def manage_events():
             if event_id:
                 selected_event = db.session.get(Event, int(event_id))
                 if selected_event:
+                    # Validate that the event has teams before creating booking
+                    if not selected_event.is_ready_for_bookings():
+                        flash('Cannot create booking: Event must have at least one team defined.', 'error')
+                        return redirect(url_for('manage_events', event_id=event_id))
+                    
                     # Create new booking linked to the event
                     new_booking = Booking(
                         booking_date=booking_form.booking_date.data,
                         session=booking_form.session.data,
                         rink_count=booking_form.rink_count.data,
                         priority=booking_form.priority.data,
+                        vs=booking_form.vs.data,
+                        home_away=booking_form.home_away.data,
                         event_id=selected_event.id
                     )
                     db.session.add(new_booking)
-                    db.session.commit()
-                    flash(f'Booking created successfully for "{selected_event.name}"!', 'success')
+                    db.session.flush()  # Flush to get the booking ID
                     
-                    # Reload the page with the selected event
-                    return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                    # Copy event teams to booking teams
+                    from app.models import BookingTeam, BookingTeamMember
+                    for event_team in selected_event.event_teams:
+                        booking_team = BookingTeam(
+                            booking_id=new_booking.id,
+                            event_team_id=event_team.id,
+                            team_name=event_team.team_name,
+                            team_number=event_team.team_number
+                        )
+                        db.session.add(booking_team)
+                        db.session.flush()  # Flush to get the booking team ID
+                        
+                        # Copy team members to booking team members
+                        for team_member in event_team.team_members:
+                            booking_team_member = BookingTeamMember(
+                                booking_team_id=booking_team.id,
+                                member_id=team_member.member_id,
+                                position=team_member.position,
+                                is_substitute=False,
+                                availability_status='pending'
+                            )
+                            db.session.add(booking_team_member)
+                    
+                    db.session.commit()
+                    flash(f'Booking created successfully for "{selected_event.name}" with {len(selected_event.event_teams)} teams!', 'success')
+                    
+                    # Reload the page with the selected event and scroll to bookings section
+                    return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
         else:
             # If booking form has errors, we need to maintain the selected event context
             event_id = request.form.get('event_id')
@@ -889,12 +955,14 @@ def manage_events():
                 booking.session = int(request.form.get('session'))
                 booking.rink_count = int(request.form.get('rink_count'))
                 booking.priority = request.form.get('priority') or None
+                booking.vs = request.form.get('vs') or None
+                booking.home_away = request.form.get('home_away') or None
                 
                 db.session.commit()
                 flash(f'Booking updated successfully!', 'success')
                 
-                # Reload the page with the selected event
-                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                # Reload the page with the selected event and scroll to bookings section
+                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
             else:
                 flash('Booking or event not found!', 'error')
 
@@ -912,8 +980,8 @@ def manage_events():
                 db.session.commit()
                 flash(f'Booking deleted successfully!', 'success')
                 
-                # Reload the page with the selected event
-                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                # Reload the page with the selected event and scroll to bookings section
+                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
             else:
                 flash('Booking or event not found!', 'error')
 
@@ -936,10 +1004,12 @@ def manage_events():
                     selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all() if selected_manager_ids else []
                     existing_event.event_managers = selected_managers
                     
+                    # Teams are now managed individually through separate routes
+                    
                     db.session.commit()
                     flash(f'Event "{existing_event.name}" updated successfully!', 'success')
-                    # Redirect with event_id to show bookings section
-                    return redirect(url_for('manage_events') + f'?event_id={existing_event.id}')
+                    # Redirect with event_id to show teams section
+                    return redirect(url_for('manage_events') + f'?event_id={existing_event.id}&scroll_to=teams-section')
                 else:
                     flash('Event not found!', 'error')
                     return redirect(url_for('manage_events'))
@@ -962,9 +1032,9 @@ def manage_events():
                     new_event.event_managers = selected_managers
                 
                 db.session.commit()
-                flash(f'Event "{new_event.name}" created successfully!', 'success')
-                # Redirect with event_id to show bookings section
-                return redirect(url_for('manage_events') + f'?event_id={new_event.id}')
+                flash(f'Event "{new_event.name}" created successfully! Now add teams to this event.', 'success')
+                # Redirect with event_id to show teams section
+                return redirect(url_for('manage_events') + f'?event_id={new_event.id}&scroll_to=teams-section')
 
     # Handle direct event selection via URL parameter (for redirect after booking creation)
     if request.method == 'GET' and request.args.get('event_id'):
@@ -986,7 +1056,158 @@ def manage_events():
                          booking_form=booking_form,
                          selected_event=selected_event,
                          event_bookings=event_bookings,
+                         event_teams=selected_event.event_teams if selected_event else [],
+                         team_positions=app.config.get('TEAM_POSITIONS', {}),
+                         can_create_bookings=selected_event.is_ready_for_bookings() if selected_event else False,
                          menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/my_games', methods=['GET', 'POST'])
+@login_required
+def my_games():
+    """
+    Route: My Games Dashboard
+    - Shows the current user's upcoming booking team assignments
+    - Allows players to confirm availability for upcoming games
+    - Displays game details including event, date, session, and team position
+    """
+    from datetime import date
+    
+    # Get all booking team assignments for the current user (past and future)
+    all_assignments = db.session.scalars(
+        sa.select(BookingTeamMember)
+        .join(BookingTeam)
+        .join(Booking)
+        .join(Event)
+        .where(
+            BookingTeamMember.member_id == current_user.id
+        )
+        .order_by(Booking.booking_date, Booking.session)
+    ).all()
+    
+    # Handle availability confirmation
+    if request.method == 'POST':
+        assignment_id = request.form.get('assignment_id')
+        action = request.form.get('action')
+        
+        if assignment_id and action in ['confirm_available', 'confirm_unavailable']:
+            assignment = db.session.get(BookingTeamMember, int(assignment_id))
+            if assignment and assignment.member_id == current_user.id and assignment.availability_status == 'pending':
+                if action == 'confirm_available':
+                    assignment.availability_status = 'available'
+                    assignment.confirmed_at = datetime.utcnow()
+                    flash('Availability confirmed successfully!', 'success')
+                elif action == 'confirm_unavailable':
+                    assignment.availability_status = 'unavailable'
+                    assignment.confirmed_at = datetime.utcnow()
+                    flash('Unavailability confirmed. The event organizer will arrange a substitute.', 'info')
+                
+                db.session.commit()
+            else:
+                flash('Unable to update availability for this assignment.', 'error')
+        
+        return redirect(url_for('my_games'))
+    
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
+    return render_template('my_games.html',
+                         assignments=all_assignments,
+                         csrf_form=csrf_form,
+                         today=date.today(),
+                         config=app.config,
+                         menu_items=app.config['MENU_ITEMS'],
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
+@role_required('Event Manager')
+def manage_booking_teams(booking_id):
+    """
+    Route: Manage Booking Teams
+    - Allows Event Managers to view and modify teams for a specific booking
+    - Handles substitutions and team member assignments
+    - Shows availability status of all team members
+    """
+    booking = db.session.get(Booking, booking_id)
+    if not booking:
+        abort(404)
+    
+    # Check if current user is an event manager for this event
+    if not current_user.is_admin:
+        user_role_names = [role.name for role in current_user.roles]
+        if 'Event Manager' not in user_role_names:
+            abort(403)
+        # Additional check: is user an event manager for this specific event?
+        if current_user not in booking.event.event_managers:
+            abort(403)
+    
+    # Handle substitution
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'substitute_player':
+            booking_team_member_id = request.form.get('booking_team_member_id')
+            new_member_id = request.form.get('new_member_id')
+            
+            if booking_team_member_id and new_member_id:
+                booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                new_member = db.session.get(Member, int(new_member_id))
+                
+                if booking_team_member and new_member:
+                    # Log the substitution
+                    substitution_log = {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'action': 'substitution',
+                        'original_player': f"{booking_team_member.member.firstname} {booking_team_member.member.lastname}",
+                        'substitute_player': f"{new_member.firstname} {new_member.lastname}",
+                        'position': booking_team_member.position,
+                        'made_by': f"{current_user.firstname} {current_user.lastname}",
+                        'reason': request.form.get('reason', 'No reason provided')
+                    }
+                    
+                    # Update the booking team member
+                    booking_team_member.member_id = new_member.id
+                    booking_team_member.is_substitute = True
+                    booking_team_member.substituted_at = datetime.utcnow()
+                    booking_team_member.availability_status = 'pending'  # New player needs to confirm
+                    booking_team_member.confirmed_at = None
+                    
+                    # Update the substitution log on the booking team
+                    import json
+                    booking_team = booking_team_member.booking_team
+                    current_log = json.loads(booking_team.substitution_log or '[]')
+                    current_log.append(substitution_log)
+                    booking_team.substitution_log = json.dumps(current_log)
+                    
+                    db.session.commit()
+                    flash(f'Successfully substituted {substitution_log["original_player"]} with {substitution_log["substitute_player"]} for {booking_team_member.position}', 'success')
+                else:
+                    flash('Invalid player selection for substitution', 'error')
+        
+        return redirect(url_for('manage_booking_teams', booking_id=booking_id))
+    
+    # Get available members for substitutions (excluding current team members)
+    current_member_ids = [btm.member_id for team in booking.booking_teams for btm in team.booking_team_members]
+    available_members = db.session.scalars(
+        sa.select(Member)
+        .where(
+            Member.status.in_(['Full', 'Social', 'Life']),
+            ~Member.id.in_(current_member_ids)
+        )
+        .order_by(Member.firstname, Member.lastname)
+    ).all()
+    
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
+    return render_template('manage_booking_teams.html',
+                         booking=booking,
+                         available_members=available_members,
+                         csrf_form=csrf_form,
+                         team_positions=app.config.get('TEAM_POSITIONS', {}),
+                         menu_items=app.config['MENU_ITEMS'],
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
@@ -1056,6 +1277,8 @@ def edit_booking(booking_id):
         booking.session = form.session.data
         booking.rink_count = form.rink_count.data
         booking.priority = form.priority.data
+        booking.vs = form.vs.data
+        booking.home_away = form.home_away.data
         
         db.session.commit()
         flash('Booking updated successfully!', 'success')
@@ -1117,9 +1340,13 @@ def manage_policy_pages():
         sa.select(PolicyPage).order_by(PolicyPage.sort_order, PolicyPage.title)
     ).all()
     
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
     return render_template(
         'manage_policy_pages.html',
         policy_pages=policy_pages,
+        csrf_form=csrf_form,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
     )
@@ -1315,6 +1542,167 @@ def delete_policy_page(policy_page_id):
     
     flash('Policy page deleted successfully!', 'success')
     return redirect(url_for('manage_policy_pages'))
+
+
+@app.route('/admin/edit_event_team/<int:team_id>', methods=['GET', 'POST'])
+@role_required('Event Manager')
+def edit_event_team(team_id):
+    """
+    Route: Edit Event Team
+    - Allows Event Managers to assign players to team positions.
+    - Updates the team member assignments for an event team.
+    """
+    team = db.session.get(EventTeam, team_id)
+    if not team:
+        abort(404)
+    
+    # Check if user has permission to manage this event
+    if not current_user.is_admin and current_user not in team.event.event_managers:
+        abort(403)
+    
+    TeamMemberForm = create_team_member_form(team.event.format)
+    form = TeamMemberForm()
+    
+    if form.validate_on_submit():
+        # Clear existing team members
+        existing_members = db.session.scalars(
+            sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
+        ).all()
+        for member in existing_members:
+            db.session.delete(member)
+        
+        # Update team name
+        team.team_name = form.team_name.data
+        
+        # Add new team members based on form data
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(team.event.format, [])
+        
+        for position in positions:
+            field_name = f"position_{position.lower().replace(' ', '_')}"
+            member_id = getattr(form, field_name).data
+            
+            if member_id and member_id > 0:  # Skip empty selections
+                team_member = TeamMember(
+                    event_team_id=team.id,
+                    member_id=member_id,
+                    position=position
+                )
+                db.session.add(team_member)
+        
+        db.session.commit()
+        flash(f'Team "{team.team_name}" updated successfully!', 'success')
+        return redirect(url_for('manage_events', event_id=team.event_id))
+    
+    # Pre-populate form with existing data
+    if request.method == 'GET':
+        form.team_id.data = team.id
+        form.team_name.data = team.team_name
+        
+        # Load existing team member assignments
+        existing_members = db.session.scalars(
+            sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
+        ).all()
+        
+        for member in existing_members:
+            field_name = f"position_{member.position.lower().replace(' ', '_')}"
+            if hasattr(form, field_name):
+                getattr(form, field_name).data = member.member_id
+    
+    return render_template('edit_event_team.html', 
+                         form=form, 
+                         team=team,
+                         event=team.event,
+                         title=f"Edit {team.team_name}",
+                         menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/admin/add_event_team/<int:event_id>', methods=['GET', 'POST'])
+@role_required('Event Manager')
+def add_event_team(event_id):
+    """
+    Route: Add Event Team
+    - Allows Event Managers to add a new team to an event.
+    - Creates a team with a custom name chosen by the user.
+    """
+    event = db.session.get(Event, event_id)
+    if not event:
+        abort(404)
+    
+    # Check if user has permission to manage this event
+    if not current_user.is_admin and current_user not in event.event_managers:
+        abort(403)
+    
+    form = AddTeamForm()
+    
+    if form.validate_on_submit():
+        # Get the next team number
+        existing_teams = db.session.scalars(
+            sa.select(EventTeam).where(EventTeam.event_id == event_id)
+        ).all()
+        next_team_number = len(existing_teams) + 1
+        
+        # Create the new team
+        new_team = EventTeam(
+            event_id=event_id,
+            team_name=form.team_name.data,
+            team_number=next_team_number
+        )
+        db.session.add(new_team)
+        db.session.commit()
+        
+        flash(f'Team "{new_team.team_name}" added successfully!', 'success')
+        return redirect(url_for('manage_events', event_id=event_id) + '&scroll_to=teams-section')
+    
+    return render_template('add_event_team.html', 
+                         form=form, 
+                         event=event,
+                         title=f"Add Team to {event.name}",
+                         menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/admin/delete_event_team/<int:team_id>', methods=['POST'])
+@role_required('Event Manager')
+def delete_event_team(team_id):
+    """
+    Route: Delete Event Team
+    - Allows Event Managers to delete an event team.
+    - Also deletes all associated team members and booking teams.
+    """
+    team = db.session.get(EventTeam, team_id)
+    if not team:
+        abort(404)
+    
+    # Check if user has permission to manage this event
+    if not current_user.is_admin and current_user not in team.event.event_managers:
+        abort(403)
+    
+    event_id = team.event_id
+    team_name = team.team_name
+    
+    # Check if this team has associated booking teams
+    booking_teams_count = len(team.booking_teams)
+    if booking_teams_count > 0:
+        # Get unique bookings that use this team
+        affected_bookings = list(set([bt.booking for bt in team.booking_teams]))
+        booking_dates = [booking.booking_date.strftime('%Y-%m-%d') for booking in affected_bookings]
+        
+        flash(f'Warning: Team "{team_name}" is used in {booking_teams_count} booking(s) on {", ".join(booking_dates)}. '
+              f'Deleting this team will not affect existing bookings (they remain independent), '
+              f'but you won\'t be able to trace them back to this template.', 'warning')
+    
+    # Delete the team (cascade will handle team_members and booking_teams relationship)
+    db.session.delete(team)
+    db.session.commit()
+    
+    if booking_teams_count > 0:
+        flash(f'Team "{team_name}" deleted. Existing bookings remain unchanged.', 'info')
+    else:
+        flash(f'Team "{team_name}" deleted successfully!', 'success')
+    
+    return redirect(url_for('manage_events', event_id=event_id) + '&scroll_to=teams-section')
 
 
 @app.route('/profile', methods=['GET', 'POST'])

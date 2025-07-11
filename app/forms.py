@@ -16,7 +16,7 @@ from wtforms.validators import (
 
 # Local application imports
 from app import db
-from app.models import Member
+from app.models import Member, Event
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -154,6 +154,12 @@ class BookingForm(FlaskForm):
         default=1
     )
     priority = StringField('Priority', validators=[Optional(), Length(max=50)])
+    vs = StringField('Opposition Team', validators=[Optional(), Length(max=128)])
+    home_away = SelectField(
+        'Venue',
+        choices=[],  # Choices will be populated dynamically
+        validators=[Optional()]
+    )
     submit = SubmitField('Submit')
 
     def __init__(self, *args, **kwargs):
@@ -161,6 +167,10 @@ class BookingForm(FlaskForm):
         # Populate the session choices dynamically from the app config
         self.session.choices = [
             (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
+        ]
+        # Populate the home/away choices dynamically from the app config
+        self.home_away.choices = [('', 'Select venue...')] + [
+            (value, key) for key, value in current_app.config.get('HOME_AWAY_OPTIONS', {}).items()
         ]
         # Dynamically set the max value for the rink_count field
         max_rinks = int(current_app.config.get('RINKS', 6))
@@ -178,11 +188,14 @@ class BookingForm(FlaskForm):
             import sqlalchemy as sa
             
             # Calculate total existing bookings for this date/session
-            existing_bookings = db.session.scalar(
-                sa.select(sa.func.sum(Booking.rink_count))
-                .where(Booking.booking_date == self.booking_date.data)
-                .where(Booking.session == self.session.data)
-            ) or 0
+            # Exclude away games from rink availability calculations
+            from app.utils import add_home_games_filter
+            availability_query = sa.select(sa.func.sum(Booking.rink_count)).where(
+                Booking.booking_date == self.booking_date.data,
+                Booking.session == self.session.data
+            )
+            availability_query = add_home_games_filter(availability_query)
+            existing_bookings = db.session.scalar(availability_query) or 0
             
             total_rinks = int(current_app.config.get('RINKS', 6))
             available_rinks = total_rinks - existing_bookings
@@ -283,3 +296,55 @@ class EventSelectionForm(FlaskForm):
         self.selected_event.choices = [(0, 'Create New Event')] + [
             (event.id, event.name) for event in events
         ]
+
+
+class AddTeamForm(FlaskForm):
+    """Form for adding a new team to an event"""
+    team_name = StringField(
+        'Team Name', 
+        validators=[DataRequired(), Length(min=1, max=100)],
+        render_kw={'placeholder': 'Enter team name (e.g. "The Misfits", "Team Alpha")'} 
+    )
+    submit = SubmitField('Add Team')
+
+
+def create_team_member_form(event_format):
+    """Factory function to create a TeamMemberForm with dynamic fields"""
+    
+    class TeamMemberForm(FlaskForm):
+        team_id = HiddenField('Team ID')
+        team_name = StringField('Team Name', validators=[DataRequired(), Length(max=100)])
+        submit = SubmitField('Save Team')
+    
+    if event_format:
+        from flask import current_app
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(event_format, [])
+        
+        # Get all members for selection
+        from app.models import Member
+        from app import db
+        import sqlalchemy as sa
+        
+        members = db.session.scalars(
+            sa.select(Member)
+            .where(Member.status.in_(['Full', 'Social', 'Life']))
+            .order_by(Member.firstname, Member.lastname)
+        ).all()
+        
+        member_choices = [(0, 'Select a player...')] + [
+            (member.id, f"{member.firstname} {member.lastname}") for member in members
+        ]
+        
+        # Dynamically create fields for each position
+        for position in positions:
+            field_name = f"position_{position.lower().replace(' ', '_')}"
+            field = SelectField(
+                f"{position}",
+                coerce=int,
+                choices=member_choices,
+                validators=[Optional()]
+            )
+            setattr(TeamMemberForm, field_name, field)
+    
+    return TeamMemberForm
