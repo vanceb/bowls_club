@@ -102,3 +102,11 @@ class Config:
         "Away": "away", 
         "Neutral": "neutral"
     }
+    
+    # Standard roles for club management
+    STANDARD_ROLES = [
+        'User Manager',
+        'Content Manager', 
+        'Event Manager'
+    ]
+    

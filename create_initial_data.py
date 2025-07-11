@@ -19,22 +19,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, db
 from app.models import Role, Member
+from config import Config
 from werkzeug.security import generate_password_hash
 
 
 def create_initial_roles():
     """Create the standard roles for the bowls club."""
-    roles_to_create = [
-        'Event Manager',
-        'Secretary', 
-        'Treasurer',
-        'Captain',
-        'Vice Captain',
-        'Committee Member',
-        'Social Committee',
-        'Greens Keeper',
-        'Match Secretary'
-    ]
+    roles_to_create = Config.STANDARD_ROLES
     
     print("Creating initial roles...")
     created_count = 0
@@ -55,40 +46,20 @@ def create_initial_roles():
     return created_count
 
 
-def create_admin_user():
-    """Create an initial admin user."""
-    print("\nCreating initial admin user...")
+def check_bootstrap_mode():
+    """Check if the system is in bootstrap mode (no users exist)."""
+    user_count = db.session.query(Member).count()
+    is_bootstrap = user_count == 0
     
-    # Check if admin user already exists
-    admin_user = db.session.query(Member).filter_by(username='admin').first()
-    if admin_user:
-        print("  - Admin user already exists")
-        return False
+    print(f"\nBootstrap mode check:")
+    print(f"  - Users in database: {user_count}")
+    print(f"  - Bootstrap mode: {'Yes' if is_bootstrap else 'No'}")
     
-    # Create admin user
-    admin = Member(
-        username='admin',
-        email='admin@bowlsclub.local',
-        phone='000-000-0000',  # Default admin phone
-        firstname='Admin',
-        lastname='User',
-        password_hash=generate_password_hash('admin123'),  # Change this in production!
-        is_admin=True,
-        gender='Other',
-        status='Full',
-        share_email=False,
-        share_phone=False
-    )
+    if is_bootstrap:
+        print(f"  - First user registration will automatically become admin")
+        print(f"  - Visit the registration page to create the first admin user")
     
-    db.session.add(admin)
-    db.session.commit()
-    
-    print("  - Created admin user")
-    print("    Username: admin")
-    print("    Password: admin123")
-    print("    WARNING: Change the admin password immediately!")
-    
-    return True
+    return is_bootstrap
 
 
 def verify_database_structure():
@@ -137,21 +108,26 @@ def main():
         # Create roles
         roles_created = create_initial_roles()
         
-        # Create admin user
-        admin_created = create_admin_user()
+        # Check bootstrap mode (instead of creating admin user)
+        is_bootstrap = check_bootstrap_mode()
         
         print("\n" + "=" * 60)
         print("SETUP COMPLETE!")
         print("=" * 60)
         print(f"Roles created: {roles_created}")
-        print(f"Admin user created: {'Yes' if admin_created else 'Already exists'}")
+        print(f"Bootstrap mode: {'Yes' if is_bootstrap else 'No'}")
         
-        if admin_created:
+        if is_bootstrap:
             print("\nIMPORTANT NEXT STEPS:")
-            print("1. Log in as admin (username: admin, password: admin123)")
-            print("2. Change the admin password immediately")
-            print("3. Create additional members through the web interface")
-            print("4. Assign appropriate roles to members")
+            print("1. Start the Flask application (flask run)")
+            print("2. Visit the registration page (/add_member)")
+            print("3. Create the first user - they will automatically become admin")
+            print("4. Create additional members through the web interface")
+            print("5. Assign appropriate roles to members")
+        else:
+            print("\nSYSTEM READY:")
+            print("- Users already exist in the system")
+            print("- No bootstrap needed")
         
         print("\nYour bowls club application is ready to use!")
 

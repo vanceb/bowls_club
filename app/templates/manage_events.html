@@ -594,6 +594,50 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Smooth scroll helper function
+    function scrollToSection(sectionId, offset = 100) {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            const yPosition = section.offsetTop - offset;
+            window.scrollTo({
+                top: yPosition,
+                behavior: 'smooth'
+            });
+        }
+    }
+    
+    // Disable browser's automatic scroll restoration
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    
+    // Preserve scroll position during page reloads
+    window.addEventListener('beforeunload', function() {
+        sessionStorage.setItem('scrollPosition', window.pageYOffset);
+    });
+    
+    // Check URL parameters for navigation hints after form submission
+    const urlParams = new URLSearchParams(window.location.search);
+    const scrollTo = urlParams.get('scroll_to');
+    if (scrollTo) {
+        // Immediately scroll to prevent jump, then smooth scroll
+        const section = document.getElementById(scrollTo);
+        if (section) {
+            const targetPosition = section.offsetTop - 100;
+            window.scrollTo(0, targetPosition);
+            // Clean up URL without causing reload
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.search.replace(/[&?]scroll_to=[^&]*/g, '');
+            window.history.replaceState({}, '', cleanUrl);
+        }
+    } else {
+        // Restore previous scroll position if no specific target
+        const savedPosition = sessionStorage.getItem('scrollPosition');
+        if (savedPosition) {
+            window.scrollTo(0, parseInt(savedPosition));
+            sessionStorage.removeItem('scrollPosition');
+        }
+    }
+    
     const eventSelect = document.getElementById('selected_event');
     const eventForm = document.getElementById('event-form');
     const eventIdInput = document.getElementById('event_id');

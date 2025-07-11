@@ -197,6 +197,8 @@ def logout():
 @limiter.limit("3 per minute")
 def add_member():
     form = MemberForm()
+    is_bootstrap = Member.is_bootstrap_mode()
+    
     if form.validate_on_submit():
         # Create a new Member instance
         new_member = Member(
@@ -206,19 +208,24 @@ def add_member():
             email=form.email.data,
             phone=form.phone.data,
             password_hash=generate_password_hash(form.password.data),
-            status="Pending",  # Set default status
+            status="Full" if is_bootstrap else "Pending",  # First user gets Full status
             gender=form.gender.data,
             share_email=form.share_email.data,
-            share_phone=form.share_phone.data
+            share_phone=form.share_phone.data,
+            is_admin=is_bootstrap  # First user becomes admin
         )
         # Add to the database
         db.session.add(new_member)
         db.session.commit()
-        flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
+        
+        if is_bootstrap:
+            flash(f'Bootstrap admin user created: {form.firstname.data} {form.lastname.data}. You can now log in with full admin privileges.', 'success')
+        else:
+            flash(f'Joining application submitted for {form.firstname.data} {form.lastname.data}', 'success')
         return redirect(url_for('login'))  # Redirect to the homepage or another page
     if form.errors:
         flash(f'There are errors in your application. Please review your application and try again.', 'danger')
-    return render_template('add_member.html', form=form, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+    return render_template('add_member.html', form=form, is_bootstrap=is_bootstrap, menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 
 
 @app.route('/members')
@@ -920,8 +927,8 @@ def manage_events():
                     db.session.commit()
                     flash(f'Booking created successfully for "{selected_event.name}" with {len(selected_event.event_teams)} teams!', 'success')
                     
-                    # Reload the page with the selected event
-                    return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                    # Reload the page with the selected event and scroll to bookings section
+                    return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
         else:
             # If booking form has errors, we need to maintain the selected event context
             event_id = request.form.get('event_id')
@@ -954,8 +961,8 @@ def manage_events():
                 db.session.commit()
                 flash(f'Booking updated successfully!', 'success')
                 
-                # Reload the page with the selected event
-                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                # Reload the page with the selected event and scroll to bookings section
+                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
             else:
                 flash('Booking or event not found!', 'error')
 
@@ -973,8 +980,8 @@ def manage_events():
                 db.session.commit()
                 flash(f'Booking deleted successfully!', 'success')
                 
-                # Reload the page with the selected event
-                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}')
+                # Reload the page with the selected event and scroll to bookings section
+                return redirect(url_for('manage_events') + f'?event_id={selected_event.id}&scroll_to=bookings-section')
             else:
                 flash('Booking or event not found!', 'error')
 
@@ -1001,8 +1008,8 @@ def manage_events():
                     
                     db.session.commit()
                     flash(f'Event "{existing_event.name}" updated successfully!', 'success')
-                    # Redirect with event_id to show bookings section
-                    return redirect(url_for('manage_events') + f'?event_id={existing_event.id}')
+                    # Redirect with event_id to show teams section
+                    return redirect(url_for('manage_events') + f'?event_id={existing_event.id}&scroll_to=teams-section')
                 else:
                     flash('Event not found!', 'error')
                     return redirect(url_for('manage_events'))
@@ -1026,8 +1033,8 @@ def manage_events():
                 
                 db.session.commit()
                 flash(f'Event "{new_event.name}" created successfully! Now add teams to this event.', 'success')
-                # Redirect with event_id to show bookings section
-                return redirect(url_for('manage_events') + f'?event_id={new_event.id}')
+                # Redirect with event_id to show teams section
+                return redirect(url_for('manage_events') + f'?event_id={new_event.id}&scroll_to=teams-section')
 
     # Handle direct event selection via URL parameter (for redirect after booking creation)
     if request.method == 'GET' and request.args.get('event_id'):
@@ -1646,7 +1653,7 @@ def add_event_team(event_id):
         db.session.commit()
         
         flash(f'Team "{new_team.team_name}" added successfully!', 'success')
-        return redirect(url_for('manage_events', event_id=event_id))
+        return redirect(url_for('manage_events', event_id=event_id) + '&scroll_to=teams-section')
     
     return render_template('add_event_team.html', 
                          form=form, 
@@ -1695,7 +1702,7 @@ def delete_event_team(team_id):
     else:
         flash(f'Team "{team_name}" deleted successfully!', 'success')
     
-    return redirect(url_for('manage_events', event_id=event_id))
+    return redirect(url_for('manage_events', event_id=event_id) + '&scroll_to=teams-section')
 
 
 @app.route('/profile', methods=['GET', 'POST'])

@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1 class="title">Apply to Join</h1>
+    {% if is_bootstrap %}
+        <h1 class="title">Create First Admin User</h1>
+        <div class="notification is-info">
+            <p class="has-text-weight-semibold">Bootstrap Mode</p>
+            <p>No users exist in the system. The first user you create will automatically become an administrator with full privileges.</p>
+        </div>
+    {% else %}
+        <h1 class="title">Apply to Join</h1>
+        <div class="notification is-warning">
+            <p>Your application will be reviewed by an administrator before you can access the system.</p>
+        </div>
+    {% endif %}
     <form action="" class="box" method="post" novalidate>
         {{ form.hidden_tag() }}
         <div class="field">
