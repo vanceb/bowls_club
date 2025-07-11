@@ -23,79 +23,87 @@
     <div class="columns is-multiline">
         {% for team in booking.booking_teams %}
         <div class="column is-half">
-            <div class="card">
-                <div class="card-header">
-                    <p class="card-header-title">
-                        {{ team.team_name }}
-                        {% if team.substitution_log %}
-                            {% set log_data = team.substitution_log | from_json %}
-                            {% if log_data %}
-                                <span class="tag is-warning ml-2">{{ log_data | length }} substitution(s)</span>
+            <div class="box">
+                <div class="level is-mobile mb-3">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <h3 class="title is-5 mb-0">{{ team.team_name }}</h3>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            {% if team.substitution_log %}
+                                {% set log_data = team.substitution_log | from_json %}
+                                {% if log_data %}
+                                    <span class="tag is-warning is-small">{{ log_data | length }} substitution(s)</span>
+                                {% endif %}
                             {% endif %}
-                        {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                {% if team.booking_team_members %}
+                <div class="table-container">
+                    <table class="table is-fullwidth is-narrow">
+                        <tbody>
+                            {% for member in team.booking_team_members %}
+                            <tr>
+                                <td style="width: 80px;">
+                                    <strong class="has-text-grey">{{ member.position }}</strong>
+                                </td>
+                                <td>
+                                    <span class="has-text-weight-medium">{{ member.member.firstname }} {{ member.member.lastname }}</span>
+                                    {% if member.is_substitute %}
+                                        <span class="tag is-info is-small ml-2">Substitute</span>
+                                    {% endif %}
+                                </td>
+                                <td style="width: 100px;">
+                                    {% if member.availability_status == 'available' %}
+                                        <span class="tag is-success is-small">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-check"></i>
+                                            </span>
+                                            <span>Confirmed</span>
+                                        </span>
+                                    {% elif member.availability_status == 'unavailable' %}
+                                        <span class="tag is-danger is-small">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-times"></i>
+                                            </span>
+                                            <span>Unavailable</span>
+                                        </span>
+                                    {% else %}
+                                        <span class="tag is-warning is-small">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-question"></i>
+                                            </span>
+                                            <span>Pending</span>
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td style="width: 120px;">
+                                    <button class="button is-small is-warning substitute-btn" 
+                                            data-member-id="{{ member.id }}"
+                                            data-member-name="{{ member.member.firstname }} {{ member.member.lastname }}"
+                                            data-position="{{ member.position }}">
+                                        <span class="icon is-small">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </span>
+                                        <span>Substitute</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="notification is-light">
+                    <p class="has-text-grey">
+                        <em>No players assigned to this team</em>
                     </p>
                 </div>
-                <div class="card-content">
-                    {% if team.booking_team_members %}
-                    <div class="content">
-                        {% for member in team.booking_team_members %}
-                        <div class="field">
-                            <div class="level">
-                                <div class="level-left">
-                                    <div class="level-item">
-                                        <div>
-                                            <p class="heading">{{ member.position }}</p>
-                                            <p class="title is-6">
-                                                {{ member.member.firstname }} {{ member.member.lastname }}
-                                                {% if member.is_substitute %}
-                                                    <span class="tag is-info is-small">Substitute</span>
-                                                {% endif %}
-                                            </p>
-                                            <p class="subtitle is-7">
-                                                {% if member.availability_status == 'available' %}
-                                                    <span class="tag is-success is-small">
-                                                        <span class="icon">
-                                                            <i class="fas fa-check"></i>
-                                                        </span>
-                                                        <span>Confirmed</span>
-                                                    </span>
-                                                {% else %}
-                                                    <span class="tag is-warning is-small">
-                                                        <span class="icon">
-                                                            <i class="fas fa-question"></i>
-                                                        </span>
-                                                        <span>Pending</span>
-                                                    </span>
-                                                {% endif %}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="level-right">
-                                    <div class="level-item">
-                                        <button class="button is-small is-warning substitute-btn" 
-                                                data-member-id="{{ member.id }}"
-                                                data-member-name="{{ member.member.firstname }} {{ member.member.lastname }}"
-                                                data-position="{{ member.position }}">
-                                            <span class="icon">
-                                                <i class="fas fa-exchange-alt"></i>
-                                            </span>
-                                            <span>Substitute</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <div class="content">
-                        <p class="has-text-grey">
-                            <em>No players assigned to this team</em>
-                        </p>
-                    </div>
-                    {% endif %}
-                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -109,7 +117,7 @@
             <div class="box">
                 <h3 class="title is-5">{{ team.team_name }} - Substitution History</h3>
                 <div class="table-container">
-                    <table class="table is-fullwidth is-striped">
+                    <table class="table is-fullwidth is-striped is-narrow">
                         <thead>
                             <tr>
                                 <th>Date/Time</th>
@@ -124,7 +132,7 @@
                             {% for entry in log_data %}
                             <tr>
                                 <td>{{ entry.timestamp }}</td>
-                                <td><span class="tag is-info">{{ entry.position }}</span></td>
+                                <td class="has-text-weight-medium">{{ entry.position }}</td>
                                 <td>{{ entry.original_player }}</td>
                                 <td>{{ entry.substitute_player }}</td>
                                 <td>{{ entry.made_by }}</td>
