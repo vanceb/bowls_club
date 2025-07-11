@@ -56,7 +56,7 @@
                 </thead>
                 <tbody>
                     {% for assignment in pending_games %}
-                    <tr>
+                    <tr class="has-background-warning-light">
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
                             <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
