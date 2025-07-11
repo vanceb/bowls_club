@@ -50,7 +50,7 @@ class Member(UserMixin, db.Model):
                                                 unique=True)
     email: so.Mapped[str] = so.mapped_column(sa.String(120), index=True,
                                              unique=True)
-    phone: so.Mapped[str] = so.mapped_column(sa.String(15), index=True)
+    phone: so.Mapped[Optional[str]] = so.mapped_column(sa.String(15), index=True)
     firstname: so.Mapped[str] = so.mapped_column(sa.String(64), index=True)
     lastname: so.Mapped[str] = so.mapped_column(sa.String(64), index=True)
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
