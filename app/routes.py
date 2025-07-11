@@ -784,38 +784,28 @@ def get_bookings_range(start_date, end_date):
     except ValueError:
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
-    # Query booking details grouped by date and session for the date range
+    # Query booking counts grouped by date and session for the date range
     # Exclude away games from calendar display
-    booking_details_query = sa.select(
+    booking_counts_query = sa.select(
         Booking.booking_date,
         Booking.session,
-        Booking.rink_count,
-        Event.name.label('event_name')
-    ).select_from(
-        Booking.join(Event, Booking.event_id == Event.id, isouter=True)
+        sa.func.sum(Booking.rink_count).label('total_rinks')
     ).where(
         Booking.booking_date >= start_date,
         Booking.booking_date <= end_date
     )
-    booking_details_query = add_home_games_filter(booking_details_query)
-    booking_details_query = booking_details_query.order_by(Booking.booking_date, Booking.session)
+    booking_counts_query = add_home_games_filter(booking_counts_query)
+    booking_counts_query = booking_counts_query.group_by(Booking.booking_date, Booking.session)
     
-    booking_details = db.session.execute(booking_details_query).all()
+    booking_counts = db.session.execute(booking_counts_query).all()
 
-    # Prepare data structure: {date: {session: {bookings: [...], total_rinks: count}}}
+    # Prepare data structure: {date: {session: count}}
     bookings_data = {}
-    for booking_date, session, rink_count, event_name in booking_details:
+    for booking_date, session, total_rinks in booking_counts:
         date_str = booking_date.isoformat()
         if date_str not in bookings_data:
             bookings_data[date_str] = {}
-        if session not in bookings_data[date_str]:
-            bookings_data[date_str][session] = {'bookings': [], 'total_rinks': 0}
-        
-        bookings_data[date_str][session]['bookings'].append({
-            'event_name': event_name or 'Unknown Event',
-            'rink_count': rink_count
-        })
-        bookings_data[date_str][session]['total_rinks'] += rink_count
+        bookings_data[date_str][session] = total_rinks
 
     rinks = current_app.config['RINKS']
     sessions = current_app.config['DAILY_SESSIONS']

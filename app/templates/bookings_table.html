@@ -119,20 +119,7 @@
             // Add cells for each session
             for (const [sessionId, sessionTime] of Object.entries(sessions)) {
                 const sessionNum = parseInt(sessionId);
-                const sessionData = bookings[date] && bookings[date][sessionNum] ? bookings[date][sessionNum] : null;
-                
-                // Handle both new detailed format and old count format
-                let bookedCount = 0;
-                if (sessionData) {
-                    if (typeof sessionData === 'object' && sessionData.total_rinks !== undefined) {
-                        // New detailed format
-                        bookedCount = sessionData.total_rinks;
-                    } else if (typeof sessionData === 'number') {
-                        // Old count format (fallback)
-                        bookedCount = sessionData;
-                    }
-                }
-                
+                const bookedCount = bookings[date] && bookings[date][sessionNum] ? bookings[date][sessionNum] : 0;
                 const availableRinks = totalRinks - bookedCount;
                 
                 let cellClass = '';
@@ -142,28 +129,10 @@
                     cellContent = `${totalRinks} available`;
                     cellClass = 'has-background-light';
                 } else if (bookedCount < totalRinks) {
-                    // Show booking titles if available, otherwise show count
-                    if (sessionData && sessionData.bookings && Array.isArray(sessionData.bookings)) {
-                        let bookingsList = sessionData.bookings.map(booking => 
-                            `• ${booking.event_name}${booking.rink_count > 1 ? ` (${booking.rink_count} rinks)` : ''}`
-                        ).join('<br>');
-                        cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">${availableRinks} available</small>`;
-                    } else {
-                        // Fallback to old format
-                        cellContent = `${bookedCount} booked<br><small class="has-text-weight-semibold">${availableRinks} available</small>`;
-                    }
+                    cellContent = `${bookedCount} booked<br>${availableRinks} available`;
                     cellClass = 'has-background-warning-light';
                 } else {
-                    // Show booking titles if available, otherwise show fully booked
-                    if (sessionData && sessionData.bookings && Array.isArray(sessionData.bookings)) {
-                        let bookingsList = sessionData.bookings.map(booking => 
-                            `• ${booking.event_name}${booking.rink_count > 1 ? ` (${booking.rink_count} rinks)` : ''}`
-                        ).join('<br>');
-                        cellContent = `${bookingsList}<br><small class="has-text-weight-semibold">Fully booked</small>`;
-                    } else {
-                        // Fallback to old format
-                        cellContent = `<small class="has-text-weight-semibold">Fully booked</small>`;
-                    }
+                    cellContent = 'Fully booked';
                     cellClass = 'has-background-danger-light';
                 }
                 
