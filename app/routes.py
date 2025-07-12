@@ -784,8 +784,8 @@ def get_bookings(selected_date):
 def get_bookings_range(start_date, end_date):
     """
     Route: Get Bookings Range
-    - Returns booking counts per session for a date range in JSON format.
-    - Used for the new table layout with dates as rows and sessions as columns.
+    - Returns detailed booking information per session for a date range in JSON format.
+    - Used for the calendar layout with dates as rows and sessions as columns.
     """
     # Validate the date formats
     try:
@@ -794,28 +794,44 @@ def get_bookings_range(start_date, end_date):
     except ValueError:
         return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
 
-    # Query booking counts grouped by date and session for the date range
+    # Query individual bookings with details for the date range
     # Exclude away games from calendar display
-    booking_counts_query = sa.select(
+    bookings_query = sa.select(
         Booking.booking_date,
         Booking.session,
-        sa.func.sum(Booking.rink_count).label('total_rinks')
-    ).where(
+        Booking.rink_count,
+        Booking.vs,
+        Booking.priority,
+        Event.name.label('event_name')
+    ).outerjoin(Event, Booking.event_id == Event.id).where(
         Booking.booking_date >= start_date,
         Booking.booking_date <= end_date
     )
-    booking_counts_query = add_home_games_filter(booking_counts_query)
-    booking_counts_query = booking_counts_query.group_by(Booking.booking_date, Booking.session)
+    bookings_query = add_home_games_filter(bookings_query)
+    bookings_query = bookings_query.order_by(Booking.booking_date, Booking.session)
     
-    booking_counts = db.session.execute(booking_counts_query).all()
+    bookings_result = db.session.execute(bookings_query).all()
 
-    # Prepare data structure: {date: {session: count}}
+    # Prepare data structure: {date: {session: [booking_details]}}
     bookings_data = {}
-    for booking_date, session, total_rinks in booking_counts:
-        date_str = booking_date.isoformat()
+    for booking in bookings_result:
+        date_str = booking.booking_date.isoformat()
+        session = booking.session
+        
         if date_str not in bookings_data:
             bookings_data[date_str] = {}
-        bookings_data[date_str][session] = total_rinks
+        if session not in bookings_data[date_str]:
+            bookings_data[date_str][session] = []
+            
+        # Create booking detail object
+        booking_detail = {
+            'event_name': booking.event_name,
+            'vs': booking.vs,
+            'rink_count': booking.rink_count,
+            'priority': booking.priority
+        }
+        
+        bookings_data[date_str][session].append(booking_detail)
 
     rinks = current_app.config['RINKS']
     sessions = current_app.config['DAILY_SESSIONS']
