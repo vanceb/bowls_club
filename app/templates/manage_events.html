@@ -397,8 +397,11 @@
                 
                 <div class="field is-grouped">
                     <div class="control">
-                        <button type="submit" name="create_booking" class="button is-primary">
-                            Create Booking
+                        <button type="submit" name="create_booking" id="create-booking-btn" class="button is-primary">
+                            <span class="icon is-hidden" id="booking-loading-icon">
+                                <i class="fas fa-spinner fa-pulse"></i>
+                            </span>
+                            <span id="booking-btn-text">Create Booking</span>
                         </button>
                     </div>
                     <div class="control">
@@ -1052,6 +1055,40 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+
+    // Prevent double submission of booking form
+    const bookingForm = document.querySelector('form[method="POST"]');
+    const createBookingBtn = document.getElementById('create-booking-btn');
+    const bookingLoadingIcon = document.getElementById('booking-loading-icon');
+    const bookingBtnText = document.getElementById('booking-btn-text');
+    
+    if (bookingForm && createBookingBtn) {
+        bookingForm.addEventListener('submit', function(e) {
+            // Check if form is already being submitted
+            if (createBookingBtn.disabled) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Only prevent double submission for booking creation
+            const submitButton = e.submitter;
+            if (submitButton && submitButton.name === 'create_booking') {
+                // Disable button and show loading state
+                createBookingBtn.disabled = true;
+                createBookingBtn.classList.add('is-loading');
+                bookingLoadingIcon.classList.remove('is-hidden');
+                bookingBtnText.textContent = 'Creating...';
+                
+                // Re-enable after a timeout as fallback (in case of error)
+                setTimeout(function() {
+                    createBookingBtn.disabled = false;
+                    createBookingBtn.classList.remove('is-loading');
+                    bookingLoadingIcon.classList.add('is-hidden');
+                    bookingBtnText.textContent = 'Create Booking';
+                }, 10000); // 10 second timeout
+            }
+        });
+    }
 });
 </script>
 
