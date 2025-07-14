@@ -14,12 +14,31 @@
         </div>
         <div class="level-right">
             <div class="level-item">
-                <a href="{{ url_for('create_policy_page') }}" class="button is-primary">
-                    <span class="icon">
-                        <i class="fas fa-plus"></i>
-                    </span>
-                    <span>Create Policy Page</span>
-                </a>
+                <div class="buttons">
+                    {% if not show_orphaned %}
+                    <a href="{{ url_for('manage_policy_pages', show_orphaned='true') }}" 
+                       class="button is-warning is-outlined">
+                        <span class="icon">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <span>Scan for Orphaned Files</span>
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('manage_policy_pages') }}" 
+                       class="button is-light">
+                        <span class="icon">
+                            <i class="fas fa-times"></i>
+                        </span>
+                        <span>Hide Orphaned Files</span>
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('create_policy_page') }}" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-plus"></i>
+                        </span>
+                        <span>Create Policy Page</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -121,6 +140,106 @@
     </div>
     {% endif %}
 
+    <!-- Orphaned Policy Pages Section -->
+    {% if show_orphaned %}
+    <div class="box">
+        <h2 class="title is-4 has-text-warning">
+            <span class="icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </span>
+            Orphaned Policy Page Files
+        </h2>
+        
+        {% if orphaned_pages %}
+        <div class="notification is-warning is-light">
+            <p><strong>Found {{ orphaned_pages|length }} orphaned policy page file(s)</strong></p>
+            <p>These files exist in secure storage but are not tracked in the database. You can recover them by clicking the "Recover" button.</p>
+        </div>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped">
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Title</th>
+                        <th>Slug</th>
+                        <th>Description</th>
+                        <th>Size</th>
+                        <th>Modified</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for orphan in orphaned_pages %}
+                    <tr>
+                        <td>
+                            <span class="tag is-family-monospace">{{ orphan.markdown_filename }}</span>
+                        </td>
+                        <td>
+                            <strong>{{ orphan.title }}</strong>
+                        </td>
+                        <td>
+                            {% if orphan.slug %}
+                                <span class="tag is-light">{{ orphan.slug }}</span>
+                            {% else %}
+                                <span class="tag is-light has-text-grey">No slug</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ orphan.description[:40] }}{% if orphan.description|length > 40 %}...{% endif %}</td>
+                        <td>
+                            {% if orphan.file_size < 1024 %}
+                                {{ orphan.file_size }} B
+                            {% elif orphan.file_size < 1048576 %}
+                                {{ "%.1f"|format(orphan.file_size / 1024) }} KB
+                            {% else %}
+                                {{ "%.1f"|format(orphan.file_size / 1048576) }} MB
+                            {% endif %}
+                        </td>
+                        <td>{{ orphan.last_modified|int|timestamp_to_date }}</td>
+                        <td>
+                            {% if orphan.has_html %}
+                                <span class="tag is-success">Complete</span>
+                            {% else %}
+                                <span class="tag is-warning">Markdown Only</span>
+                            {% endif %}
+                            {% if orphan.get('error') %}
+                                <span class="tag is-danger">Error</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not orphan.get('error') %}
+                            <form method="POST" action="{{ url_for('recover_policy_page', filename=orphan.markdown_filename) }}" 
+                                  style="display: inline-block;"
+                                  onsubmit="return confirm('Are you sure you want to recover this policy page? It will be added to the database with the current user as author.');">
+                                {{ csrf_form.hidden_tag() }}
+                                <button type="submit" 
+                                        class="button is-success is-small" 
+                                        title="Recover this orphaned policy page">
+                                    <span class="icon">
+                                        <i class="fas fa-undo"></i>
+                                    </span>
+                                    <span>Recover</span>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="tag is-danger">Cannot Recover</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="notification is-success is-light">
+            <p><strong>No orphaned policy page files found!</strong></p>
+            <p>All policy page files in secure storage are properly tracked in the database.</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="content">
         <h3 class="title is-5">About Policy Pages</h3>
         <ul>
@@ -130,6 +249,9 @@
             <li><strong>Footer Links:</strong> Pages marked to show in footer will appear at the bottom of every page</li>
             <li><strong>Sort Order:</strong> Controls the order of links in the footer (lower numbers appear first)</li>
             <li><strong>Admin Only:</strong> Only administrators can create, edit, or delete policy pages</li>
+            {% if show_orphaned %}
+            <li><strong>Orphaned Files:</strong> Files in secure storage that aren't tracked in the database can be recovered using the recovery feature</li>
+            {% endif %}
         </ul>
     </div>
 </div>

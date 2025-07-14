@@ -95,10 +95,81 @@ pip install -r requirements.txt
 - Regenerate CSRF tokens on each form render
 - Implement proper error handling for CSRF token validation failures
 
+### Audit Logging Requirements
+**CRITICAL: All database changes MUST be logged for security and compliance.**
+
+#### Required for ALL Database Operations:
+```python
+from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation
+
+# For new records
+audit_log_create('ModelName', record.id, 'Description of action', optional_data_dict)
+
+# For updates
+audit_log_update('ModelName', record.id, 'Description of action', changes_dict, optional_data_dict)
+
+# For deletions
+audit_log_delete('ModelName', record_id, 'Description of action', optional_data_dict)
+
+# For bulk operations
+audit_log_bulk_operation('BULK_CREATE', 'ModelName', count, 'Description', optional_data_dict)
+```
+
+#### Authentication Events:
+```python
+from app.audit import audit_log_authentication
+
+# Login/logout events
+audit_log_authentication('LOGIN', username, success_boolean, optional_data_dict)
+audit_log_authentication('LOGOUT', username, True)
+audit_log_authentication('PASSWORD_RESET', username, success_boolean)
+```
+
+#### Security Events:
+```python
+from app.audit import audit_log_security_event
+
+# Access denied, invalid tokens, etc.
+audit_log_security_event('ACCESS_DENIED', 'Description', optional_data_dict)
+```
+
+#### System Events:
+```python
+from app.audit import audit_log_system_event
+
+# System initialization, migrations, etc.
+audit_log_system_event('INITIALIZATION', 'Description', optional_data_dict)
+```
+
+#### Audit Log Format:
+All audit logs are written to `instance/logs/audit.log` with format:
+```
+YYYY-MM-DD HH:MM:SS | INFO | OPERATION | ModelName | ID: xxx | User: username (ID: xxx) | Description | Changes: {...} | Data: {...}
+```
+
+#### Examples:
+```python
+# Member creation
+audit_log_create('Member', new_member.id, 
+                f'Created member: {new_member.firstname} {new_member.lastname} ({new_member.username})',
+                {'status': new_member.status, 'is_admin': new_member.is_admin})
+
+# Member update with changes tracking
+changes = get_model_changes(member, form_data)
+audit_log_update('Member', member.id, 
+                f'Updated member: {member.firstname} {member.lastname}', 
+                changes)
+
+# Member deletion
+audit_log_delete('Member', member_id, f'Deleted member: {member_name}')
+```
+
 ### General Security Notes
 - Always follow security best practices
 - Never introduce code that exposes or logs secrets and keys
 - Never commit secrets or keys to the repository
+- All database changes must include audit logging
+- Use appropriate audit logging functions for all operations
 
 ## Code Style Guidelines
 

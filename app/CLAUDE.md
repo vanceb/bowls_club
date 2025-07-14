@@ -43,6 +43,64 @@ bookings = db.session.scalars(
 ).all()
 ```
 
+### Database Audit Logging
+**CRITICAL: All database modifications MUST be logged immediately after commit.**
+
+#### Required Import:
+```python
+from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation
+```
+
+#### Transaction Pattern with Audit Logging:
+```python
+# For single record operations
+try:
+    # Database operation
+    db.session.add(new_record)
+    db.session.commit()
+    
+    # REQUIRED: Audit log immediately after successful commit
+    audit_log_create('ModelName', new_record.id, 'Description of action')
+    
+except Exception as e:
+    db.session.rollback()
+    # Error handling
+    raise e
+
+# For bulk operations
+try:
+    # Multiple database operations
+    for item in items:
+        db.session.add(item)
+    db.session.commit()
+    
+    # REQUIRED: Audit log bulk operation
+    audit_log_bulk_operation('BULK_CREATE', 'ModelName', len(items), 'Description')
+    
+except Exception as e:
+    db.session.rollback()
+    raise e
+```
+
+#### Change Tracking Pattern:
+```python
+from app.audit import get_model_changes
+
+# Before updating, capture changes
+changes = get_model_changes(existing_record, {
+    'field1': new_value1,
+    'field2': new_value2
+})
+
+# Update the record
+existing_record.field1 = new_value1
+existing_record.field2 = new_value2
+db.session.commit()
+
+# REQUIRED: Audit log with changes
+audit_log_update('ModelName', existing_record.id, 'Description', changes)
+```
+
 ## Forms Development
 
 ### Form Definition Guidelines
@@ -72,6 +130,7 @@ def validate_field_name(self, field):
 - Use appropriate HTTP methods (GET, POST)
 - Include proper decorators (@login_required, @admin_required)
 - Handle form validation and errors properly
+- **ALWAYS include audit logging for database operations**
 
 ### Route Security
 ```python
@@ -88,8 +147,76 @@ def user_function(id):
     # Verify user can access this resource
     resource = db.session.get(Model, id)
     if not resource or not user_can_access(resource):
+        audit_log_security_event('ACCESS_DENIED', f'Unauthorized access attempt to resource {id}')
         abort(403)
     return render_template('template.html', resource=resource)
+```
+
+### Audit Logging in Routes
+**MANDATORY: All database operations in routes MUST include audit logging.**
+
+#### Database Operation Pattern:
+```python
+from app.audit import audit_log_create, audit_log_update, audit_log_delete, get_model_changes
+
+@app.route('/create_item', methods=['POST'])
+@login_required
+def create_item():
+    # Create new record
+    new_item = Model(name=form.name.data)
+    db.session.add(new_item)
+    db.session.commit()
+    
+    # REQUIRED: Audit log the creation
+    audit_log_create('Model', new_item.id, f'Created item: {new_item.name}')
+    
+    return redirect(url_for('list_items'))
+
+@app.route('/update_item/<int:id>', methods=['POST'])
+@login_required
+def update_item(id):
+    item = db.session.get(Model, id)
+    
+    # Capture changes before updating
+    changes = get_model_changes(item, {'name': form.name.data, 'status': form.status.data})
+    
+    # Update the item
+    item.name = form.name.data
+    item.status = form.status.data
+    db.session.commit()
+    
+    # REQUIRED: Audit log the update
+    audit_log_update('Model', item.id, f'Updated item: {item.name}', changes)
+    
+    return redirect(url_for('list_items'))
+
+@app.route('/delete_item/<int:id>', methods=['POST'])
+@login_required
+def delete_item(id):
+    item = db.session.get(Model, id)
+    item_name = item.name
+    
+    db.session.delete(item)
+    db.session.commit()
+    
+    # REQUIRED: Audit log the deletion
+    audit_log_delete('Model', id, f'Deleted item: {item_name}')
+    
+    return redirect(url_for('list_items'))
+```
+
+#### Authentication Route Pattern:
+```python
+@app.route('/login', methods=['POST'])
+def login():
+    if user and user.check_password(form.password.data):
+        login_user(user)
+        audit_log_authentication('LOGIN', user.username, True)
+        return redirect(url_for('dashboard'))
+    else:
+        audit_log_authentication('LOGIN', form.username.data, False, {'reason': 'Invalid credentials'})
+        flash('Invalid credentials')
+        return redirect(url_for('login'))
 ```
 
 ### JSON API Routes

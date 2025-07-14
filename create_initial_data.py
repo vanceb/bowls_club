@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, db
 from app.models import Role, Member
+from app.audit import audit_log_create, audit_log_system_event
 from config import Config
 from werkzeug.security import generate_password_hash
 
@@ -42,6 +43,12 @@ def create_initial_roles():
             print(f"  - Role already exists: {role_name}")
     
     db.session.commit()
+    
+    # Audit log the system initialization
+    if created_count > 0:
+        audit_log_system_event('INITIALIZATION', 
+                              f'System initialization: Created {created_count} initial roles',
+                              {'roles_created': created_count})
     print(f"Roles created: {created_count}")
     return created_count
 

@@ -18,6 +18,10 @@ from werkzeug.security import generate_password_hash
 
 # Local application imports
 from app import app, db, limiter
+from app.audit import (
+    audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation,
+    audit_log_authentication, audit_log_security_event, get_model_changes
+)
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
@@ -30,7 +34,8 @@ from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
     get_secure_post_path, get_secure_archive_path, generate_secure_filename,
-    get_secure_policy_page_path, add_home_games_filter
+    get_secure_policy_page_path, add_home_games_filter, find_orphaned_policy_pages,
+    recover_orphaned_policy_page
 )
 
 
@@ -171,12 +176,15 @@ def login():
             sa.select(Member).where(Member.username == form.username.data)
         )
         if user is None or not user.check_password(form.password.data):
+            audit_log_authentication('LOGIN', form.username.data, False, {'reason': 'Invalid credentials'})
             flash('Invalid username or password')
             return redirect(url_for('login'))
         if user.status in ['Pending', 'Suspended']:  # Restrict login
+            audit_log_authentication('LOGIN', form.username.data, False, {'reason': f'Account status: {user.status}'})
             flash('Your account is not active. Please contact the administrator.')
             return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
+        audit_log_authentication('LOGIN', user.username, True)
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
             next_page = url_for('index')
@@ -192,6 +200,8 @@ def logout():
     - Logs out the current user and redirects to home page.
     - Clears the user session.
     """
+    if current_user.is_authenticated:
+        audit_log_authentication('LOGOUT', current_user.username, True)
     logout_user()
     return redirect(url_for('index'))
 
@@ -220,6 +230,11 @@ def add_member():
         # Add to the database
         db.session.add(new_member)
         db.session.commit()
+        
+        # Audit log the member creation
+        audit_log_create('Member', new_member.id, 
+                        f'Created member: {new_member.firstname} {new_member.lastname} ({new_member.username})',
+                        {'is_bootstrap': is_bootstrap, 'status': new_member.status})
         
         if is_bootstrap:
             flash(f'Bootstrap admin user created: {form.firstname.data} {form.lastname.data}. You can now log in with full admin privileges.', 'success')
@@ -363,6 +378,21 @@ def edit_member(member_id):
 
     if form.validate_on_submit():
         if form.submit_update.data:
+            # Capture changes for audit log
+            changes = get_model_changes(member, {
+                'username': form.username.data,
+                'firstname': form.firstname.data,
+                'lastname': form.lastname.data,
+                'email': form.email.data,
+                'phone': form.phone.data,
+                'is_admin': form.is_admin.data,
+                'gender': form.gender.data,
+                'status': form.status.data,
+                'share_email': form.share_email.data,
+                'share_phone': form.share_phone.data
+            })
+            
+            # Update member fields
             member.username = form.username.data
             member.firstname = form.firstname.data
             member.lastname = form.lastname.data
@@ -376,15 +406,33 @@ def edit_member(member_id):
 
             selected_role_ids = form.roles.data
             selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
+            old_roles = [role.name for role in member.roles]
+            new_roles = [role.name for role in selected_roles]
+            if old_roles != new_roles:
+                changes['roles'] = old_roles
             member.roles = selected_roles
 
             db.session.commit()
+            
+            # Audit log the member update
+            audit_log_update('Member', member.id, 
+                           f'Updated member: {member.firstname} {member.lastname} ({member.username})',
+                           changes)
+            
             flash('Member updated successfully', 'success')
             return redirect(url_for('manage_members'))
         elif form.submit_delete.data:
+            # Capture member info for audit log before deletion
+            member_info = f'{member.firstname} {member.lastname} ({member.username})'
+            member_id = member.id
+            
             # Delete the member
             db.session.delete(member)
             db.session.commit()
+            
+            # Audit log the member deletion
+            audit_log_delete('Member', member_id, f'Deleted member: {member_info}')
+            
             flash('Member deleted successfully', 'success')
             return redirect(url_for('manage_members'))
 
@@ -427,6 +475,10 @@ def manage_roles():
                 new_role = Role(name=role_name)
                 db.session.add(new_role)
                 db.session.commit()
+                
+                # Audit log the role creation
+                audit_log_create('Role', new_role.id, f'Created role: {role_name}')
+                
                 flash('Role created successfully.', 'success')
 
         elif action == 'rename' and role_id and role_name:
@@ -436,8 +488,14 @@ def manage_roles():
                 if db.session.scalar(sa.select(Role).where(Role.name == role_name)):
                     flash('A role with this name already exists.', 'danger')
                 else:
+                    old_name = role.name
                     role.name = role_name
                     db.session.commit()
+                    
+                    # Audit log the role rename
+                    audit_log_update('Role', role.id, f'Renamed role: {old_name} → {role_name}',
+                                   {'name': old_name})
+                    
                     flash('Role renamed successfully.', 'success')
             else:
                 flash('Role not found.', 'danger')
@@ -446,8 +504,13 @@ def manage_roles():
             # Delete an existing role
             role = db.session.get(Role, int(role_id))
             if role:
+                role_name = role.name
                 db.session.delete(role)
                 db.session.commit()
+                
+                # Audit log the role deletion
+                audit_log_delete('Role', role_id, f'Deleted role: {role_name}')
+                
                 flash('Role deleted successfully.', 'success')
             else:
                 flash('Role not found.', 'danger')
@@ -508,6 +571,10 @@ def pw_reset(token):
         if user:
             user.set_password(form.password.data)
             db.session.commit()
+            
+            # Audit log the password reset
+            audit_log_authentication('PASSWORD_RESET', user.username, True)
+            
             flash('Your password has been updated!', 'success')
             return redirect(url_for('login'))
     return render_template('pw_reset.html', form=form)
@@ -546,6 +613,10 @@ def write_post():
         )
         db.session.add(post)
         db.session.commit()
+
+        # Audit log the post creation
+        audit_log_create('Post', post.id, f'Created post: {post.title}',
+                        {'publish_on': post.publish_on.isoformat(), 'expires_on': post.expires_on.isoformat()})
 
         # Save content to secure storage
         post_dir = current_app.config['POSTS_STORAGE_PATH']
@@ -602,9 +673,14 @@ def manage_posts():
             
         # Handle deletion of selected posts
         post_ids = request.form.getlist('post_ids')
+        deleted_posts = []
+        
         for post_id in post_ids:
             post = db.session.get(Post, post_id)
             if post:
+                # Capture post info for audit log
+                deleted_posts.append(f'{post.title} (ID: {post.id})')
+                
                 # Move files to secure archive storage
                 markdown_path = get_secure_post_path(post.markdown_filename)
                 html_path = get_secure_post_path(post.html_filename)
@@ -629,7 +705,13 @@ def manage_posts():
 
                 # Delete post from database
                 db.session.delete(post)
+        
         db.session.commit()
+        
+        # Audit log the post deletions
+        if deleted_posts:
+            audit_log_bulk_operation('BULK_DELETE', 'Post', len(deleted_posts), 
+                                   f'Deleted {len(deleted_posts)} posts: {", ".join(deleted_posts)}')
         flash(f"{len(post_ids)} post(s) deleted successfully!", "success")
         return redirect(url_for('manage_posts'))
 
@@ -683,6 +765,16 @@ def edit_post(post_id):
     )
 
     if form.validate_on_submit():
+        # Capture changes for audit log
+        changes = get_model_changes(post, {
+            'title': form.title.data,
+            'summary': form.summary.data,
+            'publish_on': form.publish_on.data,
+            'expires_on': form.expires_on.data,
+            'pin_until': form.pin_until.data,
+            'tags': form.tags.data
+        })
+        
         # Update the post metadata
         post.title = form.title.data
         post.summary = form.summary.data
@@ -714,6 +806,10 @@ def edit_post(post_id):
 
         # Save changes to the database
         db.session.commit()
+        
+        # Audit log the post update
+        audit_log_update('Post', post.id, f'Updated post: {post.title}', changes)
+        
         flash("Post updated successfully!", "success")
         return redirect(url_for('manage_posts'))
 
@@ -922,6 +1018,9 @@ def manage_events():
                     
                     # Copy event teams to booking teams
                     from app.models import BookingTeam, BookingTeamMember
+                    team_count = 0
+                    member_count = 0
+                    
                     for event_team in selected_event.event_teams:
                         booking_team = BookingTeam(
                             booking_id=new_booking.id,
@@ -931,6 +1030,7 @@ def manage_events():
                         )
                         db.session.add(booking_team)
                         db.session.flush()  # Flush to get the booking team ID
+                        team_count += 1
                         
                         # Copy team members to booking team members
                         for team_member in event_team.team_members:
@@ -942,8 +1042,17 @@ def manage_events():
                                 availability_status='pending'
                             )
                             db.session.add(booking_team_member)
+                            member_count += 1
                     
                     db.session.commit()
+                    
+                    # Audit log the booking creation
+                    audit_log_create('Booking', new_booking.id, 
+                                   f'Created booking for event "{selected_event.name}" on {new_booking.booking_date}',
+                                   {'event_id': selected_event.id, 'session': new_booking.session, 
+                                    'rink_count': new_booking.rink_count, 'teams_created': team_count, 
+                                    'members_assigned': member_count})
+                    
                     flash(f'Booking created successfully for "{selected_event.name}" with {len(selected_event.event_teams)} teams!', 'success')
                     
                     # Reload the page with the selected event and scroll to bookings section
@@ -969,6 +1078,14 @@ def manage_events():
             selected_event = db.session.get(Event, int(event_id))
             
             if booking and selected_event:
+                # Capture changes for audit log
+                old_booking_date = booking.booking_date
+                old_session = booking.session
+                old_rink_count = booking.rink_count
+                old_priority = booking.priority
+                old_vs = booking.vs
+                old_home_away = booking.home_away
+                
                 # Update booking with form data
                 booking.booking_date = datetime.strptime(request.form.get('booking_date'), '%Y-%m-%d').date()
                 booking.session = int(request.form.get('session'))
@@ -977,7 +1094,28 @@ def manage_events():
                 booking.vs = request.form.get('vs') or None
                 booking.home_away = request.form.get('home_away') or None
                 
+                # Build changes dictionary
+                changes = {}
+                if old_booking_date != booking.booking_date:
+                    changes['booking_date'] = old_booking_date.isoformat()
+                if old_session != booking.session:
+                    changes['session'] = old_session
+                if old_rink_count != booking.rink_count:
+                    changes['rink_count'] = old_rink_count
+                if old_priority != booking.priority:
+                    changes['priority'] = old_priority
+                if old_vs != booking.vs:
+                    changes['vs'] = old_vs
+                if old_home_away != booking.home_away:
+                    changes['home_away'] = old_home_away
+                
                 db.session.commit()
+                
+                # Audit log the booking update
+                audit_log_update('Booking', booking.id, 
+                               f'Updated booking for event "{selected_event.name}" on {booking.booking_date}',
+                               changes)
+                
                 flash(f'Booking updated successfully!', 'success')
                 
                 # Reload the page with the selected event and scroll to bookings section
@@ -995,8 +1133,15 @@ def manage_events():
             selected_event = db.session.get(Event, int(event_id))
             
             if booking and selected_event:
+                # Capture booking info for audit log
+                booking_info = f'event "{selected_event.name}" on {booking.booking_date}'
+                
                 db.session.delete(booking)
                 db.session.commit()
+                
+                # Audit log the booking deletion
+                audit_log_delete('Booking', booking_id, f'Deleted booking for {booking_info}')
+                
                 flash(f'Booking deleted successfully!', 'success')
                 
                 # Reload the page with the selected event and scroll to bookings section
@@ -1012,6 +1157,16 @@ def manage_events():
                 # Update existing event
                 existing_event = db.session.get(Event, int(event_id))
                 if existing_event:
+                    # Capture changes for audit log
+                    changes = get_model_changes(existing_event, {
+                        'name': event_form.name.data,
+                        'event_type': event_form.event_type.data,
+                        'gender': event_form.gender.data,
+                        'format': event_form.format.data,
+                        'scoring': event_form.scoring.data
+                    })
+                    
+                    # Update event fields
                     existing_event.name = event_form.name.data
                     existing_event.event_type = event_form.event_type.data
                     existing_event.gender = event_form.gender.data
@@ -1021,11 +1176,20 @@ def manage_events():
                     # Update event managers (many-to-many relationship)
                     selected_manager_ids = event_form.event_managers.data
                     selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all() if selected_manager_ids else []
+                    old_managers = [f"{mgr.firstname} {mgr.lastname}" for mgr in existing_event.event_managers]
+                    new_managers = [f"{mgr.firstname} {mgr.lastname}" for mgr in selected_managers]
+                    if old_managers != new_managers:
+                        changes['event_managers'] = old_managers
                     existing_event.event_managers = selected_managers
                     
                     # Teams are now managed individually through separate routes
                     
                     db.session.commit()
+                    
+                    # Audit log the event update
+                    audit_log_update('Event', existing_event.id, 
+                                   f'Updated event: {existing_event.name}', changes)
+                    
                     flash(f'Event "{existing_event.name}" updated successfully!', 'success')
                     # Redirect with event_id to show teams section
                     return redirect(url_for('manage_events') + f'?event_id={existing_event.id}&scroll_to=teams-section')
@@ -1046,11 +1210,20 @@ def manage_events():
                 
                 # Add event managers (many-to-many relationship)
                 selected_manager_ids = event_form.event_managers.data
+                event_managers = []
                 if selected_manager_ids:
                     selected_managers = db.session.scalars(sa.select(Member).where(Member.id.in_(selected_manager_ids))).all()
                     new_event.event_managers = selected_managers
+                    event_managers = [f"{mgr.firstname} {mgr.lastname}" for mgr in selected_managers]
                 
                 db.session.commit()
+                
+                # Audit log the event creation
+                audit_log_create('Event', new_event.id, 
+                               f'Created event: {new_event.name}',
+                               {'event_type': new_event.event_type, 'gender': new_event.gender, 
+                                'format': new_event.format, 'event_managers': event_managers})
+                
                 flash(f'Event "{new_event.name}" created successfully! Now add teams to this event.', 'success')
                 # Redirect with event_id to show teams section
                 return redirect(url_for('manage_events') + f'?event_id={new_event.id}&scroll_to=teams-section')
@@ -1116,10 +1289,22 @@ def my_games():
                 if action == 'confirm_available':
                     assignment.availability_status = 'available'
                     assignment.confirmed_at = datetime.utcnow()
+                    
+                    # Audit log the availability confirmation
+                    audit_log_update('BookingTeamMember', assignment.id, 
+                                   f'Confirmed availability for booking on {assignment.booking_team.booking.booking_date}',
+                                   {'availability_status': 'pending'})
+                    
                     flash('Availability confirmed successfully!', 'success')
                 elif action == 'confirm_unavailable':
                     assignment.availability_status = 'unavailable'
                     assignment.confirmed_at = datetime.utcnow()
+                    
+                    # Audit log the unavailability confirmation
+                    audit_log_update('BookingTeamMember', assignment.id, 
+                                   f'Confirmed unavailability for booking on {assignment.booking_team.booking.booking_date}',
+                                   {'availability_status': 'pending'})
+                    
                     flash('Unavailability confirmed. The event organizer will arrange a substitute.', 'info')
                 
                 db.session.commit()
@@ -1201,6 +1386,12 @@ def manage_booking_teams(booking_id):
                     booking_team.substitution_log = json.dumps(current_log)
                     
                     db.session.commit()
+                    
+                    # Audit log the substitution
+                    audit_log_update('BookingTeamMember', booking_team_member.id, 
+                                   f'Substituted {substitution_log["original_player"]} with {substitution_log["substitute_player"]} for {booking_team_member.position}',
+                                   {'original_member_id': booking_team_member.member_id, 'reason': substitution_log['reason']})
+                    
                     flash(f'Successfully substituted {substitution_log["original_player"]} with {substitution_log["substitute_player"]} for {booking_team_member.position}', 'success')
                 else:
                     flash('Invalid player selection for substitution', 'error')
@@ -1291,6 +1482,16 @@ def edit_booking(booking_id):
     form = BookingForm(obj=booking)
     
     if form.validate_on_submit():
+        # Capture changes for audit log
+        changes = get_model_changes(booking, {
+            'booking_date': form.booking_date.data,
+            'session': form.session.data,
+            'rink_count': form.rink_count.data,
+            'priority': form.priority.data,
+            'vs': form.vs.data,
+            'home_away': form.home_away.data
+        })
+        
         # Update the booking with form data
         booking.booking_date = form.booking_date.data
         booking.session = form.session.data
@@ -1300,6 +1501,10 @@ def edit_booking(booking_id):
         booking.home_away = form.home_away.data
         
         db.session.commit()
+        
+        # Audit log the booking edit
+        audit_log_update('Booking', booking.id, f'Edited booking #{booking.id}', changes)
+        
         flash('Booking updated successfully!', 'success')
         
         # Redirect back to events management if the booking has an event
@@ -1354,10 +1559,17 @@ def manage_policy_pages():
     """
     Route: Manage Policy Pages
     - Allows admins to view and manage all policy pages.
+    - Provides functionality to scan for and recover orphaned policy page files.
     """
     policy_pages = db.session.scalars(
         sa.select(PolicyPage).order_by(PolicyPage.sort_order, PolicyPage.title)
     ).all()
+    
+    # Check for orphaned policy pages if requested
+    orphaned_pages = []
+    show_orphaned = request.args.get('show_orphaned') == 'true'
+    if show_orphaned:
+        orphaned_pages = find_orphaned_policy_pages()
     
     # Create a simple form for CSRF protection
     csrf_form = FlaskForm()
@@ -1365,6 +1577,8 @@ def manage_policy_pages():
     return render_template(
         'manage_policy_pages.html',
         policy_pages=policy_pages,
+        orphaned_pages=orphaned_pages,
+        show_orphaned=show_orphaned,
         csrf_form=csrf_form,
         menu_items=app.config['MENU_ITEMS'],
         admin_menu_items=app.config['ADMIN_MENU_ITEMS']
@@ -1408,6 +1622,10 @@ def create_policy_page():
         )
         db.session.add(policy_page)
         db.session.commit()
+        
+        # Audit log the policy page creation
+        audit_log_create('PolicyPage', policy_page.id, f'Created policy page: {policy_page.title}',
+                        {'slug': policy_page.slug, 'is_active': policy_page.is_active})
         
         # Save content to secure storage
         policy_dir = current_app.config['POLICY_PAGES_STORAGE_PATH']
@@ -1468,6 +1686,16 @@ def edit_policy_page(policy_page_id):
             return render_template('policy_page_form.html', form=form, title="Edit Policy Page",
                                  menu_items=app.config['MENU_ITEMS'], admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
         
+        # Capture changes for audit log
+        changes = get_model_changes(policy_page, {
+            'title': form.title.data,
+            'slug': form.slug.data,
+            'description': form.description.data,
+            'is_active': form.is_active.data,
+            'show_in_footer': form.show_in_footer.data,
+            'sort_order': form.sort_order.data or 0
+        })
+        
         # Update policy page metadata
         policy_page.title = form.title.data
         policy_page.slug = form.slug.data
@@ -1476,6 +1704,9 @@ def edit_policy_page(policy_page_id):
         policy_page.show_in_footer = form.show_in_footer.data
         policy_page.sort_order = form.sort_order.data or 0
         db.session.commit()
+        
+        # Audit log the policy page update
+        audit_log_update('PolicyPage', policy_page.id, f'Updated policy page: {policy_page.title}', changes)
         
         # Update content files
         markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
@@ -1546,6 +1777,9 @@ def delete_policy_page(policy_page_id):
     if not policy_page:
         abort(404)
     
+    # Capture policy page info for audit log
+    policy_page_info = f'{policy_page.title} (slug: {policy_page.slug})'
+    
     # Delete files from secure storage
     markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
     html_path = get_secure_policy_page_path(policy_page.html_filename)
@@ -1559,8 +1793,39 @@ def delete_policy_page(policy_page_id):
     db.session.delete(policy_page)
     db.session.commit()
     
+    # Audit log the policy page deletion
+    audit_log_delete('PolicyPage', policy_page_id, f'Deleted policy page: {policy_page_info}')
+    
     flash('Policy page deleted successfully!', 'success')
     return redirect(url_for('manage_policy_pages'))
+
+
+@app.route('/admin/recover_policy_page/<filename>', methods=['POST'])
+@admin_required
+def recover_policy_page(filename):
+    """
+    Route: Recover Orphaned Policy Page
+    - Allows admins to recover orphaned policy page files by adding them to the database.
+    """
+    # Validate CSRF token
+    csrf_form = FlaskForm()
+    if not csrf_form.validate_on_submit():
+        abort(400)  # Bad request if CSRF validation fails
+    
+    # Attempt to recover the orphaned policy page
+    success, message, policy_page = recover_orphaned_policy_page(filename, current_user.id)
+    
+    if success and policy_page:
+        # Audit log the policy page recovery
+        audit_log_create('PolicyPage', policy_page.id, 
+                        f'Recovered orphaned policy page: {policy_page.title}',
+                        {'recovered_from': filename, 'slug': policy_page.slug})
+        
+        flash(message, 'success')
+    else:
+        flash(message, 'error')
+    
+    return redirect(url_for('manage_policy_pages', show_orphaned='true'))
 
 
 @app.route('/admin/edit_event_team/<int:team_id>', methods=['GET', 'POST'])
@@ -1583,19 +1848,25 @@ def edit_event_team(team_id):
     form = TeamMemberForm()
     
     if form.validate_on_submit():
-        # Clear existing team members
+        # Capture existing team members for audit log
         existing_members = db.session.scalars(
             sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
         ).all()
+        old_members = [f"{member.member.firstname} {member.member.lastname} ({member.position})" 
+                      for member in existing_members]
+        
+        # Clear existing team members
         for member in existing_members:
             db.session.delete(member)
         
         # Update team name
+        old_team_name = team.team_name
         team.team_name = form.team_name.data
         
         # Add new team members based on form data
         team_positions = current_app.config.get('TEAM_POSITIONS', {})
         positions = team_positions.get(team.event.format, [])
+        new_members = []
         
         for position in positions:
             field_name = f"position_{position.lower().replace(' ', '_')}"
@@ -1608,8 +1879,21 @@ def edit_event_team(team_id):
                     position=position
                 )
                 db.session.add(team_member)
+                member_obj = db.session.get(Member, member_id)
+                new_members.append(f"{member_obj.firstname} {member_obj.lastname} ({position})")
         
         db.session.commit()
+        
+        # Audit log the team update
+        changes = {}
+        if old_team_name != team.team_name:
+            changes['team_name'] = old_team_name
+        changes['old_members'] = old_members
+        changes['new_members'] = new_members
+        
+        audit_log_update('EventTeam', team.id, 
+                        f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
+        
         flash(f'Team "{team.team_name}" updated successfully!', 'success')
         return redirect(url_for('manage_events', event_id=team.event_id))
     
@@ -1671,6 +1955,11 @@ def add_event_team(event_id):
         db.session.add(new_team)
         db.session.commit()
         
+        # Audit log the team creation
+        audit_log_create('EventTeam', new_team.id, 
+                        f'Created team: {new_team.team_name} for event "{event.name}"',
+                        {'team_number': next_team_number})
+        
         flash(f'Team "{new_team.team_name}" added successfully!', 'success')
         return redirect(url_for('manage_events', event_id=event_id) + '&scroll_to=teams-section')
     
@@ -1700,6 +1989,7 @@ def delete_event_team(team_id):
     
     event_id = team.event_id
     team_name = team.team_name
+    event_name = team.event.name
     
     # Check if this team has associated booking teams
     booking_teams_count = len(team.booking_teams)
@@ -1715,6 +2005,11 @@ def delete_event_team(team_id):
     # Delete the team (cascade will handle team_members and booking_teams relationship)
     db.session.delete(team)
     db.session.commit()
+    
+    # Audit log the team deletion
+    audit_log_delete('EventTeam', team_id, 
+                    f'Deleted team: {team_name} from event "{event_name}"',
+                    {'booking_teams_affected': booking_teams_count})
     
     if booking_teams_count > 0:
         flash(f'Team "{team_name}" deleted. Existing bookings remain unchanged.', 'info')
@@ -1735,6 +2030,17 @@ def edit_profile():
     form = EditProfileForm(current_user.email)
     
     if form.validate_on_submit():
+        # Capture changes for audit log
+        changes = get_model_changes(current_user, {
+            'firstname': form.firstname.data,
+            'lastname': form.lastname.data,
+            'email': form.email.data,
+            'phone': form.phone.data,
+            'gender': form.gender.data,
+            'share_email': form.share_email.data,
+            'share_phone': form.share_phone.data
+        })
+        
         current_user.firstname = form.firstname.data
         current_user.lastname = form.lastname.data
         current_user.email = form.email.data
@@ -1744,6 +2050,10 @@ def edit_profile():
         current_user.share_phone = form.share_phone.data
         
         db.session.commit()
+        
+        # Audit log the profile update
+        audit_log_update('Member', current_user.id, f'Updated profile for {current_user.username}', changes)
+        
         flash('Your profile has been updated successfully!', 'success')
         return redirect(url_for('edit_profile'))
     
@@ -1874,6 +2184,11 @@ def import_users():
             # Commit all successful imports
             if success_count > 0:
                 db.session.commit()
+                
+                # Audit log the bulk import
+                audit_log_bulk_operation('BULK_CREATE', 'Member', success_count, 
+                                       f'CSV import: {success_count} members imported, {error_count} errors')
+                
                 flash(f'Successfully imported {success_count} users.', 'success')
             
             if error_count > 0:

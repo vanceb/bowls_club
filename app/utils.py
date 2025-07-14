@@ -336,3 +336,177 @@ def sanitize_html_content(html_content):
     
     # Sanitize the HTML content
     return bleach.clean(html_content, tags=allowed_tags, attributes=allowed_attributes)
+
+
+def find_orphaned_policy_pages():
+    """
+    Find policy page files in secure storage that are not tracked in the database.
+    
+    Returns:
+        list: List of dictionaries containing orphaned file information
+    """
+    from flask import current_app
+    from app.models import PolicyPage
+    from app import db
+    import sqlalchemy as sa
+    
+    orphaned_files = []
+    policy_dir = current_app.config.get('POLICY_PAGES_STORAGE_PATH')
+    
+    if not policy_dir or not os.path.exists(policy_dir):
+        return orphaned_files
+    
+    # Get all markdown files in the policy pages directory
+    markdown_files = [f for f in os.listdir(policy_dir) if f.endswith('.md')]
+    
+    # Get all policy page filenames from the database
+    db_filenames = set()
+    policy_pages = db.session.scalars(sa.select(PolicyPage)).all()
+    for page in policy_pages:
+        db_filenames.add(page.markdown_filename)
+        db_filenames.add(page.html_filename)
+    
+    # Find orphaned markdown files
+    for md_filename in markdown_files:
+        if md_filename not in db_filenames:
+            # Check if corresponding HTML file exists
+            html_filename = md_filename.replace('.md', '.html')
+            html_path = os.path.join(policy_dir, html_filename)
+            
+            # Try to read and parse the markdown file
+            md_path = os.path.join(policy_dir, md_filename)
+            try:
+                with open(md_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Parse metadata from the markdown file
+                metadata, markdown_content = parse_metadata_from_markdown(content)
+                
+                orphaned_files.append({
+                    'markdown_filename': md_filename,
+                    'html_filename': html_filename,
+                    'has_html': os.path.exists(html_path),
+                    'title': metadata.get('title', 'Unknown Title'),
+                    'slug': metadata.get('slug', ''),
+                    'description': metadata.get('description', ''),
+                    'is_active': metadata.get('is_active', True),
+                    'show_in_footer': metadata.get('show_in_footer', True),
+                    'sort_order': metadata.get('sort_order', 0),
+                    'author': metadata.get('author', 'Unknown'),
+                    'markdown_content': markdown_content,
+                    'file_size': os.path.getsize(md_path),
+                    'last_modified': os.path.getmtime(md_path)
+                })
+            except Exception as e:
+                # If we can't parse the file, still include it with basic info
+                orphaned_files.append({
+                    'markdown_filename': md_filename,
+                    'html_filename': html_filename,
+                    'has_html': os.path.exists(html_path),
+                    'title': f'Corrupted: {md_filename}',
+                    'slug': '',
+                    'description': f'Error reading file: {str(e)}',
+                    'is_active': False,
+                    'show_in_footer': False,
+                    'sort_order': 0,
+                    'author': 'Unknown',
+                    'markdown_content': '',
+                    'file_size': os.path.getsize(md_path) if os.path.exists(md_path) else 0,
+                    'last_modified': os.path.getmtime(md_path) if os.path.exists(md_path) else 0,
+                    'error': str(e)
+                })
+    
+    return orphaned_files
+
+
+def recover_orphaned_policy_page(markdown_filename, current_user_id):
+    """
+    Recover an orphaned policy page by adding it to the database.
+    
+    Args:
+        markdown_filename (str): Name of the orphaned markdown file
+        current_user_id (int): ID of the user performing the recovery
+        
+    Returns:
+        tuple: (success: bool, message: str, policy_page: PolicyPage or None)
+    """
+    from flask import current_app
+    from app.models import PolicyPage
+    from app import db
+    import sqlalchemy as sa
+    
+    try:
+        # Get the policy pages directory
+        policy_dir = current_app.config.get('POLICY_PAGES_STORAGE_PATH')
+        if not policy_dir:
+            return False, "Policy pages storage path not configured", None
+        
+        # Read the markdown file
+        md_path = os.path.join(policy_dir, markdown_filename)
+        if not os.path.exists(md_path):
+            return False, f"Markdown file not found: {markdown_filename}", None
+        
+        with open(md_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse metadata from the markdown file
+        metadata, markdown_content = parse_metadata_from_markdown(content)
+        
+        # Extract metadata with defaults
+        title = metadata.get('title', 'Recovered Policy Page')
+        slug = metadata.get('slug', '')
+        description = metadata.get('description', 'Recovered from orphaned files')
+        is_active = metadata.get('is_active', True)
+        show_in_footer = metadata.get('show_in_footer', True)
+        sort_order = metadata.get('sort_order', 0)
+        
+        # Generate slug if not provided
+        if not slug:
+            slug = re.sub(r'[^\w\-_]', '-', title.lower())[:50]
+        
+        # Check if slug already exists
+        existing_page = db.session.scalar(
+            sa.select(PolicyPage).where(PolicyPage.slug == slug)
+        )
+        if existing_page:
+            # Make slug unique
+            counter = 1
+            base_slug = slug
+            while existing_page:
+                slug = f"{base_slug}-{counter}"
+                existing_page = db.session.scalar(
+                    sa.select(PolicyPage).where(PolicyPage.slug == slug)
+                )
+                counter += 1
+        
+        # Create the policy page record
+        html_filename = markdown_filename.replace('.md', '.html')
+        policy_page = PolicyPage(
+            title=title,
+            slug=slug,
+            description=description,
+            is_active=is_active,
+            show_in_footer=show_in_footer,
+            sort_order=sort_order,
+            author_id=current_user_id,
+            markdown_filename=markdown_filename,
+            html_filename=html_filename
+        )
+        
+        # Check if HTML file exists, if not, create it
+        html_path = os.path.join(policy_dir, html_filename)
+        if not os.path.exists(html_path):
+            # Convert Markdown to HTML and save
+            html_content = markdown2.markdown(markdown_content, extras=["tables"])
+            with open(html_path, 'w', encoding='utf-8') as html_file:
+                html_file.write(html_content)
+        
+        # Add to database
+        db.session.add(policy_page)
+        db.session.commit()
+        
+        return True, f"Successfully recovered policy page: {title}", policy_page
+        
+    except Exception as e:
+        db.session.rollback()
+        return False, f"Error recovering policy page: {str(e)}", None

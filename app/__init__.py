@@ -92,6 +92,15 @@ def from_json_filter(json_str):
     except (json.JSONDecodeError, TypeError):
         return []
 
+@app.template_filter('timestamp_to_date')
+def timestamp_to_date_filter(timestamp):
+    """Convert Unix timestamp to human-readable date"""
+    try:
+        from datetime import datetime
+        return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M')
+    except (ValueError, TypeError, OSError):
+        return 'Unknown'
+
 # Security headers middleware
 @app.after_request
 def add_security_headers(response):
