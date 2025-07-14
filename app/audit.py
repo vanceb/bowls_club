@@ -84,9 +84,6 @@ def audit_log_create(model_name: str, record_id: Union[int, str], description: s
     
     log_message = f"CREATE | {model_name} | ID: {record_id} | User: {user_info} | {description}"
     
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
-    
     logger.info(log_message)
 
 
@@ -108,12 +105,6 @@ def audit_log_update(model_name: str, record_id: Union[int, str], description: s
     
     log_message = f"UPDATE | {model_name} | ID: {record_id} | User: {user_info} | {description}"
     
-    if changes:
-        log_message += f" | Changes: {changes}"
-    
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
-    
     logger.info(log_message)
 
 
@@ -132,9 +123,6 @@ def audit_log_delete(model_name: str, record_id: Union[int, str], description: s
     user_info = get_current_user_info()
     
     log_message = f"DELETE | {model_name} | ID: {record_id} | User: {user_info} | {description}"
-    
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
     
     logger.info(log_message)
 
@@ -156,9 +144,6 @@ def audit_log_bulk_operation(operation: str, model_name: str, count: int, descri
     
     log_message = f"{operation} | {model_name} | Count: {count} | User: {user_info} | {description}"
     
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
-    
     logger.info(log_message)
 
 
@@ -178,9 +163,6 @@ def audit_log_authentication(event_type: str, username: str, success: bool,
     status = "SUCCESS" if success else "FAILURE"
     log_message = f"AUTH | {event_type} | {status} | User: {username}"
     
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
-    
     logger.info(log_message)
 
 
@@ -199,9 +181,6 @@ def audit_log_security_event(event_type: str, description: str,
     
     log_message = f"SECURITY | {event_type} | User: {user_info} | {description}"
     
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
-    
     logger.warning(log_message)
 
 
@@ -218,9 +197,6 @@ def audit_log_system_event(event_type: str, description: str,
     logger = setup_audit_logger()
     
     log_message = f"SYSTEM | {event_type} | {description}"
-    
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
     
     logger.info(log_message)
 
@@ -240,9 +216,6 @@ def audit_log_file_operation(operation: str, filename: str, description: str,
     user_info = get_current_user_info()
     
     log_message = f"FILE | {operation} | File: {filename} | User: {user_info} | {description}"
-    
-    if additional_data:
-        log_message += f" | Data: {additional_data}"
     
     logger.info(log_message)
 

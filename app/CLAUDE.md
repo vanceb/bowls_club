@@ -82,23 +82,15 @@ except Exception as e:
     raise e
 ```
 
-#### Change Tracking Pattern:
+#### Update Logging Pattern:
 ```python
-from app.audit import get_model_changes
-
-# Before updating, capture changes
-changes = get_model_changes(existing_record, {
-    'field1': new_value1,
-    'field2': new_value2
-})
-
 # Update the record
 existing_record.field1 = new_value1
 existing_record.field2 = new_value2
 db.session.commit()
 
-# REQUIRED: Audit log with changes
-audit_log_update('ModelName', existing_record.id, 'Description', changes)
+# REQUIRED: Audit log the update
+audit_log_update('ModelName', existing_record.id, 'Description of what was updated')
 ```
 
 ## Forms Development
@@ -157,7 +149,7 @@ def user_function(id):
 
 #### Database Operation Pattern:
 ```python
-from app.audit import audit_log_create, audit_log_update, audit_log_delete, get_model_changes
+from app.audit import audit_log_create, audit_log_update, audit_log_delete
 
 @app.route('/create_item', methods=['POST'])
 @login_required
@@ -177,16 +169,13 @@ def create_item():
 def update_item(id):
     item = db.session.get(Model, id)
     
-    # Capture changes before updating
-    changes = get_model_changes(item, {'name': form.name.data, 'status': form.status.data})
-    
     # Update the item
     item.name = form.name.data
     item.status = form.status.data
     db.session.commit()
     
     # REQUIRED: Audit log the update
-    audit_log_update('Model', item.id, f'Updated item: {item.name}', changes)
+    audit_log_update('Model', item.id, f'Updated item: {item.name}')
     
     return redirect(url_for('list_items'))
 
@@ -214,7 +203,7 @@ def login():
         audit_log_authentication('LOGIN', user.username, True)
         return redirect(url_for('dashboard'))
     else:
-        audit_log_authentication('LOGIN', form.username.data, False, {'reason': 'Invalid credentials'})
+        audit_log_authentication('LOGIN', form.username.data, False)
         flash('Invalid credentials')
         return redirect(url_for('login'))
 ```
