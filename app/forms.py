@@ -13,10 +13,62 @@ from wtforms.widgets import CheckboxInput, ListWidget
 from wtforms.validators import (
     ValidationError, DataRequired, Email, EqualTo, Length, Optional, NumberRange
 )
+import re
 
 # Local application imports
 from app import db
 from app.models import Member, Event
+
+# Custom password validator for complexity requirements
+class PasswordComplexity:
+    """
+    Custom WTForms validator for password complexity requirements.
+    Requires at least 8 characters with uppercase, lowercase, number, and special character.
+    """
+    def __init__(self, message=None):
+        self.message = message or (
+            'Password must be at least 8 characters long and contain: '
+            'uppercase letter, lowercase letter, number, and special character (!@#$%^&*)'
+        )
+    
+    def __call__(self, form, field):
+        password = field.data
+        if not password:
+            return  # Let DataRequired handle empty passwords
+        
+        if len(password) < 8:
+            raise ValidationError('Password must be at least 8 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', password):
+            raise ValidationError('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', password):
+            raise ValidationError('Password must contain at least one lowercase letter')
+        
+        # Check for digit
+        if not re.search(r'\d', password):
+            raise ValidationError('Password must contain at least one number')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            raise ValidationError('Password must contain at least one special character (!@#$%^&*)')
+        
+        # Check for common weak patterns
+        if re.search(r'(.)\1{2,}', password):  # Same character repeated 3+ times
+            raise ValidationError('Password cannot contain the same character repeated more than twice')
+        
+        # Check for sequential patterns
+        sequences = ['123456789', 'abcdefghijklmnopqrstuvwxyz', 'qwertyuiop']
+        for seq in sequences:
+            if any(seq[i:i+4] in password.lower() for i in range(len(seq)-3)):
+                raise ValidationError('Password cannot contain sequential patterns')
+        
+        # Check for common weak passwords
+        common_weak = ['password', 'Password', 'PASSWORD', '12345678', 'qwerty123']
+        if password.lower() in [weak.lower() for weak in common_weak]:
+            raise ValidationError('Password is too common. Please choose a stronger password')
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -25,12 +77,12 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Sign In')
 
 class MemberForm(FlaskForm):
-    username = StringField('Username', validators=[DataRequired(), Length(max=64)])
-    firstname = StringField('First Name', validators=[DataRequired(), Length(max=64)])
-    lastname = StringField('Last Name', validators=[DataRequired(), Length(max=64)])
+    username = StringField('Username', validators=[DataRequired(), Length(min=1, max=64)])
+    firstname = StringField('First Name', validators=[DataRequired(), Length(min=1, max=64)])
+    lastname = StringField('Last Name', validators=[DataRequired(), Length(min=1, max=64)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
-    password = PasswordField('Password', validators=[DataRequired(message="A password is required"), Length(min=8, message="Password must be at least 8 characters long"), EqualTo('password2', "Passwords must match.")])
+    password = PasswordField('Password', validators=[DataRequired(message="A password is required"), PasswordComplexity(), EqualTo('password2', "Passwords must match.")])
     password2 = PasswordField('Repeat Password', validators=[DataRequired()])
     gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')], default='Male')  # New field
     # Privacy settings
@@ -52,9 +104,9 @@ class MemberForm(FlaskForm):
 
 class EditMemberForm(FlaskForm):
     member_id = HiddenField()
-    username = StringField('Username', validators=[DataRequired(), Length(max=64)])
-    firstname = StringField('First Name', validators=[DataRequired(), Length(max=64)])
-    lastname = StringField('Last Name', validators=[DataRequired(), Length(max=64)])
+    username = StringField('Username', validators=[DataRequired(), Length(min=1, max=64)])
+    firstname = StringField('First Name', validators=[DataRequired(), Length(min=1, max=64)])
+    lastname = StringField('Last Name', validators=[DataRequired(), Length(min=1, max=64)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
     is_admin = BooleanField('Is Admin')
@@ -90,19 +142,19 @@ class RequestResetForm(FlaskForm):
     submit = SubmitField('Request Password Reset')
 
 class ResetPasswordForm(FlaskForm):
-    password = PasswordField('New Password', validators=[DataRequired()])
+    password = PasswordField('New Password', validators=[DataRequired(), PasswordComplexity()])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
 
 
 class PasswordResetForm(FlaskForm):
-    new_password = PasswordField('New Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[DataRequired(), PasswordComplexity()])
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('new_password')])
     submit = SubmitField('Reset Password')
 
 class WritePostForm(FlaskForm):
-    title = StringField('Title', validators=[DataRequired(), Length(max=255)])
-    summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=255)])
+    title = StringField('Title', validators=[DataRequired(), Length(min=1, max=255)])
+    summary = TextAreaField('Summary', validators=[DataRequired(), Length(min=1, max=255)])
     publish_on = DateField('Publish On', default=date.today, validators=[DataRequired()])
     expires_on = DateField(
         'Expires On',
@@ -111,24 +163,24 @@ class WritePostForm(FlaskForm):
     )
     pin_until = DateField('Pin Until', validators=[Optional()])
     tags = StringField('Tags', validators=[Optional(), Length(max=255)])
-    content = TextAreaField('Content', validators=[DataRequired()])
+    content = TextAreaField('Content', validators=[DataRequired(), Length(min=1, max=10000)])
     submit = SubmitField('Submit')
 
 
 class PolicyPageForm(FlaskForm):
-    title = StringField('Title', validators=[DataRequired(), Length(max=255)])
-    slug = StringField('URL Slug', validators=[DataRequired(), Length(max=255)])
-    description = TextAreaField('Description', validators=[DataRequired(), Length(max=255)])
+    title = StringField('Title', validators=[DataRequired(), Length(min=1, max=255)])
+    slug = StringField('URL Slug', validators=[DataRequired(), Length(min=1, max=255)])
+    description = TextAreaField('Description', validators=[DataRequired(), Length(min=1, max=255)])
     is_active = BooleanField('Active', default=True)
     show_in_footer = BooleanField('Show in Footer', default=True)
-    sort_order = IntegerField('Sort Order', validators=[Optional()], default=0)
-    content = TextAreaField('Content', validators=[DataRequired()])
+    sort_order = IntegerField('Sort Order', validators=[Optional(), NumberRange(min=0, max=9999)], default=0)
+    content = TextAreaField('Content', validators=[DataRequired(), Length(min=1, max=10000)])
     submit = SubmitField('Submit')
 
 
 class EditProfileForm(FlaskForm):
-    firstname = StringField('First Name', validators=[DataRequired(), Length(max=64)])
-    lastname = StringField('Last Name', validators=[DataRequired(), Length(max=64)])
+    firstname = StringField('First Name', validators=[DataRequired(), Length(min=1, max=64)])
+    lastname = StringField('Last Name', validators=[DataRequired(), Length(min=1, max=64)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
     gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
@@ -217,7 +269,7 @@ class BookingForm(FlaskForm):
 
 class EventForm(FlaskForm):
     event_id = HiddenField('Event ID')
-    name = StringField('Event Name', validators=[DataRequired(), Length(max=256)])
+    name = StringField('Event Name', validators=[DataRequired(), Length(min=1, max=256)])
     event_type = SelectField(
         'Event Type',
         coerce=int,
@@ -321,7 +373,7 @@ def create_team_member_form(event_format):
     
     class TeamMemberForm(FlaskForm):
         team_id = HiddenField('Team ID')
-        team_name = StringField('Team Name', validators=[DataRequired(), Length(max=100)])
+        team_name = StringField('Team Name', validators=[DataRequired(), Length(min=1, max=100)])
         submit = SubmitField('Save Team')
     
     if event_format:

@@ -1,0 +1,105 @@
+# Flask Environment Configuration Template
+# Copy this file to .flaskenv and fill in the values for your environment
+# DO NOT commit .flaskenv with sensitive data to version control
+
+# =============================================================================
+# FLASK APPLICATION SETTINGS
+# =============================================================================
+
+# Flask application entry point
+FLASK_APP=bowls.py
+
+# Environment mode: development, testing, or production
+FLASK_ENV=development
+
+# Enable debug mode (set to 0 or remove for production)
+FLASK_DEBUG=1
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+
+# Session cookie security - set to true for production HTTPS
+# For development over HTTP, set to false
+SESSION_COOKIE_SECURE=false
+
+# Secret key for session encryption and CSRF protection
+# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+# CRITICAL: Use a unique key for each environment
+SECRET_KEY=your-64-character-hex-secret-key-here
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+
+# Database connection URL
+# Development (SQLite): Leave commented to use default app.db
+# Production examples:
+#   PostgreSQL: postgresql://username:password@localhost/bowls_club
+#   MySQL: mysql://username:password@localhost/bowls_club
+# DATABASE_URL=your-database-connection-string
+
+# =============================================================================
+# EMAIL CONFIGURATION
+# =============================================================================
+
+# SMTP server for sending emails (password resets, notifications)
+# Common providers:
+#   Gmail: smtp.gmail.com
+#   Outlook: smtp-mail.outlook.com
+#   SendGrid: smtp.sendgrid.net
+MAIL_SERVER=your-smtp-server.com
+
+# SMTP port (usually 587 for TLS, 465 for SSL)
+MAIL_PORT=587
+
+# Enable TLS encryption (recommended: True)
+MAIL_USE_TLS=True
+
+# Email account credentials
+# For Gmail, use an app-specific password
+MAIL_USERNAME=your-email@domain.com
+MAIL_PASSWORD=your-email-password-or-app-password
+
+# Default sender address for system emails
+MAIL_DEFAULT_SENDER=your-email@domain.com
+
+# =============================================================================
+# OPTIONAL ADVANCED SETTINGS
+# =============================================================================
+
+# Rate limiting configuration (if needed)
+# RATELIMIT_STORAGE_URL=redis://localhost:6379
+
+# Logging configuration
+# LOG_LEVEL=INFO
+# LOG_FILE=logs/bowls.log
+
+# =============================================================================
+# DEPLOYMENT NOTES
+# =============================================================================
+#
+# DEVELOPMENT SETUP:
+# 1. Copy this file to .flaskenv
+# 2. Fill in email settings for password reset functionality
+# 3. Generate a SECRET_KEY using the command above
+# 4. Keep SESSION_COOKIE_SECURE=false for HTTP development
+#
+# PRODUCTION DEPLOYMENT:
+# 1. Set FLASK_ENV=production
+# 2. Remove or set FLASK_DEBUG=0
+# 3. Set SESSION_COOKIE_SECURE=true
+# 4. Use a production database (DATABASE_URL)
+# 5. Generate a new SECRET_KEY (never reuse development keys)
+# 6. Use production email credentials
+# 7. Consider using environment variables instead of .flaskenv for sensitive data
+# 8. Set up proper logging and monitoring
+# 9. Use a production WSGI server (gunicorn, uwsgi)
+# 10. Configure reverse proxy (nginx, apache)
+#
+# SECURITY REMINDERS:
+# - Never commit .flaskenv with real credentials to version control
+# - Use different SECRET_KEYs for different environments
+# - Regularly rotate secrets and passwords
+# - Use app-specific passwords for email services
+# - Enable 2FA on email accounts used for system notifications

@@ -1,7 +1,7 @@
 import os
 
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'a-very-long-and-complex-key-that-you-will-never-guess'
+    SECRET_KEY = os.environ.get('SECRET_KEY')
 
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
@@ -110,4 +110,11 @@ class Config:
         'Content Manager', 
         'Event Manager'
     ]
+    
+    # Session cookie security configuration
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'  # Only send cookies over HTTPS (can be disabled for dev)
+    SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access
+    SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+    PERMANENT_SESSION_LIFETIME = 86400  # 24 hours in seconds
+    SESSION_COOKIE_NAME = 'bowls_session'  # Custom cookie name
     

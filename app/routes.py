@@ -555,16 +555,34 @@ def pw_reset_request():
     Route: Password Reset Request
     - Allows users to request a password reset by providing their email.
     - Sends a reset email with a token if the email is registered.
+    - Implements timing attack prevention to avoid user enumeration.
     """
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     form = RequestResetForm()
     if form.validate_on_submit():
+        import time
+        import secrets
+        
+        # Implement consistent timing to prevent user enumeration
+        start_time = time.time()
+        
         user = db.session.scalar(sa.select(Member).where(Member.email == form.email.data))
         if user:
             token = generate_reset_token(user.email)
             reset_url = url_for('pw_reset', token=token, _external=True)
             send_reset_email(user.email, reset_url)
+        else:
+            # Perform dummy operations to maintain consistent timing
+            # Generate a dummy token to simulate the same work
+            dummy_email = f"dummy{secrets.token_hex(8)}@example.com"
+            generate_reset_token(dummy_email)
+        
+        # Ensure minimum processing time to prevent timing attacks
+        min_processing_time = 0.5  # 500ms minimum
+        elapsed_time = time.time() - start_time
+        if elapsed_time < min_processing_time:
+            time.sleep(min_processing_time - elapsed_time)
 
         flash('If that email address is registered, you will receive an email with instructions to reset your password.', 'info')
         return redirect(url_for('login'))
