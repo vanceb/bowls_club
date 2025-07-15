@@ -183,7 +183,16 @@ def login():
             audit_log_authentication('LOGIN', form.username.data, False, {'reason': f'Account status: {user.status}'})
             flash('Your account is not active. Please contact the administrator.')
             return redirect(url_for('login'))
+        if user.lockout:  # Check lockout status
+            audit_log_authentication('LOGIN', form.username.data, False, {'reason': 'Account locked out'})
+            flash('Your account is locked. Please contact the administrator.')
+            return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
+        
+        # Update last_login timestamp
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+        
         audit_log_authentication('LOGIN', user.username, True)
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
@@ -285,6 +294,8 @@ def _get_member_data(member, show_private_data=False):
         'status': member.status,
         'share_email': member.share_email,
         'share_phone': member.share_phone,
+        'last_seen': member.last_seen.strftime('%Y-%m-%d') if member.last_seen else 'Never',
+        'lockout': member.lockout,
         'roles': [{'id': role.id, 'name': role.name} for role in member.roles]
     }
 
@@ -378,6 +389,12 @@ def edit_member(member_id):
 
     if form.validate_on_submit():
         if form.submit_update.data:
+            # Prevent admin users from being locked out
+            lockout_data = form.lockout.data
+            if lockout_data and member.is_admin:
+                flash('Warning: Admin users cannot be locked out. Lockout setting ignored.', 'warning')
+                lockout_data = False
+            
             # Capture changes for audit log
             changes = get_model_changes(member, {
                 'username': form.username.data,
@@ -389,7 +406,8 @@ def edit_member(member_id):
                 'gender': form.gender.data,
                 'status': form.status.data,
                 'share_email': form.share_email.data,
-                'share_phone': form.share_phone.data
+                'share_phone': form.share_phone.data,
+                'lockout': lockout_data
             })
             
             # Update member fields
@@ -403,6 +421,7 @@ def edit_member(member_id):
             member.status = form.status.data
             member.share_email = form.share_email.data
             member.share_phone = form.share_phone.data
+            member.lockout = lockout_data
 
             selected_role_ids = form.roles.data
             selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()

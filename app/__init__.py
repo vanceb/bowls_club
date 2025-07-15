@@ -135,4 +135,25 @@ def add_security_headers(response):
     
     return response
 
+# Track user activity (last_seen) efficiently
+@app.before_request
+def track_user_activity():
+    """Update last_seen date for authenticated users - only once per day"""
+    from flask_login import current_user, logout_user
+    from datetime import date
+    
+    if current_user.is_authenticated:
+        # Check if user has been locked out
+        if current_user.lockout:
+            logout_user()
+            from flask import flash, redirect, url_for
+            flash('Your account has been locked. Please contact the administrator.', 'error')
+            return redirect(url_for('login'))
+        
+        # Update last_seen date
+        today = date.today()
+        if current_user.last_seen != today:
+            current_user.last_seen = today
+            db.session.commit()
+
 from app import routes, models, errors

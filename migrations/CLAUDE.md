@@ -54,6 +54,31 @@ flask db downgrade
 - Consider data migration needs for existing records
 - Handle nullable/non-nullable column changes carefully
 
+#### Adding NOT NULL Columns with Default Values
+**CRITICAL**: SQLite cannot add NOT NULL columns with default values directly. Use this pattern:
+
+**❌ BAD - Will fail with SQLite:**
+```python
+def upgrade():
+    op.add_column('member', sa.Column('lockout', sa.Boolean(), nullable=False, default=False))
+```
+**Error**: `Cannot add a NOT NULL column with default value NULL`
+
+**✅ GOOD - Three-step process:**
+```python
+def upgrade():
+    # Step 1: Add column as nullable with default
+    op.add_column('member', sa.Column('lockout', sa.Boolean(), nullable=True, default=False))
+    
+    # Step 2: Update existing rows to have the default value
+    op.execute("UPDATE member SET lockout = 0 WHERE lockout IS NULL")
+    
+    # Step 3: Make the column NOT NULL
+    op.alter_column('member', 'lockout', nullable=False)
+```
+
+**Why this happens**: SQLite requires a multi-step process to add NOT NULL columns to tables with existing data. The `default=False` parameter only applies to new INSERT operations, not existing rows.
+
 ### Complex Migrations
 For complex schema changes:
 1. Create migration with schema changes

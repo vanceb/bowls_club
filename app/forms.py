@@ -79,6 +79,8 @@ class EditMemberForm(FlaskForm):
     # Privacy settings
     share_email = BooleanField('Share email with other members', default=True)
     share_phone = BooleanField('Share phone number with other members', default=True)
+    # Security settings
+    lockout = BooleanField('Lock out user (prevent login)', default=False)
     submit_update = SubmitField('Update')
     submit_delete = SubmitField('Delete')
 

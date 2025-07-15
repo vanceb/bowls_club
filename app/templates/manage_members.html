@@ -22,6 +22,8 @@
             <th>Phone</th>
             <th>Gender</th>
             <th>Status</th>
+            <th>Last Seen</th>
+            <th>Lockout</th>
             <th>Roles</th>
         </tr>
     </thead>
@@ -50,6 +52,8 @@
                         member.phone || 'N/A',  // Show N/A if phone is null (shouldn't happen for admin users)
                         member.gender,
                         member.status,
+                        member.last_seen,
+                        member.lockout ? 'Yes' : 'No',
                         roles
                     ];
                     

@@ -123,6 +123,22 @@
         <p class="help">Control whether other members can see your contact information</p>
     </div>
 
+    <!-- Security Settings Section -->
+    <div class="field">
+        <label class="label">Security Settings</label>
+        <div class="control">
+            <label class="checkbox">
+                {{ form.lockout }}
+                {{ form.lockout.label.text }}
+            </label>
+        </div>
+        {% if member.is_admin %}
+        <p class="help has-text-warning">Admin users cannot be locked out</p>
+        {% else %}
+        <p class="help">When checked, prevents user from logging in until unchecked</p>
+        {% endif %}
+    </div>
+
     <div class="buttons">
         <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}

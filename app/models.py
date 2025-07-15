@@ -61,6 +61,9 @@ class Member(UserMixin, db.Model):
     )  # New field
     share_email: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
     share_phone: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
+    last_login: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)  # Last successful login
+    last_seen: so.Mapped[Optional[date]] = so.mapped_column(sa.Date, nullable=True)  # Last activity date (daily updates only)
+    lockout: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False, nullable=False)  # User lockout status
     roles = relationship('Role', secondary=member_roles, back_populates='members')
     
     # Many-to-many relationship with events (as event manager)
@@ -75,6 +78,8 @@ class Member(UserMixin, db.Model):
         # to ensure proper user context and transaction management
 
     def check_password(self, password):
+        if self.password_hash is None:
+            return False
         return check_password_hash(self.password_hash, password)
     
     @staticmethod
