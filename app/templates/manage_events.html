@@ -424,158 +424,158 @@
         {% if event_bookings %}
         <div class="table-container">
             <table class="table is-fullwidth is-striped is-hoverable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Session</th>
-                        <th>Rinks</th>
-                        <th>Priority</th>
-                        <th>Opposition</th>
-                        <th>Venue</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
                 <tbody>
                     {% for booking in event_bookings %}
-                    <tr id="booking-row-{{ booking.id }}" class="booking-display-row">
-                        <td>{{ booking.booking_date.strftime('%Y-%m-%d') }}</td>
+                    <tr id="booking-row-{{ booking.id }}">
                         <td>
-                            {% set sessions = config['DAILY_SESSIONS'] %}
-                            {{ sessions.get(booking.session, 'Unknown') }}
+                            <div class="is-flex is-flex-wrap-wrap is-align-items-center">
+                                <span class="mr-2 mb-1"><strong>{{ booking.booking_date.strftime('%Y-%m-%d') }}</strong></span>
+                                <span class="mr-2 mb-1">
+                                    {% set sessions = config['DAILY_SESSIONS'] %}
+                                    {{ sessions.get(booking.session, 'Unknown') }}
+                                </span>
+                                <span class="mr-2 mb-1">{{ booking.rink_count }} rink{{ 's' if booking.rink_count != 1 else '' }}</span>
+                                {% if booking.priority %}
+                                <span class="has-text-weight-semibold mr-2 mb-1">[{{ booking.priority }}]</span>
+                                {% endif %}
+                                {% if booking.vs %}
+                                <span class="mr-2 mb-1">vs {{ booking.vs }}</span>
+                                {% endif %}
+                                {% if booking.home_away %}
+                                <span class="has-text-grey mr-2 mb-1">
+                                    ({% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
+                                        {% if value == booking.home_away %}{{ key }}{% endif %}
+                                    {% endfor %})
+                                </span>
+                                {% endif %}
+                            </div>
                         </td>
-                        <td>{{ booking.rink_count }}</td>
-                        <td>{{ booking.priority or '-' }}</td>
-                        <td>{{ booking.vs or '-' }}</td>
-                        <td>
-                            {% if booking.home_away %}
-                                {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
-                                    {% if value == booking.home_away %}{{ key }}{% endif %}
-                                {% endfor %}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="{{ url_for('manage_booking_teams', booking_id=booking.id) }}" 
-                               class="button is-small is-primary">
-                                <span class="icon"><i class="fas fa-users"></i></span>
-                                <span>Teams</span>
-                            </a>
-                            <button class="button is-small is-info edit-booking-btn" 
-                                    data-booking-id="{{ booking.id }}">
-                                <span class="icon"><i class="fas fa-edit"></i></span>
-                                <span>Edit</span>
-                            </button>
-                            <button class="button is-small is-danger delete-booking-btn" 
-                                    data-booking-id="{{ booking.id }}">
-                                <span class="icon"><i class="fas fa-trash"></i></span>
-                                <span>Delete</span>
-                            </button>
+                        <td width="200">
+                            <div class="is-flex is-justify-content-flex-end is-align-items-center">
+                                <a href="{{ url_for('manage_booking_teams', booking_id=booking.id) }}" 
+                                   class="button is-small is-primary mr-1">
+                                    <span class="icon"><i class="fas fa-users"></i></span>
+                                    <span class="is-hidden-mobile">Teams</span>
+                                </a>
+                                <button class="button is-small is-info edit-booking-btn mr-1" 
+                                        data-booking-id="{{ booking.id }}">
+                                    <span class="icon"><i class="fas fa-edit"></i></span>
+                                    <span class="is-hidden-mobile">Edit</span>
+                                </button>
+                                <button class="button is-small is-danger delete-booking-btn" 
+                                        data-booking-id="{{ booking.id }}">
+                                    <span class="icon"><i class="fas fa-trash"></i></span>
+                                    <span class="is-hidden-mobile">Delete</span>
+                                </button>
+                            </div>
                         </td>
                     </tr>
+                    
                     <!-- Inline Edit Form (initially hidden) -->
                     <tr id="booking-edit-row-{{ booking.id }}" class="booking-edit-row is-hidden">
-                        <td colspan="7">
-                            <form method="POST" class="booking-edit-form" data-booking-id="{{ booking.id }}">
-                                {{ booking_form.hidden_tag() }}
-                                <input type="hidden" name="booking_id" value="{{ booking.id }}">
-                                <input type="hidden" name="event_id" value="{{ selected_event.id }}">
-                                
-                                <div class="columns is-vcentered">
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Date</label>
-                                            <div class="control">
-                                                <input type="date" name="booking_date" class="input is-small" 
-                                                       value="{{ booking.booking_date.strftime('%Y-%m-%d') }}" required>
+                        <td colspan="2">
+                            <div class="box has-background-light" style="margin: 0.5rem 0;">
+                                <h4 class="title is-6">Edit Booking</h4>
+                                <form method="POST" class="booking-edit-form" data-booking-id="{{ booking.id }}">
+                                    {{ booking_form.hidden_tag() }}
+                                    <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                    <input type="hidden" name="event_id" value="{{ selected_event.id }}">
+                                    
+                                    <div class="columns is-mobile">
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Date</label>
+                                                <div class="control">
+                                                    <input type="date" name="booking_date" class="input is-small" 
+                                                           value="{{ booking.booking_date.strftime('%Y-%m-%d') }}" required>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Session</label>
-                                            <div class="control">
-                                                <div class="select is-small is-fullwidth">
-                                                    <select name="session" required>
-                                                        {% for session_id, session_name in config['DAILY_SESSIONS'].items() %}
-                                                        <option value="{{ session_id }}" 
-                                                                {% if booking.session == session_id %}selected{% endif %}>
-                                                            {{ session_name }}
-                                                        </option>
-                                                        {% endfor %}
-                                                    </select>
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Session</label>
+                                                <div class="control">
+                                                    <div class="select is-small is-fullwidth">
+                                                        <select name="session" required>
+                                                            {% for session_id, session_name in config['DAILY_SESSIONS'].items() %}
+                                                            <option value="{{ session_id }}" 
+                                                                    {% if booking.session == session_id %}selected{% endif %}>
+                                                                {{ session_name }}
+                                                            </option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Rinks</label>
+                                                <div class="control">
+                                                    <input type="number" name="rink_count" class="input is-small" 
+                                                           value="{{ booking.rink_count }}" min="1" max="6" required>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Rinks</label>
-                                            <div class="control">
-                                                <input type="number" name="rink_count" class="input is-small" 
-                                                       value="{{ booking.rink_count }}" min="1" max="6" required>
+                                    
+                                    <div class="columns is-mobile">
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Priority</label>
+                                                <div class="control">
+                                                    <input type="text" name="priority" class="input is-small" 
+                                                           value="{{ booking.priority or '' }}" maxlength="50">
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Priority</label>
-                                            <div class="control">
-                                                <input type="text" name="priority" class="input is-small" 
-                                                       value="{{ booking.priority or '' }}" maxlength="50">
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Opposition Team</label>
+                                                <div class="control">
+                                                    <input type="text" name="vs" class="input is-small" 
+                                                           value="{{ booking.vs or '' }}" maxlength="128" 
+                                                           placeholder="e.g., Riverdale Bowls Club">
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="columns is-vcentered">
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Opposition Team</label>
-                                            <div class="control">
-                                                <input type="text" name="vs" class="input is-small" 
-                                                       value="{{ booking.vs or '' }}" maxlength="128" 
-                                                       placeholder="e.g., Riverdale Bowls Club">
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="column">
-                                        <div class="field">
-                                            <label class="label is-small">Venue</label>
-                                            <div class="control">
-                                                <div class="select is-small is-fullwidth">
-                                                    <select name="home_away">
-                                                        <option value="">Select venue...</option>
-                                                        {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
-                                                        <option value="{{ value }}" 
-                                                                {% if booking.home_away == value %}selected{% endif %}>
-                                                            {{ key }}
-                                                        </option>
-                                                        {% endfor %}
-                                                    </select>
+                                        <div class="column">
+                                            <div class="field">
+                                                <label class="label is-small">Venue</label>
+                                                <div class="control">
+                                                    <div class="select is-small is-fullwidth">
+                                                        <select name="home_away">
+                                                            <option value="">Select venue...</option>
+                                                            {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
+                                                            <option value="{{ value }}" 
+                                                                    {% if booking.home_away == value %}selected{% endif %}>
+                                                                {{ key }}
+                                                            </option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="column is-narrow">
-                                        <div class="field is-grouped">
-                                            <div class="control">
-                                                <button type="submit" name="update_booking" 
-                                                        class="button is-small is-success">
-                                                    <span class="icon"><i class="fas fa-check"></i></span>
-                                                    <span>Save</span>
-                                                </button>
-                                            </div>
-                                            <div class="control">
-                                                <button type="button" class="button is-small is-light cancel-edit-btn">
-                                                    <span class="icon"><i class="fas fa-times"></i></span>
-                                                    <span>Cancel</span>
-                                                </button>
-                                            </div>
+                                    
+                                    <div class="field is-grouped">
+                                        <div class="control">
+                                            <button type="submit" name="update_booking" 
+                                                    class="button is-small is-success">
+                                                <span class="icon"><i class="fas fa-check"></i></span>
+                                                <span>Save</span>
+                                            </button>
+                                        </div>
+                                        <div class="control">
+                                            <button type="button" class="button is-small is-light cancel-edit-btn">
+                                                <span class="icon"><i class="fas fa-times"></i></span>
+                                                <span>Cancel</span>
+                                            </button>
                                         </div>
                                     </div>
-                                </div>
-                            </form>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
