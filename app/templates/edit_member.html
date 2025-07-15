@@ -139,6 +139,20 @@
         {% endif %}
     </div>
 
+    <!-- Password Reset Section -->
+    <div class="field">
+        <label class="label">Password Management</label>
+        <div class="control">
+            <a href="{{ url_for('admin_reset_password', member_id=member.id) }}" class="button is-warning">
+                <span class="icon">
+                    <i class="fas fa-key"></i>
+                </span>
+                <span>Reset Password</span>
+            </a>
+        </div>
+        <p class="help">Reset the user's password. They will need to use the new password to log in.</p>
+    </div>
+
     <div class="buttons">
         <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}

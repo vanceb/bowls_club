@@ -24,7 +24,7 @@ from app.audit import (
 )
 from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
-    ResetPasswordForm, WritePostForm, BookingForm, EventForm, 
+    ResetPasswordForm, PasswordResetForm, WritePostForm, BookingForm, EventForm, 
     EventSelectionForm, PolicyPageForm, EditProfileForm, create_team_member_form, AddTeamForm,
     ImportUsersForm
 )
@@ -2087,6 +2087,68 @@ def edit_profile():
         form.share_phone.data = current_user.share_phone
     
     return render_template('edit_profile.html', form=form,
+                         menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/reset_password', methods=['GET', 'POST'])
+@login_required
+def reset_password():
+    """
+    Route: Reset Password
+    - Allows users to reset their own password.
+    - Does not require current password for security simplicity.
+    """
+    form = PasswordResetForm()
+    
+    if form.validate_on_submit():
+        current_user.set_password(form.new_password.data)
+        db.session.commit()
+        
+        # Audit log the password change
+        audit_log_update('Member', current_user.id, 
+                        f'Password reset for user: {current_user.username}', 
+                        {'password': 'changed'})
+        
+        flash('Your password has been reset successfully!', 'success')
+        return redirect(url_for('edit_profile'))
+    
+    return render_template('reset_password.html', form=form,
+                         form_title='Reset Your Password',
+                         form_action=url_for('reset_password'),
+                         menu_items=app.config['MENU_ITEMS'], 
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/admin/reset_member_password/<int:member_id>', methods=['GET', 'POST'])
+@role_required('User Manager')
+def admin_reset_password(member_id):
+    """
+    Route: Admin Reset Member Password
+    - Allows admin/user manager to reset any user's password.
+    - Requires User Manager role or admin privileges.
+    """
+    member = db.session.get(Member, member_id)
+    if not member:
+        abort(404)
+    
+    form = PasswordResetForm()
+    
+    if form.validate_on_submit():
+        member.set_password(form.new_password.data)
+        db.session.commit()
+        
+        # Audit log the password reset
+        audit_log_update('Member', member.id, 
+                        f'Password reset by admin for user: {member.username}', 
+                        {'password': 'reset_by_admin'})
+        
+        flash(f'Password reset successfully for {member.firstname} {member.lastname}!', 'success')
+        return redirect(url_for('edit_member', member_id=member.id))
+    
+    return render_template('admin_reset_password.html', form=form, member=member,
+                         form_title=f'Reset Password for {member.firstname} {member.lastname}',
+                         form_action=url_for('admin_reset_password', member_id=member.id),
                          menu_items=app.config['MENU_ITEMS'], 
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
 

@@ -94,6 +94,12 @@ class ResetPasswordForm(FlaskForm):
     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
 
+
+class PasswordResetForm(FlaskForm):
+    new_password = PasswordField('New Password', validators=[DataRequired()])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('new_password')])
+    submit = SubmitField('Reset Password')
+
 class WritePostForm(FlaskForm):
     title = StringField('Title', validators=[DataRequired(), Length(max=255)])
     summary = TextAreaField('Summary', validators=[DataRequired(), Length(max=255)])
