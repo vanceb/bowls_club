@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Book Roll-Up</h1>
+    <p class="subtitle">Create a casual roll-up booking and invite other members to join you</p>
+    
+    <div class="notification is-info">
+        <p><strong>Roll-Up Booking Guidelines:</strong></p>
+        <ul>
+            <li>Roll-ups can be booked up to {{ config.get('ROLLUP_ADVANCE_BOOKING_DAYS', 7) }} days in advance</li>
+            <li>Maximum {{ config.get('ROLLUP_MAX_PLAYERS', 8) }} players per roll-up (including yourself)</li>
+            <li>You'll be automatically confirmed as the organizer</li>
+            <li>Invited players will receive notifications and can accept or decline</li>
+        </ul>
+    </div>
+
+    <form method="POST" class="box" id="rollup-form">
+        {{ form.hidden_tag() }}
+        
+        <div class="field">
+            <label class="label">{{ form.booking_date.label }}</label>
+            <div class="control">
+                {{ form.booking_date(class="input", id="booking-date") }}
+            </div>
+            {% for error in form.booking_date.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.session.label }}</label>
+            <div class="control">
+                <div class="select is-fullwidth">
+                    {{ form.session(class="select", id="session-select") }}
+                </div>
+            </div>
+            {% for error in form.session.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.organizer_notes.label }}</label>
+            <div class="control">
+                {{ form.organizer_notes(class="textarea", placeholder="Optional notes about the roll-up (e.g., 'Casual game for beginners welcome' or 'Looking for experienced players')") }}
+            </div>
+            {% for error in form.organizer_notes.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.invited_players.label }}</label>
+            <div class="control">
+                <div class="content">
+                    <p class="help">Select members to invite (you can invite up to {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }} players):</p>
+                    {% for subfield in form.invited_players %}
+                        <label class="checkbox">
+                            {{ subfield() }}
+                            {{ subfield.label.text }}
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% for error in form.invited_players.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="field">
+            <div class="control">
+                <button type="submit" class="button is-primary" id="submit-btn">
+                    <span class="icon">
+                        <i class="fas fa-calendar-plus"></i>
+                    </span>
+                    <span>Create Roll-Up</span>
+                </button>
+                <a href="{{ url_for('my_games') }}" class="button is-light">
+                    <span class="icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span>Back to My Games</span>
+                </a>
+            </div>
+        </div>
+    </form>
+
+    <div class="box">
+        <h3 class="title is-5">What is a Roll-Up?</h3>
+        <div class="content">
+            <p>A roll-up is a casual game where members can book a rink and invite others to join them. It's perfect for:</p>
+            <ul>
+                <li>Casual practice sessions</li>
+                <li>Getting to know other members</li>
+                <li>Filling time when organized events aren't available</li>
+                <li>Welcoming new members to the club</li>
+            </ul>
+            <p>Roll-ups are more flexible than organized events - players can join or leave during the session, and the format can be adapted based on who shows up.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('rollup-form');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    // Form submission protection
+    form.addEventListener('submit', function(e) {
+        if (submitBtn.disabled) {
+            e.preventDefault();
+            return false;
+        }
+        
+        submitBtn.disabled = true;
+        submitBtn.classList.add('is-loading');
+        
+        // Timeout fallback to re-enable button
+        setTimeout(() => {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('is-loading');
+        }, 10000);
+    });
+    
+    // Count selected players for validation feedback
+    const checkboxes = document.querySelectorAll('input[name="invited_players"]');
+    const maxPlayers = {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }};
+    
+    function updatePlayerCount() {
+        const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        const label = document.querySelector('label[for="invited_players"]');
+        
+        if (selectedCount >= maxPlayers) {
+            label.innerHTML = `{{ form.invited_players.label }} <span class="tag is-warning">Maximum reached (${selectedCount}/${maxPlayers})</span>`;
+            // Disable unchecked checkboxes
+            checkboxes.forEach(cb => {
+                if (!cb.checked) {
+                    cb.disabled = true;
+                }
+            });
+        } else {
+            label.innerHTML = `{{ form.invited_players.label }} <span class="tag is-info">${selectedCount}/${maxPlayers} selected</span>`;
+            // Enable all checkboxes
+            checkboxes.forEach(cb => {
+                cb.disabled = false;
+            });
+        }
+    }
+    
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updatePlayerCount);
+    });
+    
+    // Initial count
+    updatePlayerCount();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Manage Roll-Up</h1>
+    <p class="subtitle">View and manage your roll-up booking</p>
+    
+    <div class="box">
+        <h2 class="title is-4">
+            <span class="icon has-text-info">
+                <i class="fas fa-bowling-ball"></i>
+            </span>
+            Roll-Up Details
+        </h2>
+        
+        <div class="columns">
+            <div class="column">
+                <div class="field">
+                    <label class="label">Date & Time</label>
+                    <div class="control">
+                        <p class="is-size-5">
+                            <strong>{{ booking.booking_date.strftime('%A, %B %d, %Y') }}</strong>
+                        </p>
+                        <p class="has-text-grey">{{ session_name }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="column">
+                <div class="field">
+                    <label class="label">Organizer</label>
+                    <div class="control">
+                        <p class="is-size-5">
+                            <strong>{{ booking.organizer.firstname }} {{ booking.organizer.lastname }}</strong>
+                        </p>
+                        <p class="has-text-grey">{{ booking.organizer.email }}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="column">
+                <div class="field">
+                    <label class="label">Rink</label>
+                    <div class="control">
+                        <p class="is-size-5">
+                            <strong>1 Rink Booked</strong>
+                        </p>
+                        <p class="has-text-grey">Home venue</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if booking.organizer_notes %}
+        <div class="field">
+            <label class="label">Notes</label>
+            <div class="control">
+                <div class="content">
+                    <p>{{ booking.organizer_notes }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="box">
+        <h2 class="title is-4">
+            <span class="icon has-text-primary">
+                <i class="fas fa-users"></i>
+            </span>
+            Player List
+        </h2>
+        
+        {% if players %}
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Status</th>
+                        <th>Response Date</th>
+                        <th>Contact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for player in players %}
+                    <tr>
+                        <td>
+                            <div class="media">
+                                <div class="media-content">
+                                    <p class="has-text-weight-semibold">
+                                        {{ player.member.firstname }} {{ player.member.lastname }}
+                                        {% if player.member.id == booking.organizer_id %}
+                                        <span class="tag is-info is-small">Organizer</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if player.status == 'confirmed' %}
+                            <span class="tag is-success">
+                                <span class="icon">
+                                    <i class="fas fa-check"></i>
+                                </span>
+                                <span>Confirmed</span>
+                            </span>
+                            {% elif player.status == 'declined' %}
+                            <span class="tag is-danger">
+                                <span class="icon">
+                                    <i class="fas fa-times"></i>
+                                </span>
+                                <span>Declined</span>
+                            </span>
+                            {% else %}
+                            <span class="tag is-warning">
+                                <span class="icon">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                                <span>Pending</span>
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if player.response_at %}
+                            <small class="has-text-grey">
+                                {{ player.response_at.strftime('%b %d at %I:%M %p') }}
+                            </small>
+                            {% else %}
+                            <small class="has-text-grey">No response yet</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if player.member.share_email %}
+                            <a href="mailto:{{ player.member.email }}" class="button is-small is-light">
+                                <span class="icon">
+                                    <i class="fas fa-envelope"></i>
+                                </span>
+                                <span>Email</span>
+                            </a>
+                            {% endif %}
+                            {% if player.member.share_phone and player.member.phone %}
+                            <a href="tel:{{ player.member.phone }}" class="button is-small is-light">
+                                <span class="icon">
+                                    <i class="fas fa-phone"></i>
+                                </span>
+                                <span>Call</span>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Player Summary -->
+        <div class="columns">
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Confirmed</p>
+                    <p class="title is-4 has-text-success">
+                        {{ players | selectattr('status', 'equalto', 'confirmed') | list | length }}
+                    </p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Pending</p>
+                    <p class="title is-4 has-text-warning">
+                        {{ players | selectattr('status', 'equalto', 'pending') | list | length }}
+                    </p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Declined</p>
+                    <p class="title is-4 has-text-danger">
+                        {{ players | selectattr('status', 'equalto', 'declined') | list | length }}
+                    </p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Total Players</p>
+                    <p class="title is-4 has-text-info">
+                        {{ players | length }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="notification is-info">
+            <p>No players have been invited to this roll-up yet.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="box">
+        <h2 class="title is-4">
+            <span class="icon has-text-warning">
+                <i class="fas fa-cog"></i>
+            </span>
+            Actions
+        </h2>
+        
+        <div class="field is-grouped">
+            <div class="control">
+                <a href="{{ url_for('my_games') }}" class="button is-primary">
+                    <span class="icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span>Back to My Games</span>
+                </a>
+            </div>
+            
+            {% if booking.booking_date > today %}
+            <div class="control">
+                <button type="button" class="button is-danger" onclick="confirmCancellation()">
+                    <span class="icon">
+                        <i class="fas fa-trash"></i>
+                    </span>
+                    <span>Cancel Roll-Up</span>
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if booking.booking_date > today %}
+        <div class="notification is-warning">
+            <p><strong>Note:</strong> Cancelling this roll-up will notify all invited players and remove the booking from the system. This action cannot be undone.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Hidden form for cancellation -->
+    {% if booking.booking_date > today %}
+    <form method="POST" action="{{ url_for('cancel_rollup', booking_id=booking.id) }}" id="cancel-form" style="display: none;">
+        {{ csrf_form.hidden_tag() }}
+    </form>
+    {% endif %}
+</div>
+
+<script>
+function confirmCancellation() {
+    if (confirm('Are you sure you want to cancel this roll-up? All invited players will be notified and the booking will be removed. This action cannot be undone.')) {
+        document.getElementById('cancel-form').submit();
+    }
+}
+</script>
+{% endblock %}

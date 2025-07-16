@@ -414,3 +414,116 @@ class ImportUsersForm(FlaskForm):
     """Form for importing users from CSV file"""
     csv_file = FileField('CSV File', validators=[DataRequired()])
     submit = SubmitField('Import Users')
+
+
+class RollUpBookingForm(FlaskForm):
+    """Form for creating roll-up bookings"""
+    booking_date = DateField('Date', validators=[DataRequired()])
+    session = SelectField(
+        'Session',
+        coerce=int,
+        choices=[],  # Choices will be populated dynamically
+        validators=[DataRequired()]
+    )
+    organizer_notes = TextAreaField(
+        'Notes (optional)', 
+        validators=[Optional(), Length(max=500)],
+        render_kw={'placeholder': 'Optional notes about the roll-up...', 'rows': 3}
+    )
+    invited_players = SelectMultipleField(
+        'Invite Players', 
+        coerce=int, 
+        validators=[Optional()],
+        option_widget=CheckboxInput(),
+        widget=ListWidget(prefix_label=False)
+    )
+    submit = SubmitField('Create Roll-Up')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Populate the session choices dynamically from the app config
+        self.session.choices = [
+            (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
+        ]
+        
+        # Populate available players (active members only)
+        from app.models import Member
+        from app import db
+        import sqlalchemy as sa
+        
+        members = db.session.scalars(
+            sa.select(Member)
+            .where(Member.status.in_(['Full', 'Social', 'Life']))
+            .order_by(Member.firstname, Member.lastname)
+        ).all()
+        
+        self.invited_players.choices = [
+            (member.id, f"{member.firstname} {member.lastname}") for member in members
+        ]
+
+    def validate_booking_date(self, field):
+        """Validate that the booking date is within the allowed advance booking period"""
+        if not field.data:
+            return
+            
+        today = date.today()
+        max_advance_days = current_app.config.get('ROLLUP_ADVANCE_BOOKING_DAYS', 7)
+        max_date = today + timedelta(days=max_advance_days)
+        
+        if field.data < today:
+            raise ValidationError('Roll-up bookings cannot be made for past dates')
+        
+        if field.data > max_date:
+            raise ValidationError(f'Roll-up bookings can only be made {max_advance_days} days in advance')
+
+    def validate_invited_players(self, field):
+        """Validate invited players count"""
+        if not field.data:
+            return
+            
+        max_players = current_app.config.get('ROLLUP_MAX_PLAYERS', 8)
+        invited_count = len(field.data)
+        
+        # Include organizer in count (+1)
+        total_players = invited_count + 1
+        
+        if total_players > max_players:
+            raise ValidationError(f'Maximum {max_players} players allowed (including organizer). You have invited {invited_count} players.')
+
+    def validate_session(self, field):
+        """Validate session and check rink availability"""
+        if not self.booking_date.data or not field.data:
+            return
+            
+        from app.models import Booking
+        from app import db
+        from app.utils import add_home_games_filter
+        import sqlalchemy as sa
+        
+        # Calculate existing bookings for this date/session
+        availability_query = sa.select(sa.func.sum(Booking.rink_count)).where(
+            Booking.booking_date == self.booking_date.data,
+            Booking.session == field.data
+        )
+        availability_query = add_home_games_filter(availability_query)
+        existing_bookings = db.session.scalar(availability_query) or 0
+        
+        total_rinks = int(current_app.config.get('RINKS', 6))
+        available_rinks = total_rinks - existing_bookings
+        
+        if available_rinks < 1:
+            raise ValidationError(f'No rinks available for this date/session. All {total_rinks} rinks are booked.')
+
+
+class RollUpResponseForm(FlaskForm):
+    """Form for responding to roll-up invitations"""
+    response = SelectField(
+        'Your Response',
+        choices=[
+            ('confirmed', 'Accept - I can play'),
+            ('declined', 'Decline - Cannot play')
+        ],
+        validators=[DataRequired()]
+    )
+    submit = SubmitField('Submit Response')

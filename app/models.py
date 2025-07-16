@@ -204,12 +204,23 @@ class Booking(db.Model):
     vs: so.Mapped[Optional[str]] = so.mapped_column(sa.String(128), nullable=True)  # Opposition team name
     home_away: so.Mapped[Optional[str]] = so.mapped_column(sa.String(10), nullable=True)  # 'home', 'away', or 'neutral'
     event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
+    
+    # Roll-up booking fields
+    booking_type: so.Mapped[str] = so.mapped_column(sa.String(20), default='event', nullable=False)  # 'event' or 'rollup'
+    organizer_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=True)
+    organizer_notes: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
 
     # Many-to-one relationship with event
     event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='bookings')
     
-    # One-to-many relationship with booking teams
+    # Many-to-one relationship with organizer (for roll-ups)
+    organizer: so.Mapped[Optional['Member']] = so.relationship('Member', back_populates='organized_rollups', foreign_keys=[organizer_id])
+    
+    # One-to-many relationship with booking teams (for events)
     booking_teams: so.Mapped[list['BookingTeam']] = so.relationship('BookingTeam', back_populates='booking', cascade='all, delete-orphan')
+    
+    # One-to-many relationship with booking players (for roll-ups)
+    booking_players: so.Mapped[list['BookingPlayer']] = so.relationship('BookingPlayer', back_populates='booking', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"
@@ -339,7 +350,32 @@ class BookingTeamMember(db.Model):
         return f"<BookingTeamMember id={self.id}, member_id={self.member_id}, position='{self.position}', status='{self.availability_status}'>"
 
 
+class BookingPlayer(db.Model):
+    __tablename__ = 'booking_players'
+
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)
+    member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
+    status: so.Mapped[str] = so.mapped_column(sa.String(20), default='pending', nullable=False)  # 'confirmed', 'pending', 'declined'
+    invited_by: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
+    response_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Many-to-one relationships
+    booking: so.Mapped['Booking'] = so.relationship('Booking', back_populates='booking_players')
+    member: so.Mapped['Member'] = so.relationship('Member', foreign_keys=[member_id], back_populates='rollup_invitations')
+    inviter: so.Mapped['Member'] = so.relationship('Member', foreign_keys=[invited_by], back_populates='sent_rollup_invitations')
+
+    def __repr__(self):
+        return f"<BookingPlayer id={self.id}, booking_id={self.booking_id}, member_id={self.member_id}, status='{self.status}'>"
+
+
 # Add team-related relationships to Member model
 Member.team_memberships = so.relationship('TeamMember', back_populates='member')
 Member.booking_team_memberships = so.relationship('BookingTeamMember', back_populates='member')
+
+# Add roll-up related relationships to Member model
+Member.organized_rollups = so.relationship('Booking', back_populates='organizer', foreign_keys='Booking.organizer_id')
+Member.rollup_invitations = so.relationship('BookingPlayer', foreign_keys='BookingPlayer.member_id', back_populates='member')
+Member.sent_rollup_invitations = so.relationship('BookingPlayer', foreign_keys='BookingPlayer.invited_by', back_populates='inviter')
 

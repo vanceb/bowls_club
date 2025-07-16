@@ -26,10 +26,10 @@ from app.forms import (
     LoginForm, MemberForm, EditMemberForm, RequestResetForm, 
     ResetPasswordForm, PasswordResetForm, WritePostForm, BookingForm, EventForm, 
     EventSelectionForm, PolicyPageForm, EditProfileForm, create_team_member_form, AddTeamForm,
-    ImportUsersForm
+    ImportUsersForm, RollUpBookingForm, RollUpResponseForm
 )
 from flask_wtf import FlaskForm
-from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember, BookingTeam, BookingTeamMember
+from app.models import Member, Role, Post, Booking, Event, PolicyPage, EventTeam, TeamMember, BookingTeam, BookingTeamMember, BookingPlayer
 from app.utils import (
     generate_reset_token, verify_reset_token, send_reset_email, 
     sanitize_filename, parse_metadata_from_markdown, sanitize_html_content,
@@ -935,8 +935,15 @@ def get_bookings_range(start_date, end_date):
         Booking.rink_count,
         Booking.vs,
         Booking.priority,
-        Event.name.label('event_name')
-    ).outerjoin(Event, Booking.event_id == Event.id).where(
+        Booking.booking_type,
+        Booking.organizer_notes,
+        Event.name.label('event_name'),
+        Event.event_type.label('event_type'),
+        Member.firstname.label('organizer_firstname'),
+        Member.lastname.label('organizer_lastname')
+    ).outerjoin(Event, Booking.event_id == Event.id).outerjoin(
+        Member, Booking.organizer_id == Member.id
+    ).where(
         Booking.booking_date >= start_date,
         Booking.booking_date <= end_date
     )
@@ -957,22 +964,37 @@ def get_bookings_range(start_date, end_date):
             bookings_data[date_str][session] = []
             
         # Create booking detail object
-        booking_detail = {
-            'event_name': booking.event_name,
-            'vs': booking.vs,
-            'rink_count': booking.rink_count,
-            'priority': booking.priority
-        }
+        if booking.booking_type == 'rollup':
+            booking_detail = {
+                'event_name': f'Roll-Up ({booking.organizer_firstname} {booking.organizer_lastname})',
+                'vs': None,
+                'rink_count': booking.rink_count,
+                'priority': booking.priority,
+                'booking_type': 'rollup',
+                'event_type': None,
+                'organizer_notes': booking.organizer_notes
+            }
+        else:
+            booking_detail = {
+                'event_name': booking.event_name,
+                'vs': booking.vs,
+                'rink_count': booking.rink_count,
+                'priority': booking.priority,
+                'booking_type': 'event',
+                'event_type': booking.event_type
+            }
         
         bookings_data[date_str][session].append(booking_detail)
 
     rinks = current_app.config['RINKS']
     sessions = current_app.config['DAILY_SESSIONS']
+    event_types = current_app.config['EVENT_TYPES']
 
     return jsonify({
         'bookings': bookings_data, 
         'rinks': rinks, 
-        'sessions': sessions
+        'sessions': sessions,
+        'event_types': event_types
     })
 
 
@@ -1315,6 +1337,17 @@ def my_games():
         .order_by(Booking.booking_date, Booking.session)
     ).all()
     
+    # Get all roll-up invitations for the current user
+    roll_up_invitations = db.session.scalars(
+        sa.select(BookingPlayer)
+        .join(Booking)
+        .where(
+            BookingPlayer.member_id == current_user.id,
+            Booking.booking_type == 'rollup'
+        )
+        .order_by(Booking.booking_date, Booking.session)
+    ).all()
+    
     # Handle availability confirmation
     if request.method == 'POST':
         assignment_id = request.form.get('assignment_id')
@@ -1355,6 +1388,7 @@ def my_games():
     
     return render_template('my_games.html',
                          assignments=all_assignments,
+                         roll_up_invitations=roll_up_invitations,
                          csrf_form=csrf_form,
                          today=date.today(),
                          config=app.config,
@@ -2306,3 +2340,200 @@ def import_users():
     return render_template('import_users.html', form=form, results=results,
                          menu_items=app.config['MENU_ITEMS'],
                          admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+# Roll-up booking routes
+@app.route('/rollup/book', methods=['GET', 'POST'])
+@login_required
+def book_rollup():
+    """
+    Route: Create Roll-Up Booking
+    - Allows users to create roll-up bookings with invited players
+    - Validates date limits, rink availability, and player counts
+    """
+    form = RollUpBookingForm()
+    
+    if form.validate_on_submit():
+        # Create the roll-up booking
+        new_booking = Booking(
+            booking_date=form.booking_date.data,
+            session=form.session.data,
+            rink_count=1,  # Roll-ups always use 1 rink
+            booking_type='rollup',
+            organizer_id=current_user.id,
+            organizer_notes=form.organizer_notes.data
+        )
+        
+        db.session.add(new_booking)
+        db.session.flush()  # Get the booking ID
+        
+        # Add the organizer as a confirmed player
+        organizer_player = BookingPlayer(
+            booking_id=new_booking.id,
+            member_id=current_user.id,
+            status='confirmed',
+            invited_by=current_user.id,
+            response_at=datetime.utcnow()
+        )
+        db.session.add(organizer_player)
+        
+        # Add invited players as pending
+        invited_count = 0
+        for player_id in form.invited_players.data:
+            if player_id != current_user.id:  # Don't invite yourself
+                invited_player = BookingPlayer(
+                    booking_id=new_booking.id,
+                    member_id=player_id,
+                    status='pending',
+                    invited_by=current_user.id
+                )
+                db.session.add(invited_player)
+                invited_count += 1
+        
+        db.session.commit()
+        
+        # Audit log the roll-up creation
+        audit_log_create('Booking', new_booking.id, 
+                        f'Created roll-up booking for {new_booking.booking_date}',
+                        {'session': new_booking.session, 'invited_players': invited_count,
+                         'organizer': current_user.username})
+        
+        session_name = current_app.config.get('DAILY_SESSIONS', {}).get(new_booking.session, f'Session {new_booking.session}')
+        
+        if invited_count > 0:
+            flash(f'Roll-up booking created for {new_booking.booking_date.strftime("%B %d, %Y")} - {session_name}. '
+                  f'{invited_count} players have been invited and will receive notifications.', 'success')
+        else:
+            flash(f'Roll-up booking created for {new_booking.booking_date.strftime("%B %d, %Y")} - {session_name}. '
+                  f'You can invite more players later if needed.', 'success')
+        
+        return redirect(url_for('my_games'))
+    
+    return render_template('book_rollup.html', form=form, title='Book Roll-Up',
+                         menu_items=app.config['MENU_ITEMS'],
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/rollup/respond/<int:booking_id>/<action>')
+@login_required
+def respond_to_rollup(booking_id, action):
+    """
+    Route: Respond to Roll-Up Invitation
+    - Allows players to accept or decline roll-up invitations
+    """
+    # Validate action
+    if action not in ['accept', 'decline']:
+        abort(400)
+    
+    # Find the booking player record
+    booking_player = db.session.scalar(
+        sa.select(BookingPlayer).where(
+            BookingPlayer.booking_id == booking_id,
+            BookingPlayer.member_id == current_user.id
+        )
+    )
+    
+    if not booking_player:
+        flash('Roll-up invitation not found or you were not invited to this roll-up.', 'error')
+        return redirect(url_for('my_games'))
+    
+    if booking_player.status != 'pending':
+        flash(f'You have already {booking_player.status} this roll-up invitation.', 'info')
+        return redirect(url_for('my_games'))
+    
+    # Update the response
+    new_status = 'confirmed' if action == 'accept' else 'declined'
+    booking_player.status = new_status
+    booking_player.response_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    # Audit log the response
+    audit_log_update('BookingPlayer', booking_player.id,
+                    f'Responded to roll-up invitation: {new_status}',
+                    {'old_status': 'pending', 'booking_id': booking_id})
+    
+    booking = booking_player.booking
+    organizer_name = booking.organizer.firstname
+    session_name = current_app.config.get('DAILY_SESSIONS', {}).get(booking.session, f'Session {booking.session}')
+    
+    if action == 'accept':
+        flash(f'You have accepted the roll-up invitation for {booking.booking_date.strftime("%B %d, %Y")} - {session_name}. '
+              f'{organizer_name} will be notified.', 'success')
+    else:
+        flash(f'You have declined the roll-up invitation for {booking.booking_date.strftime("%B %d, %Y")} - {session_name}. '
+              f'{organizer_name} will be notified.', 'info')
+    
+    return redirect(url_for('my_games'))
+
+
+@app.route('/rollup/manage/<int:booking_id>')
+@login_required
+def manage_rollup(booking_id):
+    """
+    Route: Manage Roll-Up
+    - Allows organizers to view and manage their roll-up bookings
+    """
+    booking = db.session.get(Booking, booking_id)
+    
+    if not booking or booking.booking_type != 'rollup':
+        abort(404)
+    
+    # Check if current user is the organizer
+    if booking.organizer_id != current_user.id:
+        audit_log_security_event('ACCESS_DENIED', f'Unauthorized access to roll-up booking {booking_id}')
+        abort(403)
+    
+    # Get all players for this roll-up
+    players = db.session.scalars(
+        sa.select(BookingPlayer)
+        .join(Member, BookingPlayer.member_id == Member.id)
+        .where(BookingPlayer.booking_id == booking_id)
+        .order_by(BookingPlayer.status.desc(), Member.firstname)
+    ).all()
+    
+    session_name = current_app.config.get('DAILY_SESSIONS', {}).get(booking.session, f'Session {booking.session}')
+    
+    # Create a simple form for CSRF protection
+    csrf_form = FlaskForm()
+    
+    return render_template('manage_rollup.html', booking=booking, players=players,
+                         session_name=session_name, title='Manage Roll-Up',
+                         today=date.today(), csrf_form=csrf_form,
+                         menu_items=app.config['MENU_ITEMS'],
+                         admin_menu_items=app.config['ADMIN_MENU_ITEMS'])
+
+
+@app.route('/rollup/cancel/<int:booking_id>', methods=['POST'])
+@login_required
+def cancel_rollup(booking_id):
+    """
+    Route: Cancel Roll-Up
+    - Allows organizers to cancel their roll-up bookings
+    """
+    booking = db.session.get(Booking, booking_id)
+    
+    if not booking or booking.booking_type != 'rollup':
+        abort(404)
+    
+    # Check if current user is the organizer
+    if booking.organizer_id != current_user.id:
+        audit_log_security_event('ACCESS_DENIED', f'Unauthorized cancellation attempt for roll-up booking {booking_id}')
+        abort(403)
+    
+    # Check if booking is in the future
+    if booking.booking_date <= date.today():
+        flash('Cannot cancel roll-ups for today or past dates.', 'error')
+        return redirect(url_for('manage_rollup', booking_id=booking_id))
+    
+    booking_info = f'{booking.booking_date.strftime("%B %d, %Y")} - Session {booking.session}'
+    
+    # Delete the booking (cascade will handle booking_players)
+    db.session.delete(booking)
+    db.session.commit()
+    
+    # Audit log the cancellation
+    audit_log_delete('Booking', booking_id, f'Cancelled roll-up booking: {booking_info}')
+    
+    flash(f'Roll-up booking for {booking_info} has been cancelled. All invited players will be notified.', 'success')
+    return redirect(url_for('my_games'))

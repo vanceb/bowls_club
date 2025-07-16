@@ -20,19 +20,6 @@
                 </div>
             </div>
         </div>
-        <div class="column is-narrow">
-            <div class="field">
-                <label class="label">&nbsp;</label>
-                <div class="control">
-                    <button id="load-bookings" class="button is-primary">
-                        <span class="icon">
-                            <i class="fas fa-sync-alt"></i>
-                        </span>
-                        <span>Refresh Bookings</span>
-                    </button>
-                </div>
-            </div>
-        </div>
     </div>
     <div id="bookings-table-container">
         <!-- Table will be dynamically loaded here -->
@@ -44,7 +31,6 @@
         // Get today's date from the server-rendered value
         const startDateInput = document.getElementById('start-date');
         const endDateInput = document.getElementById('end-date');
-        const refreshButton = document.getElementById('load-bookings');
         
         // Calculate end date as 7 days from today
         const today = new Date(startDateInput.value);
@@ -63,12 +49,13 @@
             newEndDate.setDate(newStartDate.getDate() + 6); // 7 days total (including start date)
             endDateInput.value = newEndDate.toISOString().split('T')[0];
             
-            // Optionally auto-load the new date range
+            // Automatically refresh the table
             fetchBookingsRange(startDateInput.value, endDateInput.value);
         });
 
-        // Add event listener for the refresh button
-        refreshButton.addEventListener('click', function () {
+        // Add event listener for end date changes
+        endDateInput.addEventListener('change', function () {
+            // Automatically refresh the table when end date changes
             fetchBookingsRange(startDateInput.value, endDateInput.value);
         });
     });
@@ -84,12 +71,26 @@
             .then(data => {
                 console.log('Bookings data received:', data);
                 const tableContainer = document.getElementById('bookings-table-container');
-                tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, startDate, endDate);
+                tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, data.event_types, startDate, endDate);
             })
             .catch(error => console.error("Error fetching bookings:", error));
     }
 
-    function buildBookingsTable(bookings, totalRinks, sessions, startDate, endDate) {
+    function getEventTypePrefix(eventType) {
+        // Map event type IDs to colored tags
+        const eventTypeMapping = {
+            1: '<span class="tag is-success is-small">Social</span>',      // Green
+            2: '<span class="tag is-warning is-small">Competition</span>', // Yellow
+            3: '<span class="tag is-primary is-small">League</span>',      // Blue
+            4: '<span class="tag is-link is-small">Friendly</span>',       // Light blue
+            5: '<span class="tag is-info is-small">Roll Up</span>',        // Cyan (shouldn't be used here)
+            6: '<span class="tag is-light is-small">Other</span>'          // Light grey
+        };
+        
+        return eventTypeMapping[eventType] || '<span class="tag is-light is-small">Event</span>';
+    }
+
+    function buildBookingsTable(bookings, totalRinks, sessions, eventTypes, startDate, endDate) {
         // Generate date range
         const dates = [];
         const start = new Date(startDate);
@@ -136,16 +137,28 @@
                     const bookingLines = sessionBookings.map(booking => {
                         let line = '';
                         
-                        // Event name or fallback
-                        if (booking.event_name) {
-                            line = booking.event_name;
+                        // Handle roll-up vs event bookings
+                        if (booking.booking_type === 'rollup') {
+                            line = `<span class="tag is-info is-small">Roll-Up</span> ${booking.event_name}`;
+                            
+                            // Add notes if available
+                            if (booking.organizer_notes) {
+                                line += `<br><small class="has-text-grey">${booking.organizer_notes}</small>`;
+                            }
                         } else {
-                            line = 'Booking';
-                        }
-                        
-                        // Add opposition if available
-                        if (booking.vs) {
-                            line += ` vs ${booking.vs}`;
+                            // Regular event booking with event type prefix
+                            const eventTypePrefix = getEventTypePrefix(booking.event_type);
+                            
+                            if (booking.event_name) {
+                                line = `${eventTypePrefix} ${booking.event_name}`;
+                            } else {
+                                line = `${eventTypePrefix} Booking`;
+                            }
+                            
+                            // Add opposition if available
+                            if (booking.vs) {
+                                line += ` vs ${booking.vs}`;
+                            }
                         }
                         
                         // Add rink count if more than 1

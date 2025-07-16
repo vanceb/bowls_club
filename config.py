@@ -32,7 +32,13 @@ class Config:
     MENU_ITEMS = [
         {'name': 'News', 'link': 'index'},
         {'name': 'Members', 'link': 'members'},
-        {'name': 'Bookings', 'link': 'bookings'},
+        {
+            'name': 'Bookings',
+            'submenu': [
+                {'name': 'View Bookings', 'link': 'bookings'},
+                {'name': 'Book Roll-Up', 'link': 'book_rollup'},
+            ]
+        },
         {'name': 'My Games', 'link': 'my_games'},
 ]
     # A List holding the contents of the Admin menu
@@ -62,9 +68,9 @@ class Config:
 
 # How many daily sessions are there 
     DAILY_SESSIONS = {
-        1: "9:30am - 12:00pm", 
-        2: "1:00pm - 3:30pm",
-        3: "4:00pm - 6:00pm", 
+        1: "10:00am - 1:00pm", 
+        2: "1:00pm - 4:00pm",
+        3: "4:00pm - 7:00pm", 
         4: "7:00pm - 9:30pm"
     }
 
@@ -116,6 +122,11 @@ class Config:
         'Content Manager', 
         'Event Manager'
     ]
+    
+    # Roll-up booking configuration
+    ROLLUP_ADVANCE_BOOKING_DAYS = 7  # How many days ahead users can book roll-ups
+    ROLLUP_MAX_PLAYERS = 8  # Maximum players per roll-up (including organizer)
+    ROLLUP_MIN_PLAYERS = 2  # Minimum players required for a roll-up
     
     # Session cookie security configuration
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'  # Only send cookies over HTTPS (can be disabled for dev)
