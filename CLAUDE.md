@@ -182,6 +182,83 @@ audit_log_delete('Member', member_id, f'Deleted member: {member_name}')
 - When creating new components, look at existing components first
 - When editing code, look at surrounding context to understand framework choices
 
+## Git Workflow - GitHub Flow
+
+**CRITICAL: This repository uses GitHub Flow. ALL changes must go through feature branches and Pull Requests.**
+
+### Starting New Work
+```bash
+# ALWAYS start from main
+git checkout main
+git pull origin main
+
+# Create feature branch with descriptive name
+git checkout -b feature/your-feature-name
+# OR for bug fixes
+git checkout -b fix/bug-description
+# OR for enhancements
+git checkout -b enhancement/improvement-name
+```
+
+### Working on Features
+```bash
+# Make changes, then stage and commit frequently
+git add .
+git commit -m "Descriptive commit message explaining what and why"
+
+# Push to remote (first time)
+git push -u origin feature/your-feature-name
+
+# Subsequent pushes
+git push
+```
+
+### Completing Work
+```bash
+# Push final changes
+git push
+
+# Create Pull Request on GitHub:
+# 1. Go to https://github.com/vanceb/bowls_club
+# 2. Click "Pull requests" → "New pull request"
+# 3. Select your feature branch
+# 4. Add description and create PR
+
+# After PR is merged, clean up:
+git checkout main
+git pull origin main
+git branch -d feature/your-feature-name
+```
+
+### Branch Naming Convention
+- **feature/**: New functionality (`feature/roll-up-booking`, `feature/member-search`)
+- **fix/**: Bug fixes (`fix/login-error`, `fix/booking-validation`)
+- **enhancement/**: Improvements (`enhancement/ui-improvements`, `enhancement/performance`)
+
+### Git Workflow Rules
+1. **NEVER commit directly to main** - Always use feature branches
+2. **Keep branches small and focused** - One feature per branch
+3. **Use descriptive commit messages** - Explain what and why
+4. **Create PRs for ALL changes** - Even small fixes need review
+5. **Delete branches after merging** - Keep repository clean
+6. **Pull main frequently** - Keep feature branches up to date
+
+### Before Starting Any Work
+```bash
+# Check you're on main and up to date
+git status
+git checkout main
+git pull origin main
+
+# Only then create your feature branch
+git checkout -b feature/your-new-feature
+```
+
+**IMPORTANT: If you find yourself working directly on main, immediately:**
+1. Create a feature branch: `git checkout -b feature/emergency-fix`
+2. Continue your work on the feature branch
+3. Follow the PR process before merging
+
 ## Architecture Notes
 
 - Flask web application with SQLAlchemy ORM

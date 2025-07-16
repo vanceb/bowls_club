@@ -2,6 +2,21 @@
 
 This file provides guidance specific to Flask application development in the `app` directory.
 
+## Development Workflow
+
+**IMPORTANT: Before making ANY changes to Flask application code, follow the GitHub Flow workflow:**
+
+1. **Check current status**: `git status` (should be on main, clean working directory)
+2. **Update main branch**: `git checkout main && git pull origin main`
+3. **Create feature branch**: `git checkout -b feature/your-feature-name`
+4. **Make changes** to Flask app files
+5. **Test thoroughly** using `flask run`
+6. **Commit changes**: `git add . && git commit -m "descriptive message"`
+7. **Push and create PR**: `git push -u origin feature/your-feature-name`
+8. **After PR merged**: Clean up branch and return to main
+
+**NEVER work directly on main branch when making Flask application changes.**
+
 ## Application Structure
 
 ### Core Files
