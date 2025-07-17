@@ -2537,3 +2537,59 @@ def cancel_rollup(booking_id):
     
     flash(f'Roll-up booking for {booking_info} has been cancelled. All invited players will be notified.', 'success')
     return redirect(url_for('my_games'))
+
+
+@app.route('/rollup/remove_player/<int:booking_id>', methods=['POST'])
+@login_required
+def remove_rollup_player(booking_id):
+    """
+    Route: Remove Player from Roll-Up
+    - Allows organizers to remove players from their roll-up bookings
+    """
+    booking = db.session.get(Booking, booking_id)
+    
+    if not booking or booking.booking_type != 'rollup':
+        abort(404)
+    
+    # Check if current user is the organizer
+    if booking.organizer_id != current_user.id:
+        audit_log_security_event('ACCESS_DENIED', f'Unauthorized player removal attempt for roll-up booking {booking_id}')
+        abort(403)
+    
+    # Get player ID from form
+    player_id = request.form.get('player_id')
+    if not player_id:
+        flash('Invalid player ID.', 'error')
+        return redirect(url_for('manage_rollup', booking_id=booking_id))
+    
+    # Find the booking player
+    booking_player = db.session.scalar(
+        sa.select(BookingPlayer)
+        .join(Member, BookingPlayer.member_id == Member.id)
+        .where(
+            BookingPlayer.booking_id == booking_id,
+            BookingPlayer.id == player_id
+        )
+    )
+    
+    if not booking_player:
+        flash('Player not found in this roll-up.', 'error')
+        return redirect(url_for('manage_rollup', booking_id=booking_id))
+    
+    # Don't allow removing the organizer
+    if booking_player.member_id == booking.organizer_id:
+        flash('Cannot remove the organizer from the roll-up.', 'error')
+        return redirect(url_for('manage_rollup', booking_id=booking_id))
+    
+    player_name = f'{booking_player.member.firstname} {booking_player.member.lastname}'
+    
+    # Remove the player
+    db.session.delete(booking_player)
+    db.session.commit()
+    
+    # Audit log the removal
+    audit_log_delete('BookingPlayer', player_id, 
+                    f'Removed {player_name} from roll-up booking {booking_id}')
+    
+    flash(f'{player_name} has been removed from the roll-up.', 'success')
+    return redirect(url_for('manage_rollup', booking_id=booking_id))

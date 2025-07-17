@@ -32,14 +32,14 @@ class Config:
     MENU_ITEMS = [
         {'name': 'News', 'link': 'index'},
         {'name': 'Members', 'link': 'members'},
+        {'name': 'Bookings', 'link': 'bookings'},
         {
-            'name': 'Bookings',
+            'name': 'My Games',
             'submenu': [
-                {'name': 'View Bookings', 'link': 'bookings'},
+                {'name': 'View My Games', 'link': 'my_games'},
                 {'name': 'Book Roll-Up', 'link': 'book_rollup'},
             ]
         },
-        {'name': 'My Games', 'link': 'my_games'},
 ]
     # A List holding the contents of the Admin menu
     # Using None to create a separator

@@ -54,13 +54,40 @@
             <label class="label">{{ form.invited_players.label }}</label>
             <div class="control">
                 <div class="content">
-                    <p class="help">Select members to invite (you can invite up to {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }} players):</p>
-                    {% for subfield in form.invited_players %}
-                        <label class="checkbox">
-                            {{ subfield() }}
-                            {{ subfield.label.text }}
-                        </label>
-                    {% endfor %}
+                    <p class="help">Search and add members to invite (you can invite up to {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }} players):</p>
+                    
+                    <!-- Search input -->
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <input type="text" class="input" id="member-search" placeholder="Search members by name...">
+                        </div>
+                        <div class="control">
+                            <button type="button" class="button is-info" id="clear-search">
+                                <span class="icon">
+                                    <i class="fas fa-times"></i>
+                                </span>
+                                <span>Clear</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Search results -->
+                    <div id="search-results" class="box" style="display: none; max-height: 200px; overflow-y: auto;">
+                        <div class="content">
+                            <div id="search-results-list"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Selected players -->
+                    <div id="selected-players">
+                        <p class="heading">Selected Players <span id="player-count" class="tag is-info">0/{{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }}</span></p>
+                        <div id="selected-players-list" class="tags">
+                            <!-- Selected players will appear here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden field for form submission -->
+                    {{ form.invited_players() }}
                 </div>
             </div>
             {% for error in form.invited_players.errors %}
@@ -105,6 +132,34 @@
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('rollup-form');
     const submitBtn = document.getElementById('submit-btn');
+    const memberSearch = document.getElementById('member-search');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const searchResults = document.getElementById('search-results');
+    const searchResultsList = document.getElementById('search-results-list');
+    const selectedPlayersList = document.getElementById('selected-players-list');
+    const playerCountTag = document.getElementById('player-count');
+    const invitedPlayersInput = document.getElementById('invited_players');
+    
+    const maxPlayers = {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }};
+    const selectedPlayers = new Map(); // Map of id -> {id, name}
+    
+    // Member data - we'll get this from the backend
+    let allMembers = [];
+    
+    // Fetch initial members data (empty query to get all active members)
+    fetch('/search_members?q=')
+        .then(response => response.json())
+        .then(data => {
+            allMembers = data.members.filter(member => 
+                member.status === 'Full' || member.status === 'Social' || member.status === 'Life'
+            ).map(member => ({
+                id: member.id,
+                name: `${member.firstname} ${member.lastname}`
+            }));
+        })
+        .catch(error => {
+            console.error('Error loading members:', error);
+        });
     
     // Form submission protection
     form.addEventListener('submit', function(e) {
@@ -123,37 +178,93 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 10000);
     });
     
-    // Count selected players for validation feedback
-    const checkboxes = document.querySelectorAll('input[name="invited_players"]');
-    const maxPlayers = {{ config.get('ROLLUP_MAX_PLAYERS', 8) - 1 }};
-    
-    function updatePlayerCount() {
-        const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
-        const label = document.querySelector('label[for="invited_players"]');
+    // Search functionality
+    memberSearch.addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase().trim();
         
-        if (selectedCount >= maxPlayers) {
-            label.innerHTML = `{{ form.invited_players.label }} <span class="tag is-warning">Maximum reached (${selectedCount}/${maxPlayers})</span>`;
-            // Disable unchecked checkboxes
-            checkboxes.forEach(cb => {
-                if (!cb.checked) {
-                    cb.disabled = true;
-                }
-            });
+        if (searchTerm.length < 2) {
+            searchResults.style.display = 'none';
+            return;
+        }
+        
+        const filteredMembers = allMembers.filter(member => 
+            (member.name.toLowerCase().includes(searchTerm)) && 
+            !selectedPlayers.has(member.id)
+        );
+        
+        displaySearchResults(filteredMembers);
+    });
+    
+    // Clear search
+    clearSearchBtn.addEventListener('click', function() {
+        memberSearch.value = '';
+        searchResults.style.display = 'none';
+    });
+    
+    // Display search results
+    function displaySearchResults(members) {
+        if (members.length === 0) {
+            searchResultsList.innerHTML = '<p class="has-text-grey">No members found</p>';
         } else {
-            label.innerHTML = `{{ form.invited_players.label }} <span class="tag is-info">${selectedCount}/${maxPlayers} selected</span>`;
-            // Enable all checkboxes
-            checkboxes.forEach(cb => {
-                cb.disabled = false;
-            });
+            searchResultsList.innerHTML = members.map(member => `
+                <div class="py-1">
+                    <p class="is-size-6 has-text-link" style="cursor: pointer;" onclick="addPlayer(${member.id}, '${member.name}')">${member.name}</p>
+                </div>
+            `).join('');
+        }
+        
+        searchResults.style.display = 'block';
+    }
+    
+    // Add player function
+    window.addPlayer = function(id, name) {
+        if (selectedPlayers.size >= maxPlayers) {
+            alert(`Maximum ${maxPlayers} players allowed`);
+            return;
+        }
+        
+        selectedPlayers.set(id, { id, name });
+        updateSelectedPlayersDisplay();
+        updateHiddenField();
+        
+        // Hide search results and clear search
+        searchResults.style.display = 'none';
+        memberSearch.value = '';
+    };
+    
+    // Remove player function
+    window.removePlayer = function(id) {
+        selectedPlayers.delete(id);
+        updateSelectedPlayersDisplay();
+        updateHiddenField();
+    };
+    
+    // Update selected players display
+    function updateSelectedPlayersDisplay() {
+        const count = selectedPlayers.size;
+        playerCountTag.textContent = `${count}/${maxPlayers}`;
+        playerCountTag.className = count >= maxPlayers ? 'tag is-warning' : 'tag is-info';
+        
+        if (count === 0) {
+            selectedPlayersList.innerHTML = '<span class="has-text-grey">No players selected</span>';
+        } else {
+            selectedPlayersList.innerHTML = Array.from(selectedPlayers.values()).map(player => `
+                <span class="tag is-medium">
+                    ${player.name}
+                    <button type="button" class="delete is-small" onclick="removePlayer(${player.id})"></button>
+                </span>
+            `).join('');
         }
     }
     
-    checkboxes.forEach(cb => {
-        cb.addEventListener('change', updatePlayerCount);
-    });
+    // Update hidden field
+    function updateHiddenField() {
+        const playerIds = Array.from(selectedPlayers.keys());
+        invitedPlayersInput.value = playerIds.join(',');
+    }
     
-    // Initial count
-    updatePlayerCount();
+    // Initialize display
+    updateSelectedPlayersDisplay();
 });
 </script>
 {% endblock %}

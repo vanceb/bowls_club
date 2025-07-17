@@ -430,13 +430,7 @@ class RollUpBookingForm(FlaskForm):
         validators=[Optional(), Length(max=500)],
         render_kw={'placeholder': 'Optional notes about the roll-up...', 'rows': 3}
     )
-    invited_players = SelectMultipleField(
-        'Invite Players', 
-        coerce=int, 
-        validators=[Optional()],
-        option_widget=CheckboxInput(),
-        widget=ListWidget(prefix_label=False)
-    )
+    invited_players = HiddenField('Invite Players')
     submit = SubmitField('Create Roll-Up')
 
     def __init__(self, *args, **kwargs):
@@ -445,21 +439,6 @@ class RollUpBookingForm(FlaskForm):
         # Populate the session choices dynamically from the app config
         self.session.choices = [
             (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
-        ]
-        
-        # Populate available players (active members only)
-        from app.models import Member
-        from app import db
-        import sqlalchemy as sa
-        
-        members = db.session.scalars(
-            sa.select(Member)
-            .where(Member.status.in_(['Full', 'Social', 'Life']))
-            .order_by(Member.firstname, Member.lastname)
-        ).all()
-        
-        self.invited_players.choices = [
-            (member.id, f"{member.firstname} {member.lastname}") for member in members
         ]
 
     def validate_booking_date(self, field):
@@ -483,7 +462,13 @@ class RollUpBookingForm(FlaskForm):
             return
             
         max_players = current_app.config.get('ROLLUP_MAX_PLAYERS', 8)
-        invited_count = len(field.data)
+        
+        # Parse comma-separated string of player IDs
+        try:
+            player_ids = [int(x.strip()) for x in field.data.split(',') if x.strip()]
+            invited_count = len(player_ids)
+        except (ValueError, AttributeError):
+            invited_count = 0
         
         # Include organizer in count (+1)
         total_players = invited_count + 1
