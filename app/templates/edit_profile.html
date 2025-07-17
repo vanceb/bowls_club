@@ -71,7 +71,7 @@
                         <div class="content">
                             <p class="is-size-7 has-text-grey">
                                 Control who can see your contact information in the member directory.
-                                <a href="{{ url_for('view_policy_page', slug='privacy-policy') }}" target="_blank" class="has-text-link">
+                                <a href="{{ url_for('main.policy', slug='privacy-policy') }}" target="_blank" class="has-text-link">
                                     Read our Privacy Policy <i class="fas fa-external-link-alt is-size-7"></i>
                                 </a>
                             </p>
@@ -108,7 +108,7 @@
                             {{ form.submit(class="button is-primary") }}
                         </div>
                         <div class="control">
-                            <a href="{{ url_for('index') }}" class="button is-light">Cancel</a>
+                            <a href="{{ url_for('main.index') }}" class="button is-light">Cancel</a>
                         </div>
                     </div>
                 </form>
@@ -146,7 +146,7 @@
                 </div>
                 <div class="field">
                     <div class="control">
-                        <a href="{{ url_for('reset_password') }}" class="button is-warning">
+                        <a href="{{ url_for('auth.change_password') }}" class="button is-warning">
                             <span class="icon">
                                 <i class="fas fa-key"></i>
                             </span>

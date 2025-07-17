@@ -38,12 +38,12 @@
 
         <!-- Add the password reset link -->
         <p>
-            <a href="{{ url_for('pw_reset_request') }}">Reset your password!</a>
+            <a href="{{ url_for('auth.reset_password_request') }}">Reset your password!</a>
         </p>
 
     </form>
     <p>
-        Not yet a member? <a href="{{ url_for('add_member') }}">Apply to join the Club</a>.
+        Not yet a member? <a href="{{ url_for('main.add_member') }}">Apply to join the Club</a>.
     </p>
 
 {% endblock %}

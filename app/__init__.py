@@ -35,7 +35,7 @@ def create_app(config_name='development'):
     mail.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)
-    login.login_view = 'login'
+    login.login_view = 'auth.login'
     moment.init_app(app)
     limiter.init_app(app)
     

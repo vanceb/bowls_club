@@ -2,7 +2,7 @@
 
   <!-- Brand is placed left of the navbar and stays when screens are small -->
   <div class="navbar-brand">
-    <a class="navbar-item" href="{{ url_for('index') }}">
+    <a class="navbar-item" href="{{ url_for('main.index') }}">
       <img src="{{ url_for('static', filename='images/brand.svg') }}" alt="" class="brand-logo py-2">
     </a>
 
@@ -46,10 +46,10 @@
 
       <!-- Add a Login / Logout item to the end of the menu -->
       {% if current_user.is_anonymous %}
-        <a class="navbar-item" href="{{ url_for('login') }}">Login</a>
+        <a class="navbar-item" href="{{ url_for('auth.login') }}">Login</a>
       {% else %}
-        <a class="navbar-item" href="{{ url_for('edit_profile') }}">Profile</a>
-        <a class="navbar-item" href="{{ url_for('logout') }}">Logout {{ current_user.firstname }}</a>
+        <a class="navbar-item" href="{{ url_for('auth.profile') }}">Profile</a>
+        <a class="navbar-item" href="{{ url_for('auth.logout') }}">Logout {{ current_user.firstname }}</a>
       {% endif %}
     </div>
 

@@ -28,14 +28,14 @@ class Config:
 
     # List holding the contents of the main menu
     MENU_ITEMS = [
-        {'name': 'News', 'link': 'index'},
-        {'name': 'Members', 'link': 'members'},
-        {'name': 'Bookings', 'link': 'bookings'},
+        {'name': 'News', 'link': 'main.index'},
+        {'name': 'Members', 'link': 'main.members'},
+        {'name': 'Bookings', 'link': 'main.bookings'},
         {
             'name': 'My Games',
             'submenu': [
-                {'name': 'View My Games', 'link': 'my_games'},
-                {'name': 'Book Roll-Up', 'link': 'book_rollup'},
+                {'name': 'View My Games', 'link': 'main.my_games'},
+                {'name': 'Book Roll-Up', 'link': 'main.book_rollup'},
             ]
         },
 ]
@@ -44,17 +44,17 @@ class Config:
     # Organized by role sections for logical grouping
     ADMIN_MENU_ITEMS = [
         # User Management Section
-        {"name": "Manage Members", "link": "manage_members", "roles": ["User Manager"]},
-        {"name": "Import Users", "link": "import_users"},
-        {"name": "Manage Roles", "link": "manage_roles"},
+        {"name": "Manage Members", "link": "admin.manage_members", "roles": ["User Manager"]},
+        {"name": "Import Users", "link": "admin.import_users"},
+        {"name": "Manage Roles", "link": "admin.manage_roles"},
         None,
         # Content Management Section
-        {"name": "Write Post", "link": "write_post", "roles": ["Content Manager"]},
-        {"name": "Manage Posts", "link": "manage_posts", "roles": ["Content Manager"]},
-        {"name": "Manage Policy Pages", "link": "manage_policy_pages"},
+        {"name": "Write Post", "link": "admin.write_post", "roles": ["Content Manager"]},
+        {"name": "Manage Posts", "link": "admin.manage_posts", "roles": ["Content Manager"]},
+        {"name": "Manage Policy Pages", "link": "admin.manage_policy_pages"},
         None,
         # Event Management Section
-        {"name": "Manage Events", "link": "manage_events", "roles": ["Event Manager"]},
+        {"name": "Manage Events", "link": "admin.manage_events", "roles": ["Event Manager"]},
     ]
 
 # Config options relating to Posts    

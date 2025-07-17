@@ -44,11 +44,21 @@ def index():
         
         return render_template('index.html', 
                              recent_posts=recent_posts, 
-                             upcoming_events=upcoming_events)
+                             upcoming_events=upcoming_events,
+                             pinned_posts=[],
+                             non_pinned_posts=recent_posts,
+                             pagination=None,
+                             current_page=1)
     except Exception as e:
         current_app.logger.error(f"Error in index route: {str(e)}")
         flash('An error occurred while loading the home page.', 'error')
-        return render_template('index.html', recent_posts=[], upcoming_events=[])
+        return render_template('index.html', 
+                             recent_posts=[], 
+                             upcoming_events=[],
+                             pinned_posts=[],
+                             non_pinned_posts=[],
+                             pagination=None,
+                             current_page=1)
 
 
 @bp.route("/post/<int:post_id>")

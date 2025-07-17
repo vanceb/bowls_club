@@ -26,9 +26,9 @@
             {% endfor %}
                 <li>
                     {% if current_user.is_anonymous %}
-                    <a href="{{ url_for('login') }}">Login</a>
+                    <a href="{{ url_for('auth.login') }}">Login</a>
                     {% else %}
-                    <a href="{{ url_for('logout') }}">Logout {{ current_user.username }}</a>
+                    <a href="{{ url_for('auth.logout') }}">Logout {{ current_user.username }}</a>
                     {% endif %}
                 </li>
         </ul>
