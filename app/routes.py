@@ -17,7 +17,8 @@ from markdown2 import markdown
 from werkzeug.security import generate_password_hash
 
 # Local application imports
-from app import app, db, limiter
+from app import db, limiter
+from flask import current_app
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation,
     audit_log_authentication, audit_log_security_event, get_model_changes

@@ -17,7 +17,7 @@ from datetime import datetime
 # Add the app directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import app, db
+from app import create_app, db
 from app.models import Role, Member
 from app.audit import audit_log_create, audit_log_system_event
 from config import Config
@@ -106,6 +106,9 @@ def main():
     print("=" * 60)
     print("BOWLS CLUB - Initial Data Setup")
     print("=" * 60)
+    
+    # Create app instance
+    app = create_app()
     
     with app.app_context():
         # Verify database structure

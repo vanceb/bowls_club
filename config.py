@@ -1,6 +1,7 @@
 import os
 
 class Config:
+    """Base configuration"""
     SECRET_KEY = os.environ.get('SECRET_KEY')
     if not SECRET_KEY:
         raise RuntimeError(
@@ -9,9 +10,6 @@ class Config:
             "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
 
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
-    
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Secure file storage paths (outside web root)
@@ -134,4 +132,36 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
     PERMANENT_SESSION_LIFETIME = 86400  # 24 hours in seconds
     SESSION_COOKIE_NAME = 'bowls_session'  # Custom cookie name
-    
+
+
+class DevelopmentConfig(Config):
+    """Development configuration"""
+    DEBUG = True
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL') or \
+        'sqlite:///' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.db')
+    SESSION_COOKIE_SECURE = False  # Allow HTTP in development
+
+
+class TestingConfig(Config):
+    """Testing configuration"""
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    WTF_CSRF_ENABLED = False
+    SESSION_COOKIE_SECURE = False  # Allow HTTP in testing
+
+
+class ProductionConfig(Config):
+    """Production configuration"""
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'postgresql://user:pass@localhost/bowls_club'
+    SESSION_COOKIE_SECURE = True  # Force HTTPS in production
+
+
+# Configuration mapping
+config = {
+    'development': DevelopmentConfig,
+    'testing': TestingConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+}
