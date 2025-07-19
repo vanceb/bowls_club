@@ -20,7 +20,7 @@
                 {% for post in posts %}
                 <tr data-post-id="{{ post.id }}">
                     <td><input type="checkbox" name="post_ids" value="{{ post.id }}" class="post-checkbox" data-expires-on="{{ post.expires_on }}"></td>
-                    <td><a href="{{ url_for('edit_post', post_id=post.id) }}">{{ post.title }}</a></td>
+                    <td><a href="{{ url_for('admin.edit_post', post_id=post.id) }}">{{ post.title }}</a></td>
                     <td>{{ post.expires_on }}</td>
                 </tr>
                 {% endfor %}

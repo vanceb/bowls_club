@@ -197,15 +197,143 @@ def admin_reset_password(member_id):
         return redirect(url_for('admin.edit_member', member_id=member_id))
 
 
-@bp.route('/import_users')
+@bp.route('/import_users', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def import_users():
     """
     Admin interface for importing users from CSV
+    - Required columns: firstname, lastname, email, phone
+    - Optional columns: username, gender
+    - Imported users get 'pending' status and no roles
     """
     try:
-        return render_template('admin/import_users.html')
+        from app.forms import ImportUsersForm
+        from app.audit import audit_log_bulk_operation
+        import csv
+        import io
+        
+        form = ImportUsersForm()
+        results = None
+        
+        if form.validate_on_submit():
+            csv_file = form.csv_file.data
+            
+            # Read CSV content
+            try:
+                # Decode the file content
+                csv_content = csv_file.read().decode('utf-8')
+                csv_file.seek(0)  # Reset file pointer
+                
+                # Parse CSV
+                csv_reader = csv.DictReader(io.StringIO(csv_content))
+                
+                # Validate required columns
+                required_columns = {'firstname', 'lastname', 'email', 'phone'}
+                csv_columns = set(csv_reader.fieldnames or [])
+                
+                if not required_columns.issubset(csv_columns):
+                    missing_columns = required_columns - csv_columns
+                    flash(f'CSV file is missing required columns: {", ".join(missing_columns)}', 'error')
+                    return render_template('admin/import_users.html', form=form, results=results)
+                
+                # Process rows
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 to account for header
+                    try:
+                        # Extract required fields
+                        firstname = row['firstname'].strip()
+                        lastname = row['lastname'].strip()
+                        email = row['email'].strip().lower()
+                        phone = row['phone'].strip()
+                        
+                        # Validate required fields
+                        if not all([firstname, lastname, email, phone]):
+                            errors.append(f'Row {row_num}: Missing required data')
+                            error_count += 1
+                            continue
+                        
+                        # Check if email already exists
+                        existing_user = db.session.scalar(sa.select(Member).where(Member.email == email))
+                        if existing_user:
+                            errors.append(f'Row {row_num}: Email {email} already exists')
+                            error_count += 1
+                            continue
+                        
+                        # Generate username if not provided
+                        username = row.get('username', '').strip()
+                        if not username:
+                            username = f"{firstname.lower()}_{lastname.lower()}"
+                            # Make username unique if it already exists
+                            base_username = username
+                            counter = 1
+                            while db.session.scalar(sa.select(Member).where(Member.username == username)):
+                                username = f"{base_username}_{counter}"
+                                counter += 1
+                        else:
+                            # Check if provided username already exists
+                            existing_username = db.session.scalar(sa.select(Member).where(Member.username == username))
+                            if existing_username:
+                                errors.append(f'Row {row_num}: Username {username} already exists')
+                                error_count += 1
+                                continue
+                        
+                        # Get gender, default to 'unknown' if not provided
+                        gender = row.get('gender', '').strip()
+                        if gender.lower() not in ['male', 'female', 'other']:
+                            gender = 'Other'
+                        else:
+                            gender = gender.capitalize()
+                        
+                        # Create new member
+                        member = Member(
+                            username=username,
+                            firstname=firstname,
+                            lastname=lastname,
+                            email=email,
+                            phone=phone,
+                            gender=gender,
+                            status='Pending',  # All imported users get pending status
+                            is_admin=False,    # No admin privileges
+                            share_email=True,  # Default privacy settings
+                            share_phone=True
+                        )
+                        
+                        db.session.add(member)
+                        success_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f'Row {row_num}: {str(e)}')
+                        error_count += 1
+                        continue
+                
+                # Commit all successful imports
+                if success_count > 0:
+                    db.session.commit()
+                    
+                    # Audit log the bulk import
+                    audit_log_bulk_operation('BULK_CREATE', 'Member', success_count, 
+                                           f'CSV import: {success_count} members imported, {error_count} errors')
+                    
+                    flash(f'Successfully imported {success_count} users.', 'success')
+                
+                if error_count > 0:
+                    flash(f'{error_count} errors occurred during import.', 'warning')
+                
+                results = {
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'errors': errors
+                }
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error processing CSV file: {str(e)}', 'error')
+        
+        return render_template('admin/import_users.html', form=form, results=results)
         
     except Exception as e:
         current_app.logger.error(f"Error in import_users: {str(e)}")
@@ -498,23 +626,80 @@ tags: {tags}
         return redirect(url_for('main.index'))
 
 
-@bp.route('/manage_posts')
+@bp.route('/manage_posts', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_posts():
     """
-    Admin interface for managing posts
+    Admin interface for managing posts with bulk operations
     """
     try:
-        # Get all posts
-        posts = db.session.scalars(
-            sa.select(Post).order_by(Post.publish_on.desc())
-        ).all()
+        from app.utils import get_secure_post_path, get_secure_archive_path
+        import shutil
         
+        today = date.today()
+        posts_query = sa.select(Post).order_by(Post.created_at.desc())
+        posts = db.session.scalars(posts_query).all()
+
+        if request.method == 'POST':
+            # Validate CSRF token
+            csrf_form = FlaskForm()
+            if not csrf_form.validate_on_submit():
+                flash('Security validation failed.', 'error')
+                return redirect(url_for('admin.manage_posts'))
+                
+            # Handle deletion of selected posts
+            post_ids = request.form.getlist('post_ids')
+            deleted_posts = []
+            
+            for post_id in post_ids:
+                post = db.session.get(Post, post_id)
+                if post:
+                    # Capture post info for audit log
+                    deleted_posts.append(f'{post.title} (ID: {post.id})')
+                    
+                    # Move files to secure archive storage
+                    markdown_path = get_secure_post_path(post.markdown_filename)
+                    html_path = get_secure_post_path(post.html_filename)
+                    archive_markdown_path = get_secure_archive_path(post.markdown_filename)
+                    archive_html_path = get_secure_archive_path(post.html_filename)
+                    
+                    # Validate all paths
+                    if not all([markdown_path, html_path, archive_markdown_path, archive_html_path]):
+                        continue  # Skip files with invalid paths
+
+                    # Ensure the archive directory exists
+                    archive_dir = current_app.config['ARCHIVE_STORAGE_PATH']
+                    os.makedirs(archive_dir, exist_ok=True)
+
+                    # Move Markdown file if it exists
+                    if os.path.exists(markdown_path):
+                        shutil.move(markdown_path, archive_markdown_path)
+
+                    # Move HTML file if it exists
+                    if os.path.exists(html_path):
+                        shutil.move(html_path, archive_html_path)
+
+                    # Delete post from database
+                    db.session.delete(post)
+            
+            db.session.commit()
+            
+            # Audit log the post deletions
+            if deleted_posts:
+                from app.audit import audit_log_bulk_operation
+                audit_log_bulk_operation('BULK_DELETE', 'Post', len(deleted_posts), 
+                                       f'Deleted {len(deleted_posts)} posts: {", ".join(deleted_posts)}')
+            flash(f"{len(post_ids)} post(s) deleted successfully!", "success")
+            return redirect(url_for('admin.manage_posts'))
+
         # Create a simple form for CSRF protection
         csrf_form = FlaskForm()
         
-        return render_template('admin/manage_posts.html', posts=posts, csrf_form=csrf_form)
+        return render_template('admin/manage_posts.html', 
+                             posts=posts, 
+                             today=today,
+                             csrf_form=csrf_form)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_posts: {str(e)}")
@@ -971,6 +1156,406 @@ def delete_policy_page(policy_page_id):
         current_app.logger.error(f"Error in delete_policy_page: {str(e)}")
         flash('An error occurred while deleting the policy page.', 'error')
         return redirect(url_for('admin.manage_policy_pages'))
+
+
+@bp.route('/edit_booking/<int:booking_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_booking(booking_id):
+    """
+    Admin interface for editing existing bookings
+    """
+    try:
+        from app.forms import BookingForm
+        from app.utils import get_secure_post_path
+        
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        form = BookingForm(obj=booking)
+        
+        if form.validate_on_submit():
+            # Capture changes for audit log
+            changes = get_model_changes(booking, {
+                'booking_date': form.booking_date.data,
+                'session': form.session.data,
+                'rink_count': form.rink_count.data,
+                'priority': form.priority.data,
+                'vs': form.vs.data,
+                'home_away': form.home_away.data
+            })
+            
+            # Update the booking with form data
+            booking.booking_date = form.booking_date.data
+            booking.session = form.session.data
+            booking.rink_count = form.rink_count.data
+            booking.priority = form.priority.data
+            booking.vs = form.vs.data
+            booking.home_away = form.home_away.data
+            
+            db.session.commit()
+            
+            # Audit log the booking edit
+            audit_log_update('Booking', booking.id, f'Edited booking #{booking.id}', changes)
+            
+            flash('Booking updated successfully!', 'success')
+            
+            # Redirect back to events management if the booking has an event
+            if booking.event_id:
+                return redirect(url_for('admin.manage_events'))
+            else:
+                return redirect(url_for('main.bookings'))
+        
+        return render_template('admin/booking_form.html', 
+                             form=form, 
+                             booking=booking,
+                             title=f"Edit Booking #{booking.id}")
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in edit_booking: {str(e)}")
+        flash('An error occurred while editing the booking.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/recover_policy_page/<filename>', methods=['POST'])
+@login_required
+@admin_required
+def recover_policy_page(filename):
+    """
+    Admin interface for recovering orphaned policy page files
+    """
+    try:
+        from app.utils import recover_orphaned_policy_page
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_policy_pages'))
+        
+        # Attempt to recover the orphaned policy page
+        success, message, policy_page = recover_orphaned_policy_page(filename, current_user.id)
+        
+        if success and policy_page:
+            # Audit log the policy page recovery
+            audit_log_create('PolicyPage', policy_page.id, 
+                            f'Recovered orphaned policy page: {policy_page.title}',
+                            {'recovered_from': filename, 'slug': policy_page.slug})
+            
+            flash(message, 'success')
+        else:
+            flash(message, 'error')
+        
+        return redirect(url_for('admin.manage_policy_pages'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in recover_policy_page: {str(e)}")
+        flash('An error occurred while recovering the policy page.', 'error')
+        return redirect(url_for('admin.manage_policy_pages'))
+
+
+@bp.route('/edit_event_team/<int:team_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_event_team(team_id):
+    """
+    Admin interface for editing event teams and assigning players to positions
+    """
+    try:
+        from app.models import EventTeam, TeamMember
+        from app.forms import create_team_member_form
+        
+        team = db.session.get(EventTeam, team_id)
+        if not team:
+            flash('Team not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission to manage this event
+        if not current_user.is_admin and current_user not in team.event.event_managers:
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Non-authorized user attempted to edit team {team_id}')
+            flash('You do not have permission to edit this team.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        TeamMemberForm = create_team_member_form(team.event.format)
+        form = TeamMemberForm()
+        
+        if form.validate_on_submit():
+            # Capture existing team members for audit log
+            existing_members = db.session.scalars(
+                sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
+            ).all()
+            old_members = [f"{member.member.firstname} {member.member.lastname} ({member.position})" 
+                          for member in existing_members]
+            
+            # Clear existing team members
+            for member in existing_members:
+                db.session.delete(member)
+            
+            # Update team name
+            old_team_name = team.team_name
+            team.team_name = form.team_name.data
+            
+            # Add new team members based on form data
+            team_positions = current_app.config.get('TEAM_POSITIONS', {})
+            positions = team_positions.get(team.event.format, [])
+            new_members = []
+            
+            for position in positions:
+                field_name = f"position_{position.lower().replace(' ', '_')}"
+                member_id = getattr(form, field_name).data
+                
+                if member_id and member_id > 0:  # Skip empty selections
+                    team_member = TeamMember(
+                        event_team_id=team.id,
+                        member_id=member_id,
+                        position=position
+                    )
+                    db.session.add(team_member)
+                    member_obj = db.session.get(Member, member_id)
+                    new_members.append(f"{member_obj.firstname} {member_obj.lastname} ({position})")
+            
+            db.session.commit()
+            
+            # Audit log the team update
+            changes = {}
+            if old_team_name != team.team_name:
+                changes['team_name'] = old_team_name
+            changes['old_members'] = old_members
+            changes['new_members'] = new_members
+            
+            audit_log_update('EventTeam', team.id, 
+                            f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
+            
+            flash(f'Team "{team.team_name}" updated successfully!', 'success')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Pre-populate form with existing data
+        if request.method == 'GET':
+            form.team_id.data = team.id
+            form.team_name.data = team.team_name
+            
+            # Load existing team member assignments
+            existing_members = db.session.scalars(
+                sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
+            ).all()
+            
+            for member in existing_members:
+                field_name = f"position_{member.position.lower().replace(' ', '_')}"
+                if hasattr(form, field_name):
+                    getattr(form, field_name).data = member.member_id
+        
+        return render_template('admin/edit_event_team.html', 
+                             form=form, 
+                             team=team,
+                             event=team.event,
+                             title=f"Edit {team.team_name}")
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in edit_event_team: {str(e)}")
+        flash('An error occurred while editing the team.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/add_event_team/<int:event_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def add_event_team(event_id):
+    """
+    Admin interface for adding a new team to an event
+    """
+    try:
+        from app.models import EventTeam
+        from app.forms import AddTeamForm
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission to manage this event
+        if not current_user.is_admin and current_user not in event.event_managers:
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Non-authorized user attempted to add team to event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        form = AddTeamForm()
+        
+        if form.validate_on_submit():
+            # Get the next team number
+            existing_teams = db.session.scalars(
+                sa.select(EventTeam).where(EventTeam.event_id == event_id)
+            ).all()
+            next_team_number = len(existing_teams) + 1
+            
+            # Create the new team
+            new_team = EventTeam(
+                event_id=event_id,
+                team_name=form.team_name.data,
+                team_number=next_team_number
+            )
+            db.session.add(new_team)
+            db.session.commit()
+            
+            # Audit log the team creation
+            audit_log_create('EventTeam', new_team.id, 
+                            f'Created team: {new_team.team_name} for event "{event.name}"',
+                            {'team_number': next_team_number})
+            
+            flash(f'Team "{new_team.team_name}" added successfully!', 'success')
+            return redirect(url_for('admin.manage_events'))
+        
+        return render_template('admin/add_event_team.html', 
+                             form=form, 
+                             event=event,
+                             title=f"Add Team to {event.name}")
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in add_event_team: {str(e)}")
+        flash('An error occurred while adding the team.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/delete_event_team/<int:team_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_event_team(team_id):
+    """
+    Admin interface for deleting an event team
+    """
+    try:
+        from app.models import EventTeam
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        team = db.session.get(EventTeam, team_id)
+        if not team:
+            flash('Team not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission to manage this event
+        if not current_user.is_admin and current_user not in team.event.event_managers:
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Non-authorized user attempted to delete team {team_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        event_id = team.event_id
+        team_name = team.team_name
+        event_name = team.event.name
+        
+        # Check if this team has associated booking teams
+        booking_teams_count = len(team.booking_teams)
+        if booking_teams_count > 0:
+            # Get unique bookings that use this team
+            affected_bookings = list(set([bt.booking for bt in team.booking_teams]))
+            booking_dates = [booking.booking_date.strftime('%Y-%m-%d') for booking in affected_bookings]
+            
+            flash(f'Warning: Team "{team_name}" is used in {booking_teams_count} booking(s) on {", ".join(booking_dates)}. '
+                  f'Deleting this team will not affect existing bookings (they remain independent), '
+                  f'but you won\'t be able to trace them back to this template.', 'warning')
+        
+        # Delete the team (cascade will handle team_members and booking_teams relationship)
+        db.session.delete(team)
+        db.session.commit()
+        
+        # Audit log the team deletion
+        audit_log_delete('EventTeam', team_id, 
+                        f'Deleted team: {team_name} from event "{event_name}"',
+                        {'booking_teams_affected': booking_teams_count})
+        
+        if booking_teams_count > 0:
+            flash(f'Team "{team_name}" deleted. Existing bookings remain unchanged.', 'info')
+        else:
+            flash(f'Team "{team_name}" deleted successfully!', 'success')
+        
+        return redirect(url_for('admin.manage_events'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in delete_event_team: {str(e)}")
+        flash('An error occurred while deleting the team.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
+@login_required
+def manage_teams(booking_id):
+    """
+    Admin interface for managing teams for a specific booking
+    Accessible to admins and booking organizers
+    """
+    try:
+        # Get the booking
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission to manage teams
+        if not current_user.is_admin and booking.organizer_id != current_user.id:
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to manage teams for booking {booking_id}')
+            flash('You do not have permission to manage teams for this booking.', 'error')
+            return redirect(url_for('main.bookings'))
+        
+        from app.models import BookingTeam, BookingTeamMember
+        
+        # Get existing teams for this booking
+        teams = db.session.scalars(
+            sa.select(BookingTeam)
+            .where(BookingTeam.booking_id == booking_id)
+            .order_by(BookingTeam.team_name)
+        ).all()
+        
+        # Handle POST request for team management
+        if request.method == 'POST':
+            csrf_form = FlaskForm()
+            if not csrf_form.validate_on_submit():
+                flash('Security validation failed.', 'error')
+                return redirect(url_for('admin.manage_teams', booking_id=booking_id))
+            
+            # Handle different actions
+            action = request.form.get('action')
+            
+            if action == 'add_team':
+                team_name = request.form.get('team_name')
+                if team_name:
+                    new_team = BookingTeam(
+                        booking_id=booking_id,
+                        team_name=team_name,
+                        event_team_id=booking.event.teams[0].id if booking.event and booking.event.teams else None
+                    )
+                    db.session.add(new_team)
+                    db.session.commit()
+                    
+                    audit_log_create('BookingTeam', new_team.id, 
+                                   f'Added team {team_name} to booking {booking_id}')
+                    flash(f'Team "{team_name}" added successfully.', 'success')
+                else:
+                    flash('Team name is required.', 'error')
+            
+            return redirect(url_for('admin.manage_teams', booking_id=booking_id))
+        
+        # Get session name
+        sessions = current_app.config.get('DAILY_SESSIONS', {})
+        session_name = sessions.get(booking.session, 'Unknown Session')
+        
+        return render_template('admin/manage_teams.html', 
+                             booking=booking,
+                             teams=teams,
+                             session_name=session_name)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")
+        flash('An error occurred while managing teams.', 'error')
+        return redirect(url_for('main.bookings'))
 
 
 @bp.route('/test')

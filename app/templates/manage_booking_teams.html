@@ -12,8 +12,8 @@
 
     <nav class="breadcrumb" aria-label="breadcrumbs">
         <ul>
-            <li><a href="{{ url_for('manage_events') }}">Events Management</a></li>
-            <li><a href="{{ url_for('manage_events') }}?event_id={{ booking.event.id }}">{{ booking.event.name }}</a></li>
+            <li><a href="{{ url_for('admin.manage_events') }}">Events Management</a></li>
+            <li><a href="{{ url_for('admin.manage_events') }}?event_id={{ booking.event.id }}">{{ booking.event.name }}</a></li>
             <li class="is-active"><a href="#" aria-current="page">Manage Teams</a></li>
         </ul>
     </nav>

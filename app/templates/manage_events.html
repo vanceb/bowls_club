@@ -137,7 +137,7 @@
                 <div class="control">
                     {{ event_form.submit(class="button is-primary") }}
                     {% if selected_event %}
-                        <a href="{{ url_for('manage_events') }}" class="button is-light">Cancel</a>
+                        <a href="{{ url_for('admin.manage_events') }}" class="button is-light">Cancel</a>
                     {% endif %}
                 </div>
             </div>
@@ -202,7 +202,7 @@
                             </span>
                         </p>
                         <div class="card-header-icon">
-                            <a href="{{ url_for('edit_event_team', team_id=team.id) }}" 
+                            <a href="{{ url_for('admin.edit_event_team', team_id=team.id) }}" 
                                class="button is-small is-info mr-1"
                                aria-label="Edit team">
                                 <span class="icon is-small">
@@ -452,7 +452,7 @@
                         </td>
                         <td width="200">
                             <div class="is-flex is-justify-content-flex-end is-align-items-center">
-                                <a href="{{ url_for('manage_booking_teams', booking_id=booking.id) }}" 
+                                <a href="{{ url_for('admin.manage_teams', booking_id=booking.id) }}" 
                                    class="button is-small is-primary mr-1">
                                     <span class="icon"><i class="fas fa-users"></i></span>
                                     <span class="is-hidden-mobile">Teams</span>
