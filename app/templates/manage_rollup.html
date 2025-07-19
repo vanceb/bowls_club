@@ -64,12 +64,30 @@
     </div>
 
     <div class="box">
-        <h2 class="title is-4">
-            <span class="icon has-text-primary">
-                <i class="fas fa-users"></i>
-            </span>
-            Player List
-        </h2>
+        <div class="level">
+            <div class="level-left">
+                <div class="level-item">
+                    <h2 class="title is-4">
+                        <span class="icon has-text-primary">
+                            <i class="fas fa-users"></i>
+                        </span>
+                        Player List
+                    </h2>
+                </div>
+            </div>
+            <div class="level-right">
+                <div class="level-item">
+                    {% if booking.booking_date > today %}
+                    <button type="button" class="button is-success" onclick="openAddPlayerModal()">
+                        <span class="icon">
+                            <i class="fas fa-user-plus"></i>
+                        </span>
+                        <span>Add Player</span>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
         
         {% if players %}
         <div class="table-container">
@@ -257,6 +275,38 @@
         {{ csrf_form.hidden_tag() }}
         <input type="hidden" name="player_id" id="player-id-input">
     </form>
+    
+    <!-- Hidden form for adding players -->
+    <form method="POST" action="{{ url_for('main.add_rollup_player', booking_id=booking.id) }}" id="add-player-form" style="display: none;">
+        {{ csrf_form.hidden_tag() }}
+        <input type="hidden" name="member_id" id="member-id-input">
+    </form>
+</div>
+
+<!-- Modal for adding players -->
+<div class="modal" id="add-player-modal">
+    <div class="modal-background" onclick="closeAddPlayerModal()"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Add Player to Roll-Up</p>
+            <button class="delete" onclick="closeAddPlayerModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <div class="field">
+                <label class="label">Search Members</label>
+                <div class="control">
+                    <input class="input" type="text" id="member-search" placeholder="Type member name to search...">
+                </div>
+            </div>
+            
+            <div id="member-search-results" class="content">
+                <p class="has-text-grey">Start typing to search for members...</p>
+            </div>
+        </section>
+        <footer class="modal-card-foot">
+            <button class="button" onclick="closeAddPlayerModal()">Cancel</button>
+        </footer>
+    </div>
 </div>
 
 <script>
@@ -272,5 +322,89 @@ function confirmRemovePlayer(playerId, playerName) {
         document.getElementById('remove-player-form').submit();
     }
 }
+
+function openAddPlayerModal() {
+    document.getElementById('add-player-modal').classList.add('is-active');
+    document.getElementById('member-search').focus();
+}
+
+function closeAddPlayerModal() {
+    document.getElementById('add-player-modal').classList.remove('is-active');
+    document.getElementById('member-search').value = '';
+    document.getElementById('member-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+}
+
+function addPlayerToRollup(memberId) {
+    document.getElementById('member-id-input').value = memberId;
+    document.getElementById('add-player-form').submit();
+}
+
+// Member search functionality
+let searchTimeout;
+document.getElementById('member-search').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        document.getElementById('member-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/api/search_members?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('member-search-results');
+                
+                if (data.success && data.members.length > 0) {
+                    // Get list of current player IDs to exclude them
+                    const currentPlayerIds = {{ players | map(attribute='member.id') | list | tojson }};
+                    
+                    // Filter out members who are already in the roll-up
+                    const availableMembers = data.members.filter(member => !currentPlayerIds.includes(member.id));
+                    
+                    if (availableMembers.length > 0) {
+                        let html = '<div class="columns is-multiline">';
+                        availableMembers.forEach(member => {
+                            html += `
+                                <div class="column is-half">
+                                    <div class="box is-clickable" onclick="addPlayerToRollup(${member.id})" style="cursor: pointer;">
+                                        <div class="media">
+                                            <div class="media-content">
+                                                <p class="has-text-weight-semibold">${member.firstname} ${member.lastname}</p>
+                                                <p class="is-size-7 has-text-grey">${member.status} Member</p>
+                                            </div>
+                                            <div class="media-right">
+                                                <span class="icon has-text-success">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        resultsDiv.innerHTML = html;
+                    } else {
+                        resultsDiv.innerHTML = '<p class="has-text-grey">All matching members are already in this roll-up.</p>';
+                    }
+                } else {
+                    resultsDiv.innerHTML = '<p class="has-text-grey">No members found matching your search.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error searching members:', error);
+                document.getElementById('member-search-results').innerHTML = '<p class="has-text-danger">Error searching members. Please try again.</p>';
+            });
+    }, 300);
+});
+
+// Handle ESC key to close modal
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeAddPlayerModal();
+    }
+});
 </script>
 {% endblock %}

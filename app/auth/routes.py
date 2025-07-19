@@ -182,7 +182,7 @@ def profile():
     User profile page - view and edit profile information
     """
     try:
-        form = EditProfileForm()
+        form = EditProfileForm(current_user.email)
         
         if form.validate_on_submit():
             # Update profile information
@@ -211,12 +211,12 @@ def profile():
             form.share_email.data = current_user.share_email
             form.share_phone.data = current_user.share_phone
         
-        return render_template('profile.html', form=form)
+        return render_template('edit_profile.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in profile route: {str(e)}")
         flash('An error occurred while loading your profile.', 'error')
-        return render_template('profile.html', form=EditProfileForm())
+        return render_template('edit_profile.html', form=EditProfileForm(current_user.email))
 
 
 @bp.route('/change_password', methods=['GET', 'POST'])

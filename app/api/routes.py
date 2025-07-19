@@ -48,8 +48,10 @@ def search_members():
                 'id': member.id,
                 'firstname': member.firstname,
                 'lastname': member.lastname,
-                'email': member.email if member.share_email else None,
-                'phone': member.phone if member.share_phone else None,
+                'email': member.email,
+                'phone': member.phone,
+                'share_email': member.share_email,
+                'share_phone': member.share_phone,
                 'status': member.status
             })
         

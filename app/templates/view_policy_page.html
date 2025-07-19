@@ -25,7 +25,7 @@
                     </p>
                     {% if current_user.is_authenticated and current_user.is_admin %}
                     <p class="mt-2">
-                        <a href="{{ url_for('edit_policy_page', policy_page_id=policy_page.id) }}" class="button is-small is-outlined">
+                        <a href="{{ url_for('admin.edit_policy_page', policy_page_id=policy_page.id) }}" class="button is-small is-outlined">
                             <span class="icon is-small">
                                 <i class="fas fa-edit"></i>
                             </span>

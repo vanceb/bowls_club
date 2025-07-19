@@ -1,5 +1,5 @@
 ---
-author: svb
+author: 1
 description: How we collect, use, and protect your personal information
 is_active: true
 show_in_footer: true
@@ -63,8 +63,8 @@ As a member, you have the following rights regarding your personal information:
 
 If you have questions about this privacy policy or wish to exercise your rights, please contact:
 
-- **Club Secretary:** secretary@bowlsclub.org
-- **Data Protection Officer:** privacy@bowlsclub.org
+- **Club Secretary:** secretary@bowls-club.org
+- **Data Protection Officer:** privacy@bowls-club.org
 
 ## Changes to This Policy
 

@@ -535,7 +535,10 @@ def manage_policy_pages():
             sa.select(PolicyPage).order_by(PolicyPage.sort_order, PolicyPage.title)
         ).all()
         
-        return render_template('admin/manage_policy_pages.html', policy_pages=policy_pages)
+        # Create a simple form for CSRF protection
+        csrf_form = FlaskForm()
+        
+        return render_template('admin/manage_policy_pages.html', policy_pages=policy_pages, csrf_form=csrf_form)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_policy_pages: {str(e)}")
@@ -730,6 +733,244 @@ def delete_post(post_id):
         current_app.logger.error(f"Error in delete_post: {str(e)}")
         flash('An error occurred while deleting the post.', 'error')
         return redirect(url_for('admin.manage_posts'))
+
+
+@bp.route('/create_policy_page', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def create_policy_page():
+    """
+    Admin interface for creating policy pages
+    """
+    try:
+        from app.forms import PolicyPageForm
+        from app.utils import generate_secure_filename, get_secure_policy_page_path
+        import yaml
+        import os
+        from markdown2 import markdown
+        
+        form = PolicyPageForm()
+        
+        if form.validate_on_submit():
+            # Check if slug already exists
+            existing_page = db.session.scalar(
+                sa.select(PolicyPage).where(PolicyPage.slug == form.slug.data)
+            )
+            if existing_page:
+                flash('A policy page with this URL slug already exists. Please choose a different slug.', 'error')
+                return render_template('admin/policy_page_form.html', form=form, title="Create Policy Page")
+            
+            # Generate secure filenames using UUID
+            markdown_filename = generate_secure_filename(form.title.data, '.md')
+            html_filename = generate_secure_filename(form.title.data, '.html')
+            
+            # Save metadata to the database
+            policy_page = PolicyPage(
+                title=form.title.data,
+                slug=form.slug.data,
+                description=form.description.data,
+                is_active=form.is_active.data,
+                show_in_footer=form.show_in_footer.data,
+                sort_order=form.sort_order.data or 0,
+                author_id=current_user.id,
+                markdown_filename=markdown_filename,
+                html_filename=html_filename
+            )
+            db.session.add(policy_page)
+            db.session.commit()
+            
+            # Audit log the policy page creation
+            audit_log_create('PolicyPage', policy_page.id, f'Created policy page: {policy_page.title}',
+                            {'slug': policy_page.slug, 'is_active': policy_page.is_active})
+            
+            # Save content to secure storage
+            policy_dir = current_app.config['POLICY_PAGES_STORAGE_PATH']
+            os.makedirs(policy_dir, exist_ok=True)
+            markdown_path = get_secure_policy_page_path(markdown_filename)
+            html_path = get_secure_policy_page_path(html_filename)
+            
+            # Validate secure paths
+            if not markdown_path or not html_path:
+                flash('Error creating secure file paths.', 'error')
+                return render_template('admin/policy_page_form.html', form=form, title="Create Policy Page")
+            
+            # Create metadata dictionary and serialize to YAML
+            metadata_dict = {
+                'title': policy_page.title,
+                'slug': policy_page.slug,
+                'description': policy_page.description,
+                'is_active': policy_page.is_active,
+                'show_in_footer': policy_page.show_in_footer,
+                'sort_order': policy_page.sort_order,
+                'author': policy_page.author_id
+            }
+            metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
+            
+            # Write markdown file with metadata
+            with open(markdown_path, 'w', encoding='utf-8') as f:
+                f.write(metadata + "\n" + form.content.data)
+            
+            # Convert to HTML and write HTML file
+            html_content = markdown(form.content.data, extras=['fenced-code-blocks', 'tables'])
+            sanitized_html = sanitize_html_content(html_content)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(sanitized_html)
+            
+            flash('Policy page created successfully!', 'success')
+            return redirect(url_for('admin.manage_policy_pages'))
+        
+        return render_template('admin/policy_page_form.html', form=form, title="Create Policy Page")
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in create_policy_page: {str(e)}")
+        flash('An error occurred while creating the policy page.', 'error')
+        return redirect(url_for('admin.manage_policy_pages'))
+
+
+@bp.route('/edit_policy_page/<int:policy_page_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_policy_page(policy_page_id):
+    """
+    Admin interface for editing policy pages
+    """
+    try:
+        from app.forms import PolicyPageForm
+        from app.utils import get_secure_policy_page_path, parse_metadata_from_markdown
+        import yaml
+        import os
+        from markdown2 import markdown
+        
+        policy_page = db.session.get(PolicyPage, policy_page_id)
+        if not policy_page:
+            flash('Policy page not found.', 'error')
+            return redirect(url_for('admin.manage_policy_pages'))
+        
+        form = PolicyPageForm(obj=policy_page)
+        
+        if form.validate_on_submit():
+            # Check if slug already exists (but not for this page)
+            existing_page = db.session.scalar(
+                sa.select(PolicyPage).where(PolicyPage.slug == form.slug.data, PolicyPage.id != policy_page_id)
+            )
+            if existing_page:
+                flash('A policy page with this URL slug already exists. Please choose a different slug.', 'error')
+                return render_template('admin/policy_page_form.html', form=form, title="Edit Policy Page")
+            
+            # Capture changes for audit log
+            changes = get_model_changes(policy_page, {
+                'title': form.title.data,
+                'slug': form.slug.data,
+                'description': form.description.data,
+                'is_active': form.is_active.data,
+                'show_in_footer': form.show_in_footer.data,
+                'sort_order': form.sort_order.data
+            })
+            
+            # Update policy page metadata
+            policy_page.title = form.title.data
+            policy_page.slug = form.slug.data
+            policy_page.description = form.description.data
+            policy_page.is_active = form.is_active.data
+            policy_page.show_in_footer = form.show_in_footer.data
+            policy_page.sort_order = form.sort_order.data or 0
+            
+            db.session.commit()
+            
+            # Audit log the policy page update
+            audit_log_update('PolicyPage', policy_page.id, f'Updated policy page: {policy_page.title}', changes)
+            
+            # Update the files if content changed
+            if hasattr(form, 'content') and form.content.data:
+                markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+                html_path = get_secure_policy_page_path(policy_page.html_filename)
+                
+                if markdown_path and html_path:
+                    # Create metadata dictionary and serialize to YAML
+                    metadata_dict = {
+                        'title': policy_page.title,
+                        'slug': policy_page.slug,
+                        'description': policy_page.description,
+                        'is_active': policy_page.is_active,
+                        'show_in_footer': policy_page.show_in_footer,
+                        'sort_order': policy_page.sort_order,
+                        'author': policy_page.author_id
+                    }
+                    metadata = "---\n" + yaml.dump(metadata_dict, default_flow_style=False) + "---\n"
+                    
+                    # Write updated markdown file
+                    with open(markdown_path, 'w', encoding='utf-8') as f:
+                        f.write(metadata + "\n" + form.content.data)
+                    
+                    # Convert to HTML and write HTML file
+                    html_content = markdown(form.content.data, extras=['fenced-code-blocks', 'tables'])
+                    sanitized_html = sanitize_html_content(html_content)
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(sanitized_html)
+            
+            flash('Policy page updated successfully!', 'success')
+            return redirect(url_for('admin.manage_policy_pages'))
+        
+        # For GET requests, populate form with existing data and content
+        if request.method == 'GET':
+            markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+            if markdown_path and os.path.exists(markdown_path):
+                with open(markdown_path, 'r', encoding='utf-8') as f:
+                    markdown_content = f.read()
+                metadata, content = parse_metadata_from_markdown(markdown_content)
+                if hasattr(form, 'content'):
+                    form.content.data = content
+        
+        return render_template('admin/policy_page_form.html', form=form, title="Edit Policy Page", policy_page=policy_page)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in edit_policy_page: {str(e)}")
+        flash('An error occurred while editing the policy page.', 'error')
+        return redirect(url_for('admin.manage_policy_pages'))
+
+
+@bp.route('/delete_policy_page/<int:policy_page_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_policy_page(policy_page_id):
+    """
+    Admin interface for deleting policy pages
+    """
+    try:
+        from app.utils import get_secure_policy_page_path
+        import os
+        
+        policy_page = db.session.get(PolicyPage, policy_page_id)
+        if not policy_page:
+            flash('Policy page not found.', 'error')
+            return redirect(url_for('admin.manage_policy_pages'))
+        
+        # Capture policy page info for audit log
+        policy_page_info = f'{policy_page.title} (slug: {policy_page.slug})'
+        
+        # Delete associated files
+        markdown_path = get_secure_policy_page_path(policy_page.markdown_filename)
+        html_path = get_secure_policy_page_path(policy_page.html_filename)
+        
+        if markdown_path and os.path.exists(markdown_path):
+            os.remove(markdown_path)
+        if html_path and os.path.exists(html_path):
+            os.remove(html_path)
+        
+        # Delete from database
+        db.session.delete(policy_page)
+        db.session.commit()
+        
+        # Audit log the policy page deletion
+        audit_log_delete('PolicyPage', policy_page_id, f'Deleted policy page: {policy_page_info}')
+        
+        flash('Policy page deleted successfully!', 'success')
+        return redirect(url_for('admin.manage_policy_pages'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in delete_policy_page: {str(e)}")
+        flash('An error occurred while deleting the policy page.', 'error')
+        return redirect(url_for('admin.manage_policy_pages'))
 
 
 @bp.route('/test')

@@ -45,8 +45,18 @@
                         <td>{{ page.sort_order }}</td>
                         <td>
                             <div class="buttons are-small">
-                                <button class="button is-primary is-small">Edit</button>
-                                <button class="button is-danger is-small">Delete</button>
+                                <a href="{{ url_for('admin.edit_policy_page', policy_page_id=page.id) }}" class="button is-primary is-small">
+                                    <span class="icon">
+                                        <i class="fas fa-edit"></i>
+                                    </span>
+                                    <span>Edit</span>
+                                </a>
+                                <button class="button is-danger is-small" onclick="deletePolicyPage({{ page.id }}, '{{ page.title }}')">
+                                    <span class="icon">
+                                        <i class="fas fa-trash"></i>
+                                    </span>
+                                    <span>Delete</span>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -63,13 +73,28 @@
     
     <div class="field">
         <div class="control">
-            <button class="button is-primary">
+            <a href="{{ url_for('admin.create_policy_page') }}" class="button is-primary">
                 <span class="icon">
                     <i class="fas fa-plus"></i>
                 </span>
                 <span>Create Policy Page</span>
-            </button>
+            </a>
         </div>
     </div>
 </div>
+
+<!-- Hidden form for policy page deletion -->
+<form method="POST" id="delete-policy-page-form" style="display: none;">
+    {{ csrf_form.hidden_tag() }}
+</form>
+
+<script>
+function deletePolicyPage(pageId, pageTitle) {
+    if (confirm(`Are you sure you want to delete the policy page "${pageTitle}"?\n\nThis action cannot be undone and will permanently remove the page and its files.`)) {
+        const form = document.getElementById('delete-policy-page-form');
+        form.action = `{{ url_for('admin.delete_policy_page', policy_page_id=0) }}`.replace('0', pageId);
+        form.submit();
+    }
+}
+</script>
 {% endblock %}

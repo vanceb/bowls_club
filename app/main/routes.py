@@ -297,7 +297,7 @@ def policy(slug):
         
         # Get the HTML content from file
         from app.utils import get_secure_policy_page_path
-        html_path = get_secure_policy_page_path(policy_page.html_path)
+        html_path = get_secure_policy_page_path(policy_page.html_filename)
         if not html_path:
             abort(404)
         
@@ -310,7 +310,7 @@ def policy(slug):
         # Sanitize HTML content
         sanitized_content = sanitize_html_content(html_content)
         
-        return render_template('policy.html', 
+        return render_template('view_policy_page.html', 
                              policy_page=policy_page, 
                              content=sanitized_content)
     except Exception as e:
@@ -677,6 +677,96 @@ def remove_rollup_player(booking_id):
     except Exception as e:
         current_app.logger.error(f"Error removing player from roll-up {booking_id}: {str(e)}")
         flash('An error occurred while removing the player.', 'error')
+        return redirect(url_for('main.my_games'))
+
+
+@bp.route('/rollup/add_player/<int:booking_id>', methods=['POST'])
+@login_required
+def add_rollup_player(booking_id):
+    """
+    Add a player to a roll-up booking (organizer only)
+    """
+    try:
+        from app.forms import FlaskForm
+        from app.audit import audit_log_create
+        
+        current_app.logger.info(f"Add player request for booking {booking_id} by user {current_user.id}")
+        
+        # Validate CSRF
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            current_app.logger.error(f"CSRF validation failed for add player booking {booking_id}")
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('main.my_games'))
+        
+        # Get the booking
+        booking = db.session.get(Booking, booking_id)
+        if not booking or booking.booking_type != 'rollup':
+            flash('Invalid roll-up booking.', 'error')
+            return redirect(url_for('main.my_games'))
+        
+        # Check if user is the organizer
+        if booking.organizer_id != current_user.id:
+            flash('You are not authorized to modify this roll-up.', 'error')
+            return redirect(url_for('main.my_games'))
+        
+        # Get member ID from form
+        member_id = request.form.get('member_id')
+        current_app.logger.info(f"Received member_id: {member_id}")
+        if not member_id:
+            current_app.logger.error(f"Missing member_id in form data")
+            flash('Missing member information.', 'error')
+            return redirect(url_for('main.manage_rollup', booking_id=booking_id))
+        
+        # Get the member
+        member = db.session.get(Member, int(member_id))
+        if not member:
+            flash('Member not found.', 'error')
+            return redirect(url_for('main.manage_rollup', booking_id=booking_id))
+        
+        # Check if member is already in the roll-up
+        existing_player = db.session.scalar(
+            sa.select(BookingPlayer).where(
+                BookingPlayer.booking_id == booking_id,
+                BookingPlayer.member_id == member_id
+            )
+        )
+        if existing_player:
+            flash(f'{member.firstname} {member.lastname} is already in this roll-up.', 'warning')
+            return redirect(url_for('main.manage_rollup', booking_id=booking_id))
+        
+        # Check roll-up capacity
+        current_players = db.session.scalar(
+            sa.select(sa.func.count(BookingPlayer.id)).where(BookingPlayer.booking_id == booking_id)
+        )
+        max_players = current_app.config.get('ROLLUP_MAX_PLAYERS', 8)
+        if current_players >= max_players:
+            flash(f'Roll-up is full (maximum {max_players} players).', 'error')
+            return redirect(url_for('main.manage_rollup', booking_id=booking_id))
+        
+        # Add the player
+        new_player = BookingPlayer(
+            booking_id=booking_id,
+            member_id=member_id,
+            status='pending',
+            invited_by=current_user.id,
+            response_at=datetime.utcnow()
+        )
+        db.session.add(new_player)
+        db.session.commit()
+        
+        # Audit log
+        player_name = f"{member.firstname} {member.lastname}"
+        audit_log_create('BookingPlayer', new_player.id, 
+                        f'Added player {player_name} to roll-up booking {booking_id}')
+        
+        current_app.logger.info(f"Successfully added player {player_name} to booking {booking_id}")
+        flash(f'{player_name} has been added to the roll-up.', 'success')
+        return redirect(url_for('main.manage_rollup', booking_id=booking_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding player to roll-up {booking_id}: {str(e)}")
+        flash('An error occurred while adding the player.', 'error')
         return redirect(url_for('main.my_games'))
 
 
