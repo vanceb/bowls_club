@@ -94,13 +94,16 @@ def register_template_context_processors(app):
     """Register template context processors"""
     
     @app.context_processor
-    def inject_admin_menu():
-        """Make filtered admin menu available to all templates"""
+    def inject_menu_items():
+        """Make menu items and filtered admin menu available to all templates"""
         from flask_login import current_user
         from app.utils import filter_admin_menu_by_roles
         
         filtered_admin_menu = filter_admin_menu_by_roles(current_user)
-        return dict(filtered_admin_menu_items=filtered_admin_menu)
+        return dict(
+            menu_items=app.config['MENU_ITEMS'],
+            filtered_admin_menu_items=filtered_admin_menu
+        )
 
     @app.context_processor
     def inject_footer_policy_pages():

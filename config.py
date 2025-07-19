@@ -114,8 +114,8 @@ class Config:
         "Neutral": "neutral"
     }
     
-    # Standard roles for club management
-    STANDARD_ROLES = [
+    # Core roles for club management (cannot be edited or deleted)
+    CORE_ROLES = [
         'User Manager',
         'Content Manager', 
         'Event Manager'

@@ -1,4 +1,5 @@
 # Main public routes for the Bowls Club application
+import os
 from datetime import datetime, timedelta, date
 from flask import render_template, flash, redirect, url_for, request, abort, jsonify, current_app
 from flask_login import current_user, login_required
@@ -9,11 +10,12 @@ from app.main import bp
 from app import db
 from app.models import Member, Post, Booking, Event, PolicyPage, BookingPlayer
 from app.utils import sanitize_html_content, get_secure_post_path
-from app.forms import RollUpResponseForm
+from app.forms import RollUpResponseForm, FlaskForm
 
 
 @bp.route("/")
 @bp.route("/index")
+@login_required
 def index():
     """
     Home page that displays recent posts and upcoming events
@@ -62,6 +64,7 @@ def index():
 
 
 @bp.route("/post/<int:post_id>")
+@login_required
 def post(post_id):
     """
     Display a single post with full content
@@ -70,30 +73,43 @@ def post(post_id):
         # Get post by ID
         post = db.session.get(Post, post_id)
         if not post:
+            current_app.logger.error(f"Post not found with ID: {post_id}")
             abort(404)
         
-        # Get the HTML content from file - use markdown filename for now
-        # This will need to be updated when we have the proper file paths
-        html_path = f"posts/{post.markdown_filename.replace('.md', '.html')}"
+        current_app.logger.info(f"Found post: {post.title}, HTML file: {post.html_filename}")
+        
+        # Get the HTML content from secure storage using utility function
+        html_path = get_secure_post_path(post.html_filename)
+        
         if not html_path:
+            current_app.logger.error(f"Could not get secure path for HTML file: {post.html_filename}")
             abort(404)
-        
+            
         try:
             with open(html_path, 'r', encoding='utf-8') as f:
                 html_content = f.read()
         except FileNotFoundError:
+            current_app.logger.error(f"Post HTML file not found: {html_path}")
             abort(404)
+        except Exception as e:
+            current_app.logger.error(f"Error reading HTML file {html_path}: {str(e)}")
+            abort(500)
         
         # Sanitize HTML content
-        sanitized_content = sanitize_html_content(html_content)
+        try:
+            sanitized_content = sanitize_html_content(html_content)
+        except Exception as e:
+            current_app.logger.error(f"Error sanitizing HTML content: {str(e)}")
+            sanitized_content = html_content  # Fallback to unsanitized content
         
-        return render_template('post.html', post=post, content=sanitized_content)
+        return render_template('view_post.html', post=post, content=sanitized_content)
     except Exception as e:
         current_app.logger.error(f"Error displaying post {post_id}: {str(e)}")
         abort(500)
 
 
 @bp.route('/members')
+@login_required
 def members():
     """
     Display paginated list of active members
@@ -131,6 +147,7 @@ def members():
 
 
 @bp.route('/bookings')
+@login_required
 def bookings():
     """
     Display bookings calendar/table view
@@ -157,6 +174,7 @@ def bookings():
 
 
 @bp.route('/get_bookings/<string:selected_date>')
+@login_required
 def get_bookings(selected_date):
     """
     Get bookings for a specific date (AJAX endpoint)
@@ -203,6 +221,7 @@ def get_bookings(selected_date):
 
 
 @bp.route('/get_bookings_range/<string:start_date>/<string:end_date>')
+@login_required
 def get_bookings_range(start_date, end_date):
     """
     Get bookings for a date range (AJAX endpoint)
@@ -237,7 +256,7 @@ def get_bookings_range(start_date, end_date):
                 'id': booking.id,
                 'rink_count': booking.rink_count,
                 'booking_type': booking.booking_type,
-                'organizer': f"{booking.organizer.firstname} {booking.organizer.lastname}",
+                'organizer': f"{booking.organizer.firstname} {booking.organizer.lastname}" if booking.organizer else "Unknown",
                 'organizer_notes': booking.organizer_notes
             }
             
@@ -261,6 +280,7 @@ def get_bookings_range(start_date, end_date):
 
 
 @bp.route('/policy/<slug>')
+@login_required
 def policy(slug):
     """
     Display a policy page by slug
@@ -307,7 +327,6 @@ def my_games():
     try:
         # Handle POST requests for availability confirmation
         if request.method == 'POST':
-            from app.forms import FlaskForm
             csrf_form = FlaskForm()
             
             if csrf_form.validate_on_submit():
@@ -348,27 +367,24 @@ def my_games():
         today = date.today()
         
         # Get team assignments for current user
+        from app.models import BookingTeam, Booking
         assignments = db.session.scalars(
             sa.select(BookingTeamMember)
             .join(BookingTeamMember.booking_team)
-            .join(BookingTeamMember.booking_team.has(booking=True))
+            .join(BookingTeam.booking)
             .where(BookingTeamMember.member_id == current_user.id)
-            .order_by(BookingTeamMember.booking_team.booking.booking_date)
+            .order_by(Booking.booking_date)
         ).all()
         
-        # Get roll-up invitations for current user
+        # Get roll-up invitations for current user (include organizer's own rollups)
         roll_up_invitations = db.session.scalars(
             sa.select(BookingPlayer)
             .join(BookingPlayer.booking)
-            .where(
-                BookingPlayer.member_id == current_user.id,
-                BookingPlayer.member_id != BookingPlayer.booking.organizer_id  # Not organizer
-            )
-            .order_by(BookingPlayer.booking.booking_date)
+            .where(BookingPlayer.member_id == current_user.id)
+            .order_by(Booking.booking_date)
         ).all()
         
         # Create CSRF form for POST actions
-        from app.forms import FlaskForm
         csrf_form = FlaskForm()
         
         return render_template('my_games.html', 
@@ -418,6 +434,7 @@ def book_rollup():
                 booking_id=booking.id,
                 member_id=current_user.id,
                 status='confirmed',
+                invited_by=current_user.id,  # Organizer invites themselves
                 response_at=datetime.utcnow()
             )
             db.session.add(organizer_player)
@@ -430,7 +447,8 @@ def book_rollup():
                         invited_player = BookingPlayer(
                             booking_id=booking.id,
                             member_id=player_id,
-                            status='pending'
+                            status='pending',
+                            invited_by=current_user.id  # Organizer invites other players
                         )
                         db.session.add(invited_player)
             
@@ -527,7 +545,7 @@ def manage_rollup(booking_id):
             sa.select(BookingPlayer)
             .join(BookingPlayer.member)
             .where(BookingPlayer.booking_id == booking_id)
-            .order_by(BookingPlayer.member.firstname, BookingPlayer.member.lastname)
+            .order_by(Member.firstname, Member.lastname)
         ).all()
         
         # Get session name

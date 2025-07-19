@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Manage Policy Pages</h1>
+    <p class="subtitle">Admin interface for managing policy pages and legal documents</p>
+    
+    <div class="box">
+        <h2 class="title is-4">Policy Pages ({{ policy_pages|length }})</h2>
+        
+        {% if policy_pages %}
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Slug</th>
+                        <th>Active</th>
+                        <th>In Footer</th>
+                        <th>Sort Order</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for page in policy_pages %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('main.policy', slug=page.slug) }}">{{ page.title }}</a>
+                        </td>
+                        <td><code>{{ page.slug }}</code></td>
+                        <td>
+                            {% if page.is_active %}
+                            <span class="tag is-success">Active</span>
+                            {% else %}
+                            <span class="tag is-warning">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if page.show_in_footer %}
+                            <span class="tag is-info">Yes</span>
+                            {% else %}
+                            <span class="tag is-light">No</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ page.sort_order }}</td>
+                        <td>
+                            <div class="buttons are-small">
+                                <button class="button is-primary is-small">Edit</button>
+                                <button class="button is-danger is-small">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="notification is-info">
+            <p>No policy pages found.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="field">
+        <div class="control">
+            <button class="button is-primary">
+                <span class="icon">
+                    <i class="fas fa-plus"></i>
+                </span>
+                <span>Create Policy Page</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

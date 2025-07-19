@@ -98,10 +98,11 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Game Details</th>
-                        <th>Type</th>
-                        <th>Team/Role</th>
-                        <th>Actions</th>
+                        <th style="width: 25%;">Game Details</th>
+                        <th style="width: 12%;">Type</th>
+                        <th style="width: 18%;">Team/Role</th>
+                        <th style="width: 20%;">Status</th>
+                        <th style="width: 25%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -123,6 +124,14 @@
                         <td>
                             <strong>{{ assignment.booking_team.team_name }}</strong><br>
                             <small>{{ assignment.position }}</small>
+                        </td>
+                        <td>
+                            <span class="tag is-warning">
+                                <span class="icon">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                                <span>Pending</span>
+                            </span>
                         </td>
                         <td>
                             <div class="buttons are-small">
@@ -170,8 +179,16 @@
                             <small>Organizer</small>
                         </td>
                         <td>
+                            <span class="tag is-warning">
+                                <span class="icon">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                                <span>Pending</span>
+                            </span>
+                        </td>
+                        <td>
                             <div class="buttons are-small">
-                                <a href="{{ url_for('respond_to_rollup', booking_id=invitation.booking.id, action='accept') }}" 
+                                <a href="{{ url_for('main.respond_to_rollup', booking_id=invitation.booking.id, action='accept') }}" 
                                    class="button is-small is-success"
                                    onclick="return confirm('Accept this roll-up invitation?')">
                                     <span class="icon">
@@ -179,7 +196,7 @@
                                     </span>
                                     <span>Accept</span>
                                 </a>
-                                <a href="{{ url_for('respond_to_rollup', booking_id=invitation.booking.id, action='decline') }}" 
+                                <a href="{{ url_for('main.respond_to_rollup', booking_id=invitation.booking.id, action='decline') }}" 
                                    class="button is-small is-danger"
                                    onclick="return confirm('Decline this roll-up invitation?')">
                                     <span class="icon">
@@ -213,11 +230,11 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Game Details</th>
-                        <th>Type</th>
-                        <th>Team/Role</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th style="width: 25%;">Game Details</th>
+                        <th style="width: 12%;">Type</th>
+                        <th style="width: 18%;">Team/Role</th>
+                        <th style="width: 20%;">Status</th>
+                        <th style="width: 25%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -288,7 +305,7 @@
                         </td>
                         <td>
                             {% if invitation.booking.organizer_id == current_user.id %}
-                            <a href="{{ url_for('manage_rollup', booking_id=invitation.booking.id) }}" 
+                            <a href="{{ url_for('main.manage_rollup', booking_id=invitation.booking.id) }}" 
                                class="button is-small is-primary">
                                 <span class="icon">
                                     <i class="fas fa-cog"></i>
@@ -321,10 +338,11 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Game Details</th>
-                        <th>Type</th>
-                        <th>Team/Role</th>
-                        <th>Status</th>
+                        <th style="width: 25%;">Game Details</th>
+                        <th style="width: 12%;">Type</th>
+                        <th style="width: 18%;">Team/Role</th>
+                        <th style="width: 20%;">Status</th>
+                        <th style="width: 25%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -358,7 +376,8 @@
                             <small class="has-text-grey">
                                 {{ assignment.confirmed_at.strftime('%b %d at %I:%M %p') }}
                             </small>
-                            <br>
+                        </td>
+                        <td>
                             <small class="has-text-grey">
                                 Contact event organizer to make changes
                             </small>
@@ -392,6 +411,11 @@
                                 {{ invitation.response_at.strftime('%b %d at %I:%M %p') }}
                             </small>
                         </td>
+                        <td>
+                            <small class="has-text-grey">
+                                Contact event organizer to make changes
+                            </small>
+                        </td>
                         {% endif %}
                     </tr>
                     {% endfor %}
@@ -416,10 +440,11 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th>Game Details</th>
-                        <th>Type</th>
-                        <th>Team/Role</th>
-                        <th>Status</th>
+                        <th style="width: 25%;">Game Details</th>
+                        <th style="width: 12%;">Type</th>
+                        <th style="width: 18%;">Team/Role</th>
+                        <th style="width: 20%;">Status</th>
+                        <th style="width: 25%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -466,6 +491,11 @@
                                 </span>
                             {% endif %}
                         </td>
+                        <td>
+                            <small class="has-text-grey">
+                                Game completed
+                            </small>
+                        </td>
                         {% else %}
                         {% set invitation = item.data %}
                         <td>
@@ -506,6 +536,11 @@
                                     <span>No Response</span>
                                 </span>
                             {% endif %}
+                        </td>
+                        <td>
+                            <small class="has-text-grey">
+                                Game completed
+                            </small>
                         </td>
                         {% endif %}
                     </tr>

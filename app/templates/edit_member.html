@@ -143,7 +143,7 @@
     <div class="field">
         <label class="label">Password Management</label>
         <div class="control">
-            <a href="{{ url_for('admin_reset_password', member_id=member.id) }}" class="button is-warning">
+            <a href="{{ url_for('admin.admin_reset_password', member_id=member.id) }}" class="button is-warning">
                 <span class="icon">
                     <i class="fas fa-key"></i>
                 </span>
@@ -154,7 +154,7 @@
     </div>
 
     <div class="buttons">
-        <a class="button" href="{{ url_for('manage_members') }}">Cancel</a>
+        <a class="button" href="{{ url_for('admin.manage_members') }}">Cancel</a>
         {{ form.submit_update(class="button is-primary") }}
         <button type="button" class="button is-danger" id="delete-button">
             <span class="icon">

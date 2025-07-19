@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    {% if post %}
+    <h1 class="title">Edit Post</h1>
+    <p class="subtitle">Edit existing news post or announcement</p>
+    {% else %}
+    <h1 class="title">Write Post</h1>
+    <p class="subtitle">Create a new news post or announcement</p>
+    {% endif %}
+    
+    <div class="box">
+        {% if form %}
+        <!-- Using Flask-WTF form object (for edit) -->
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            <div class="field">
+                <label class="label">{{ form.title.label }}</label>
+                <div class="control">
+                    {{ form.title(class="input") }}
+                </div>
+                {% for error in form.title.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            
+            <div class="field">
+                <label class="label">{{ form.summary.label }}</label>
+                <div class="control">
+                    {{ form.summary(class="textarea", rows="3") }}
+                </div>
+                {% for error in form.summary.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">{{ form.publish_on.label }}</label>
+                        <div class="control">
+                            {{ form.publish_on(class="input") }}
+                        </div>
+                        {% for error in form.publish_on.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">{{ form.expires_on.label }}</label>
+                        <div class="control">
+                            {{ form.expires_on(class="input") }}
+                        </div>
+                        {% for error in form.expires_on.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            {% if form.pin_until %}
+            <div class="field">
+                <label class="label">{{ form.pin_until.label }}</label>
+                <div class="control">
+                    {{ form.pin_until(class="input") }}
+                </div>
+                {% for error in form.pin_until.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="field">
+                <label class="label">{{ form.content.label }}</label>
+                <div class="control">
+                    {{ form.content(class="textarea", rows="15") }}
+                </div>
+                {% for error in form.content.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            
+            <div class="field">
+                <label class="label">{{ form.tags.label }}</label>
+                <div class="control">
+                    {{ form.tags(class="input", placeholder="Comma-separated tags") }}
+                </div>
+                {% for error in form.tags.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            
+            <div class="field is-grouped">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-save"></i>
+                        </span>
+                        <span>{% if post %}Update Post{% else %}Publish Post{% endif %}</span>
+                    </button>
+                </div>
+                <div class="control">
+                    <a href="{{ url_for('admin.manage_posts') }}" class="button is-light">Cancel</a>
+                </div>
+            </div>
+        </form>
+        {% else %}
+        <!-- Using raw form fields (for create) -->
+        <form method="POST">
+            {{ csrf_form.hidden_tag() }}
+            <div class="field">
+                <label class="label">Title</label>
+                <div class="control">
+                    <input class="input" type="text" name="title" placeholder="Post title" required>
+                </div>
+            </div>
+            
+            <div class="field">
+                <label class="label">Summary</label>
+                <div class="control">
+                    <textarea class="textarea" name="summary" placeholder="Brief summary of the post" rows="3" required></textarea>
+                </div>
+            </div>
+            
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Publish Date</label>
+                        <div class="control">
+                            <input class="input" type="date" name="publish_on" value="{{ default_publish_on }}" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Expires Date</label>
+                        <div class="control">
+                            <input class="input" type="date" name="expires_on" value="{{ default_expires_on }}" required>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="field">
+                <label class="label">Content</label>
+                <div class="control">
+                    <textarea class="textarea" name="content" placeholder="Post content (Markdown supported)" rows="15" required></textarea>
+                </div>
+            </div>
+            
+            <div class="field">
+                <label class="label">Tags (optional)</label>
+                <div class="control">
+                    <input class="input" type="text" name="tags" placeholder="Comma-separated tags">
+                </div>
+            </div>
+            
+            <div class="field is-grouped">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-save"></i>
+                        </span>
+                        <span>Publish Post</span>
+                    </button>
+                </div>
+                <div class="control">
+                    <a href="{{ url_for('admin.manage_posts') }}" class="button is-light">Cancel</a>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

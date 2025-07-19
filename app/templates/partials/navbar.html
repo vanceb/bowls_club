@@ -20,29 +20,31 @@
   <div id="navbar-menu" class="navbar-menu">
     <div class="navbar-start">
 
-      <!-- Create the menu items -->
-      {% for item in menu_items %}
-        {% if item.submenu %}
-          <div class="navbar-item has-dropdown is-hoverable">
-            <a class="navbar-link">
+      <!-- Create the menu items (only for authenticated users) -->
+      {% if current_user.is_authenticated %}
+        {% for item in menu_items %}
+          {% if item.submenu %}
+            <div class="navbar-item has-dropdown is-hoverable">
+              <a class="navbar-link">
+                {{ item.name }}
+              </a>
+              <div class="navbar-dropdown">
+                {% for subitem in item.submenu %}
+                  {% if subitem is none %}
+                    <hr class="navbar-divider">
+                  {% else %}
+                    <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          {% else %}
+            <a class="navbar-item" href="{{ url_for(item.link) }}">
               {{ item.name }}
             </a>
-            <div class="navbar-dropdown">
-              {% for subitem in item.submenu %}
-                {% if subitem is none %}
-                  <hr class="navbar-divider">
-                {% else %}
-                  <a href="{{ url_for(subitem.link) }}" class="navbar-item">{{ subitem.name }}</a>
-                {% endif %}
-              {% endfor %}
-            </div>
-          </div>
-        {% else %}
-          <a class="navbar-item" href="{{ url_for(item.link) }}">
-            {{ item.name }}
-          </a>
-        {% endif %}
-      {% endfor %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
 
       <!-- Add a Login / Logout item to the end of the menu -->
       {% if current_user.is_anonymous %}

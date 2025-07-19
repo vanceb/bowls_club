@@ -218,7 +218,7 @@
         
         <div class="field is-grouped">
             <div class="control">
-                <a href="{{ url_for('my_games') }}" class="button is-primary">
+                <a href="{{ url_for('main.my_games') }}" class="button is-primary">
                     <span class="icon">
                         <i class="fas fa-arrow-left"></i>
                     </span>
@@ -247,13 +247,13 @@
 
     <!-- Hidden form for cancellation -->
     {% if booking.booking_date > today %}
-    <form method="POST" action="{{ url_for('cancel_rollup', booking_id=booking.id) }}" id="cancel-form" style="display: none;">
+    <form method="POST" action="{{ url_for('main.cancel_rollup', booking_id=booking.id) }}" id="cancel-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
     </form>
     {% endif %}
     
     <!-- Hidden form for player removal -->
-    <form method="POST" action="{{ url_for('remove_rollup_player', booking_id=booking.id) }}" id="remove-player-form" style="display: none;">
+    <form method="POST" action="{{ url_for('main.remove_rollup_player', booking_id=booking.id) }}" id="remove-player-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
         <input type="hidden" name="player_id" id="player-id-input">
     </form>

@@ -103,7 +103,7 @@
                     </span>
                     <span>Create Roll-Up</span>
                 </button>
-                <a href="{{ url_for('my_games') }}" class="button is-light">
+                <a href="{{ url_for('main.my_games') }}" class="button is-light">
                     <span class="icon">
                         <i class="fas fa-arrow-left"></i>
                     </span>
@@ -147,18 +147,32 @@ document.addEventListener('DOMContentLoaded', function() {
     let allMembers = [];
     
     // Fetch initial members data (empty query to get all active members)
-    fetch('/search_members?q=')
-        .then(response => response.json())
+    fetch('/api/search_members?q=')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            allMembers = data.members.filter(member => 
-                member.status === 'Full' || member.status === 'Social' || member.status === 'Life'
-            ).map(member => ({
-                id: member.id,
-                name: `${member.firstname} ${member.lastname}`
-            }));
+            if (data.success) {
+                allMembers = data.members.filter(member => 
+                    member.status === 'Full' || member.status === 'Social' || member.status === 'Life'
+                ).map(member => ({
+                    id: member.id,
+                    name: `${member.firstname} ${member.lastname}`
+                }));
+                console.log(`Loaded ${allMembers.length} members for search`);
+            } else {
+                throw new Error('API returned failure response');
+            }
         })
         .catch(error => {
             console.error('Error loading members:', error);
+            // Show user-friendly error message
+            if (searchResultsList) {
+                searchResultsList.innerHTML = '<p class="has-text-danger">Error loading members for search. Please refresh the page.</p>';
+            }
         });
     
     // Form submission protection
