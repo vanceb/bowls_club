@@ -124,12 +124,16 @@ class Event(db.Model):
     format: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=5)  # Default to "Fours - 2 Wood"
     scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+    has_pool: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
 
     # One-to-many relationship with bookings
     bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
     
     # One-to-many relationship with event teams
     event_teams: so.Mapped[list['EventTeam']] = so.relationship('EventTeam', back_populates='event', cascade='all, delete-orphan')
+    
+    # One-to-one relationship with event pool
+    pool: so.Mapped[Optional['EventPool']] = so.relationship('EventPool', back_populates='event', uselist=False, cascade='all, delete-orphan')
     
     # Many-to-many relationship with event managers (Members with Event Manager role)
     event_managers: so.Mapped[list['Member']] = so.relationship('Member', secondary=event_member_managers, back_populates='managed_events')
@@ -191,6 +195,136 @@ class Event(db.Model):
     def is_ready_for_bookings(self):
         """Check if the event is ready for booking creation"""
         return self.has_teams()  # At minimum, need teams defined
+
+    # Pool-related methods
+    def has_pool_enabled(self):
+        """Check if this event has pool functionality enabled"""
+        return bool(self.has_pool) and self.pool is not None
+    
+    def is_pool_open(self):
+        """Check if the event pool is open for registration"""
+        return self.has_pool_enabled() and self.pool.is_open
+    
+    def get_pool_member_count(self):
+        """Get the number of members registered in the pool"""
+        if not self.has_pool_enabled():
+            return 0
+        return len(self.pool.registrations)
+    
+    def get_registration_status(self):
+        """Get event registration status: 'open', 'closed', 'no_pool'"""
+        if not self.has_pool_enabled():
+            return 'no_pool'
+        return 'open' if self.pool.is_open else 'closed'
+
+
+class EventPool(db.Model):
+    """
+    Event Pool model - manages member registration for events
+    Based on existing event_pools table structure
+    """
+    __tablename__ = 'event_pools'
+
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    event_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=False)
+    is_open: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=True)
+    auto_close_date: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
+    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+    closed_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
+
+    # Relationships
+    event: so.Mapped['Event'] = so.relationship('Event', back_populates='pool')
+    registrations: so.Mapped[list['PoolRegistration']] = so.relationship('PoolRegistration', back_populates='pool', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        status = "Open" if self.is_open else "Closed"
+        return f"<EventPool id={self.id}, event='{self.event.name if self.event else 'Unknown'}', status={status}>"
+
+    def close_pool(self):
+        """Close the pool for new registrations"""
+        if self.is_open:
+            self.is_open = False
+            self.closed_at = datetime.utcnow()
+
+    def reopen_pool(self):
+        """Reopen the pool for new registrations"""
+        if not self.is_open:
+            self.is_open = True
+            self.closed_at = None
+
+    def get_registered_members(self):
+        """Get all members currently registered in the pool"""
+        return [reg.member for reg in self.registrations if reg.status == 'registered']
+
+    def get_available_members(self):
+        """Get all members with 'available' status"""
+        return [reg.member for reg in self.registrations if reg.status == 'available']
+
+    def is_member_registered(self, member_id):
+        """Check if a member is registered in this pool"""
+        return any(reg.member_id == member_id and reg.status in ['registered', 'available'] 
+                  for reg in self.registrations)
+
+    def get_member_registration(self, member_id):
+        """Get the registration record for a specific member"""
+        return next((reg for reg in self.registrations if reg.member_id == member_id), None)
+
+    def get_registration_count(self):
+        """Get the total number of active registrations"""
+        return len([reg for reg in self.registrations if reg.status in ['registered', 'available']])
+
+
+class PoolRegistration(db.Model):
+    """
+    Pool Registration model - tracks individual member registrations in event pools
+    Based on existing pool_members table structure
+    """
+    __tablename__ = 'pool_members'
+
+    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    pool_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('event_pools.id'), nullable=False)
+    member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
+    status: so.Mapped[str] = so.mapped_column(sa.String(20), nullable=False, default='registered')
+    registered_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
+    last_updated: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    pool: so.Mapped['EventPool'] = so.relationship('EventPool', back_populates='registrations')
+    member: so.Mapped['Member'] = so.relationship('Member')
+
+    def __repr__(self):
+        return f"<PoolRegistration id={self.id}, member='{self.member.firstname} {self.member.lastname}' if self.member else 'Unknown', status={self.status}>"
+
+    def withdraw(self):
+        """Withdraw the member from the pool"""
+        self.status = 'withdrawn'
+        self.last_updated = datetime.utcnow()
+
+    def reregister(self):
+        """Re-register the member (from withdrawn status)"""
+        if self.status == 'withdrawn':
+            self.status = 'registered'
+            self.last_updated = datetime.utcnow()
+
+    def set_available(self):
+        """Mark member as available for team selection"""
+        self.status = 'available'
+        self.last_updated = datetime.utcnow()
+
+    def set_selected(self):
+        """Mark member as selected for a team"""
+        self.status = 'selected'
+        self.last_updated = datetime.utcnow()
+
+    @property
+    def is_active(self):
+        """Check if registration is active (not withdrawn)"""
+        return self.status in ['registered', 'available', 'selected']
+
+    @classmethod
+    def get_valid_statuses(cls):
+        """Get list of valid registration statuses"""
+        return ['registered', 'available', 'selected', 'withdrawn']
 
 
 class Booking(db.Model):
