@@ -13,7 +13,7 @@ from app.models import Member, Role, Event, Post, PolicyPage, Booking, EventPool
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
 from app.forms import EditMemberForm, PasswordResetForm, FlaskForm, WritePostForm
 from app.utils import generate_secure_filename, get_secure_post_path, sanitize_html_content
-
+from app.routes import role_required
 
 def admin_required(f):
     """
@@ -34,7 +34,7 @@ def admin_required(f):
 
 @bp.route('/manage_members')
 @login_required
-@admin_required
+@role_required('User Manager')
 def manage_members():
     """
     Admin interface for managing members
@@ -55,7 +55,7 @@ def manage_members():
 
 @bp.route('/edit_member/<int:member_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('User Manager')
 def edit_member(member_id):
     """
     Admin interface for editing or deleting a member
@@ -160,7 +160,7 @@ def edit_member(member_id):
 
 @bp.route('/reset_member_password/<int:member_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('User Manager')
 def admin_reset_password(member_id):
     """
     Admin interface for resetting a member's password
@@ -343,7 +343,7 @@ def import_users():
 
 @bp.route('/manage_roles', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('User Manager')
 def manage_roles():
     """
     Admin interface for managing roles - create, rename, or delete roles
@@ -493,7 +493,7 @@ def manage_roles():
 
 @bp.route('/write_post', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def write_post():
     """
     Admin interface for writing posts
@@ -601,7 +601,7 @@ tags: {tags}
 
 @bp.route('/manage_posts', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def manage_posts():
     """
     Admin interface for managing posts with bulk operations
@@ -682,7 +682,7 @@ def manage_posts():
 
 @bp.route('/manage_policy_pages')
 @login_required
-@admin_required
+@role_required('Content Manager')
 def manage_policy_pages():
     """
     Admin interface for managing policy pages
@@ -722,7 +722,7 @@ def manage_policy_pages():
 
 @bp.route('/manage_events', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def manage_events():
     """
     Admin interface for managing events
@@ -799,12 +799,23 @@ def manage_events():
                             event.event_managers.append(manager)
                     
                     db.session.add(event)
+                    db.session.flush()  # Get event ID
+                    
+                    # Automatically create a pool for the new event (open by default)
+                    event_pool = EventPool(
+                        event_id=event.id,
+                        is_open=True
+                    )
+                    event.has_pool = True
+                    db.session.add(event_pool)
+                    
                     db.session.commit()
                     
                     # Audit log
                     audit_log_create('Event', event.id, f'Created event: {event.name}')
+                    audit_log_create('EventPool', event_pool.id, f'Auto-created pool for event: {event.name}')
                     
-                    flash(f'Event "{event.name}" created successfully!', 'success')
+                    flash(f'Event "{event.name}" created successfully with pool registration open!', 'success')
                     selected_event_id = event.id
             
             # Handle booking creation/updating
@@ -886,6 +897,23 @@ def manage_events():
         # Get team positions for display
         team_positions = current_app.config.get('TEAM_POSITIONS', {})
         
+        # Get available members for adding to pool (members not already in the pool)
+        available_members_for_pool = []
+        if selected_event and selected_event.has_pool_enabled():
+            # Get all active members
+            all_members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Social', 'Life']))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            
+            # Filter out members already in the pool
+            pool_member_ids = set()
+            if pool_registrations:
+                pool_member_ids = {reg.member_id for reg in pool_registrations if reg.is_active}
+            
+            available_members_for_pool = [member for member in all_members if member.id not in pool_member_ids]
+        
         return render_template('admin/manage_events.html', 
                              events=[], # Not used in template
                              selection_form=selection_form,
@@ -897,17 +925,23 @@ def manage_events():
                              can_create_bookings=can_create_bookings,
                              team_positions=team_positions,
                              pool_data=pool_data,
-                             pool_registrations=pool_registrations)
+                             pool_registrations=pool_registrations,
+                             available_members_for_pool=available_members_for_pool)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         current_app.logger.error(f"Error in manage_events: {str(e)}")
-        flash('An error occurred while loading events.', 'error')
+        current_app.logger.error(f"Full traceback: {error_details}")
+        current_app.logger.error(f"Request args: {request.args}")
+        current_app.logger.error(f"Request form: {request.form}")
+        flash(f'An error occurred while loading events: {str(e)}', 'error')
         return redirect(url_for('main.index'))
 
 
 @bp.route('/toggle_event_pool/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def toggle_event_pool(event_id):
     """
     Toggle pool registration status for an event (open/close)
@@ -955,7 +989,7 @@ def toggle_event_pool(event_id):
 
 @bp.route('/create_event_pool/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def create_event_pool(event_id):
     """
     Create a new pool for an event
@@ -1004,7 +1038,7 @@ def create_event_pool(event_id):
 
 @bp.route('/update_registration_status/<int:registration_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def update_registration_status(registration_id):
     """
     Update a pool registration status (for Event Managers)
@@ -1058,7 +1092,7 @@ def update_registration_status(registration_id):
 # Placeholder templates return simple messages for now
 @bp.route('/edit_post/<int:post_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def edit_post(post_id):
     """
     Admin interface for editing posts
@@ -1175,7 +1209,7 @@ def edit_post(post_id):
 
 @bp.route('/delete_post/<int:post_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def delete_post(post_id):
     """
     Admin interface for deleting posts
@@ -1225,7 +1259,7 @@ def delete_post(post_id):
 
 @bp.route('/create_policy_page', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def create_policy_page():
     """
     Admin interface for creating policy pages
@@ -1317,7 +1351,7 @@ def create_policy_page():
 
 @bp.route('/edit_policy_page/<int:policy_page_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def edit_policy_page(policy_page_id):
     """
     Admin interface for editing policy pages
@@ -1419,7 +1453,7 @@ def edit_policy_page(policy_page_id):
 
 @bp.route('/delete_policy_page/<int:policy_page_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Content Manager')
 def delete_policy_page(policy_page_id):
     """
     Admin interface for deleting policy pages
@@ -1463,7 +1497,7 @@ def delete_policy_page(policy_page_id):
 
 @bp.route('/edit_booking/<int:booking_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def edit_booking(booking_id):
     """
     Admin interface for editing existing bookings
@@ -1561,7 +1595,7 @@ def recover_policy_page(filename):
 
 @bp.route('/edit_event_team/<int:team_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def edit_event_team(team_id):
     """
     Admin interface for editing event teams and assigning players to positions
@@ -1580,9 +1614,9 @@ def edit_event_team(team_id):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Non-authorized user attempted to edit team {team_id}')
             flash('You do not have permission to edit this team.', 'error')
-            return redirect(url_for('admin.manage_events'))
+            return redirect(url_for('admin.manage_events', event_id=team.event.id))
         
-        TeamMemberForm = create_team_member_form(team.event.format)
+        TeamMemberForm = create_team_member_form(team.event.format, team.event)
         form = TeamMemberForm()
         
         if form.validate_on_submit():
@@ -1642,7 +1676,7 @@ def edit_event_team(team_id):
                                 f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
                 
                 flash(f'Team "{team.team_name}" updated successfully!', 'success')
-                return redirect(url_for('admin.manage_events'))
+                return redirect(url_for('admin.manage_events', event_id=team.event.id))
                 
             except Exception as e:
                 # Rollback transaction on any error to preserve existing data
@@ -1674,12 +1708,19 @@ def edit_event_team(team_id):
     except Exception as e:
         current_app.logger.error(f"Error in edit_event_team: {str(e)}")
         flash('An error occurred while editing the team.', 'error')
+        # Try to get event_id from team if possible
+        try:
+            team = db.session.get(EventTeam, team_id)
+            if team:
+                return redirect(url_for('admin.manage_events', event_id=team.event_id))
+        except:
+            pass
         return redirect(url_for('admin.manage_events'))
 
 
 @bp.route('/add_event_team/<int:event_id>', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def add_event_team(event_id):
     """
     Admin interface for adding a new team to an event
@@ -1724,7 +1765,7 @@ def add_event_team(event_id):
                             {'team_number': next_team_number})
             
             flash(f'Team "{new_team.team_name}" added successfully!', 'success')
-            return redirect(url_for('admin.manage_events'))
+            return redirect(url_for('admin.manage_events', event_id=event_id))
         
         return render_template('admin/add_event_team.html', 
                              form=form, 
@@ -1734,12 +1775,12 @@ def add_event_team(event_id):
     except Exception as e:
         current_app.logger.error(f"Error in add_event_team: {str(e)}")
         flash('An error occurred while adding the team.', 'error')
-        return redirect(url_for('admin.manage_events'))
+        return redirect(url_for('admin.manage_events', event_id=event_id))
 
 
 @bp.route('/delete_event_team/<int:team_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def delete_event_team(team_id):
     """
     Admin interface for deleting an event team
@@ -1747,26 +1788,27 @@ def delete_event_team(team_id):
     try:
         from app.models import EventTeam
         
-        # Validate CSRF token
-        csrf_form = FlaskForm()
-        if not csrf_form.validate_on_submit():
-            flash('Security validation failed.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
+        # Get team first to get event_id for redirects
         team = db.session.get(EventTeam, team_id)
         if not team:
             flash('Team not found.', 'error')
             return redirect(url_for('admin.manage_events'))
+        
+        event_id = team.event_id
+        team_name = team.team_name
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
         
         # Check if user has permission to manage this event
         if not current_user.is_admin and current_user not in team.event.event_managers:
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Non-authorized user attempted to delete team {team_id}')
             flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        event_id = team.event_id
-        team_name = team.team_name
+            return redirect(url_for('admin.manage_events', event_id=event_id))
         event_name = team.event.name
         
         # Check if this team has associated booking teams
@@ -1794,17 +1836,24 @@ def delete_event_team(team_id):
         else:
             flash(f'Team "{team_name}" deleted successfully!', 'success')
         
-        return redirect(url_for('admin.manage_events'))
+        return redirect(url_for('admin.manage_events', event_id=event_id))
         
     except Exception as e:
         current_app.logger.error(f"Error in delete_event_team: {str(e)}")
         flash('An error occurred while deleting the team.', 'error')
+        # Try to get event_id from team if possible, otherwise redirect without it
+        try:
+            team = db.session.get(EventTeam, team_id)
+            if team:
+                return redirect(url_for('admin.manage_events', event_id=team.event_id))
+        except:
+            pass
         return redirect(url_for('admin.manage_events'))
 
 
 @bp.route('/create_teams_from_pool/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def create_teams_from_pool(event_id):
     """
     Create teams from pool members with 'available' status
@@ -1927,7 +1976,7 @@ def create_teams_from_pool(event_id):
 
 @bp.route('/bulk_update_pool_status/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def bulk_update_pool_status(event_id):
     """
     Bulk update pool member statuses (e.g., mark all as available)
@@ -1992,7 +2041,7 @@ def bulk_update_pool_status(event_id):
 
 @bp.route('/copy_teams_to_booking/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def copy_teams_to_booking(event_id):
     """
     Create a booking from event teams (Stage 5: Booking system redesign)
@@ -2118,7 +2167,7 @@ def copy_teams_to_booking(event_id):
 
 @bp.route('/add_substitute_to_team/<int:booking_team_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def add_substitute_to_team(booking_team_id):
     """
     Add a substitute to a booking team
@@ -2244,7 +2293,7 @@ def update_member_availability(booking_team_member_id):
 
 @bp.route('/auto_select_pool_members/<int:event_id>', methods=['POST'])
 @login_required
-@admin_required
+@role_required('Event Manager')
 def auto_select_pool_members(event_id):
     """
     Automatically select pool members for team creation based on criteria
@@ -2317,6 +2366,7 @@ def auto_select_pool_members(event_id):
 
 @bp.route('/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
 @login_required
+@role_required('Event Manager')
 def manage_teams(booking_id):
     """
     Admin interface for managing teams for a specific booking
@@ -2391,7 +2441,7 @@ def manage_teams(booking_id):
 
 @bp.route('/add_user_to_role', methods=['POST'])
 @login_required
-@admin_required
+@role_required('User Manager')
 def add_user_to_role():
     """
     Add a user to a role (AJAX endpoint)
@@ -2458,7 +2508,7 @@ def add_user_to_role():
 
 @bp.route('/remove_user_from_role', methods=['POST'])
 @login_required
-@admin_required
+@role_required('User Manager')
 def remove_user_from_role():
     """
     Remove a user from a role (AJAX endpoint)
@@ -2521,6 +2571,71 @@ def remove_user_from_role():
             'success': False,
             'error': 'An error occurred while removing the user from the role'
         }), 500
+
+
+@bp.route('/add_member_to_pool/<int:event_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def add_member_to_pool(event_id):
+    """
+    Add a member to the event pool (for Event Managers to expand the pool)
+    """
+    try:
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get the event
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            flash('This event does not have pool registration enabled.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get member_id from form
+        member_id = request.form.get('member_id', type=int)
+        if not member_id:
+            flash('Please select a member to add.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get the member
+        member = db.session.get(Member, member_id)
+        if not member:
+            flash('Member not found.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Check if member is already in the pool
+        existing_registration = event.pool.get_member_registration(member_id)
+        if existing_registration and existing_registration.is_active:
+            flash(f'{member.firstname} {member.lastname} is already registered for this event.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Add member to pool
+        registration = PoolRegistration(
+            pool_id=event.pool.id,
+            member_id=member_id,
+            status='available'  # Event Manager added, so mark as available
+        )
+        db.session.add(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('PoolRegistration', registration.id, 
+                        f'Event Manager added {member.firstname} {member.lastname} to pool for event: {event.name}')
+        
+        flash(f'{member.firstname} {member.lastname} added to event pool successfully!', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding member to pool: {str(e)}")
+        flash('An error occurred while adding member to pool.', 'error')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
 
 
 @bp.route('/test')

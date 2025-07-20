@@ -368,7 +368,7 @@ class AddTeamForm(FlaskForm):
     submit = SubmitField('Add Team')
 
 
-def create_team_member_form(event_format):
+def create_team_member_form(event_format, event=None):
     """Factory function to create a TeamMemberForm with dynamic fields"""
     
     class TeamMemberForm(FlaskForm):
@@ -381,16 +381,29 @@ def create_team_member_form(event_format):
         team_positions = current_app.config.get('TEAM_POSITIONS', {})
         positions = team_positions.get(event_format, [])
         
-        # Get all members for selection
+        # Get members for selection - prefer pool members if event is provided
         from app.models import Member
         from app import db
         import sqlalchemy as sa
         
-        members = db.session.scalars(
-            sa.select(Member)
-            .where(Member.status.in_(['Full', 'Social', 'Life']))
-            .order_by(Member.firstname, Member.lastname)
-        ).all()
+        if event and event.has_pool_enabled() and event.pool:
+            # Get pool members available for team selection (only 'registered' status)
+            from app.models import PoolRegistration
+            pool_members = db.session.scalars(
+                sa.select(Member)
+                .join(PoolRegistration, Member.id == PoolRegistration.member_id)
+                .where(PoolRegistration.pool_id == event.pool.id)
+                .where(PoolRegistration.status == 'registered')
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            members = pool_members
+        else:
+            # Fallback to all active members
+            members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Social', 'Life']))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
         
         member_choices = [(0, 'Select a player...')] + [
             (member.id, f"{member.firstname} {member.lastname}") for member in members

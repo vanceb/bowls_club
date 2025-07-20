@@ -157,7 +157,7 @@
                                 <span class="icon is-small"><i class="fas fa-swimming-pool"></i></span>
                                 <span>Pool Enabled</span>
                             </span>
-                            {% if selected_event.pool.is_open %}
+                            {% if selected_event.is_pool_open() %}
                                 <span class="tag is-success ml-1">
                                     <span class="icon is-small"><i class="fas fa-door-open"></i></span>
                                     <span>Open</span>
@@ -188,7 +188,7 @@
             <div class="level-right">
                 {% if not selected_event.has_pool_enabled() %}
                     <form method="POST" action="{{ url_for('admin.create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
-                        {{ csrf_token() }}
+                        {{ event_form.csrf_token }}
                         <button type="submit" class="button is-primary">
                             <span class="icon">
                                 <i class="fas fa-plus"></i>
@@ -198,31 +198,29 @@
                     </form>
                 {% else %}
                     <div class="field is-grouped">
-                        {% if selected_event.pool.is_open %}
-                            <form method="POST" action="{{ url_for('admin.toggle_pool_status', event_id=selected_event.id) }}" style="display: inline;">
-                                {{ csrf_token() }}
-                                <input type="hidden" name="action" value="close">
+                        {% if selected_event.is_pool_open() %}
+                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                {{ event_form.csrf_token }}
                                 <button type="submit" class="button is-warning">
                                     <span class="icon">
                                         <i class="fas fa-door-closed"></i>
                                     </span>
-                                    <span>Close Pool</span>
+                                    <span>Close Registration</span>
                                 </button>
                             </form>
                         {% else %}
-                            <form method="POST" action="{{ url_for('admin.toggle_pool_status', event_id=selected_event.id) }}" style="display: inline;">
-                                {{ csrf_token() }}
-                                <input type="hidden" name="action" value="open">
+                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                {{ event_form.csrf_token }}
                                 <button type="submit" class="button is-success">
                                     <span class="icon">
                                         <i class="fas fa-door-open"></i>
                                     </span>
-                                    <span>Reopen Pool</span>
+                                    <span>Open Registration</span>
                                 </button>
                             </form>
                         {% endif %}
-                        
-                        <div class="dropdown is-hoverable ml-2">
+                    
+                    <div class="dropdown is-hoverable ml-2">
                             <div class="dropdown-trigger">
                                 <button class="button is-info" aria-haspopup="true" aria-controls="pool-actions-menu">
                                     <span>Pool Actions</span>
@@ -275,8 +273,23 @@
         {% if selected_event.has_pool_enabled() %}
             <!-- Pool Members Display -->
             <div class="content">
-                {% if selected_event.pool.registrations %}
-                    <h4 class="title is-6">Pool Members ({{ selected_event.pool.registrations | length }})</h4>
+                {% if pool_registrations %}
+                    <h4 class="title is-6">Pool Members ({{ pool_registrations | length }})</h4>
+                    
+                    <!-- Status Explanation -->
+                    <div class="message is-info mb-4">
+                        <div class="message-body">
+                            <p class="has-text-weight-semibold mb-2">Pool Status Guide:</p>
+                            <div class="content is-small">
+                                <ul class="mb-1">
+                                    <li><span class="tag is-info is-small">Registered</span> - Member is available for team selection</li>
+                                    <li><span class="tag is-primary is-small">Selected</span> - Member has been placed in a team</li>
+                                </ul>
+                                <p class="is-size-7 has-text-grey">Members who withdraw are removed from the pool. Only "Registered" members can be selected for teams.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="table-container">
                         <table class="table is-fullwidth is-striped">
                             <thead>
@@ -288,7 +301,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for registration in selected_event.pool.registrations %}
+                                {% for registration in pool_registrations %}
                                 <tr>
                                     <td>
                                         <strong>{{ registration.member.firstname }} {{ registration.member.lastname }}</strong>
@@ -299,9 +312,7 @@
                                     <td>
                                         <span class="tag 
                                             {% if registration.status == 'registered' %}is-info
-                                            {% elif registration.status == 'available' %}is-success
                                             {% elif registration.status == 'selected' %}is-primary
-                                            {% elif registration.status == 'withdrawn' %}is-light
                                             {% endif %}">
                                             {{ registration.status.title() }}
                                         </span>
@@ -310,43 +321,19 @@
                                         <small>{{ registration.registered_at.strftime('%Y-%m-%d %H:%M') }}</small>
                                     </td>
                                     <td>
-                                        {% if registration.status != 'withdrawn' %}
-                                            <div class="field is-grouped">
-                                                {% if registration.status == 'registered' %}
-                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
-                                                        {{ csrf_token() }}
-                                                        <input type="hidden" name="status" value="available">
-                                                        <button type="submit" class="button is-small is-success" title="Mark as available for team selection">
-                                                            <span class="icon is-small">
-                                                                <i class="fas fa-check"></i>
-                                                            </span>
-                                                            <span>Available</span>
-                                                        </button>
-                                                    </form>
-                                                {% elif registration.status == 'available' %}
-                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
-                                                        {{ csrf_token() }}
-                                                        <input type="hidden" name="status" value="registered">
-                                                        <button type="submit" class="button is-small is-info" title="Return to registered status">
-                                                            <span class="icon is-small">
-                                                                <i class="fas fa-undo"></i>
-                                                            </span>
-                                                            <span>Registered</span>
-                                                        </button>
-                                                    </form>
-                                                {% elif registration.status == 'selected' %}
-                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
-                                                        {{ csrf_token() }}
-                                                        <input type="hidden" name="status" value="available">
-                                                        <button type="submit" class="button is-small is-warning" title="Return to available status">
-                                                            <span class="icon is-small">
-                                                                <i class="fas fa-undo"></i>
-                                                            </span>
-                                                            <span>Available</span>
-                                                        </button>
-                                                    </form>
-                                                {% endif %}
-                                            </div>
+                                        {% if registration.status == 'selected' %}
+                                            <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
+                                                {{ event_form.csrf_token }}
+                                                <input type="hidden" name="status" value="registered">
+                                                <button type="submit" class="button is-small is-warning" title="Return member to pool (remove from team)">
+                                                    <span class="icon is-small">
+                                                        <i class="fas fa-undo"></i>
+                                                    </span>
+                                                    <span>Return to Pool</span>
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <span class="has-text-grey is-size-7">Ready for selection</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -360,6 +347,34 @@
                         <p>Members can register via the "Upcoming Events" page when the pool is open.</p>
                     </div>
                 {% endif %}
+                
+                <!-- Add Member to Pool Form -->
+                <div class="mt-4">
+                    <h5 class="title is-6">Add Member to Pool</h5>
+                    <form method="POST" action="{{ url_for('admin.add_member_to_pool', event_id=selected_event.id) }}">
+                        {{ event_form.csrf_token }}
+                        <div class="field has-addons">
+                            <div class="control is-expanded">
+                                <div class="select is-fullwidth">
+                                    <select name="member_id" required>
+                                        <option value="">Select a member to add...</option>
+                                        {% for member in available_members_for_pool %}
+                                            <option value="{{ member.id }}">{{ member.firstname }} {{ member.lastname }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="control">
+                                <button type="submit" class="button is-primary">
+                                    <span class="icon">
+                                        <i class="fas fa-user-plus"></i>
+                                    </span>
+                                    <span>Add to Pool</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Workflow Progress Indicator -->
@@ -453,7 +468,6 @@
             </div>
         {% endif %}
     </div>
-    {% endif %}
 
     <!-- Teams Section -->
     <div class="box" id="teams-section" {% if not selected_event %}style="opacity: 0.6;"{% endif %}>
@@ -903,6 +917,7 @@
             <p>Select an event from the dropdown above to view and manage its bookings.</p>
         </div>
     </div>
+    {% endif %}
 
 </div>
 
@@ -1054,16 +1069,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // Load selected event data via AJAX
             fetch(`/api/event/${eventId}`)
                 .then(response => {
+                    console.log('API Response status:', response.status);
+                    console.log('API Response headers:', response.headers);
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.text().then(text => {
+                            console.error('API Error response body:', text);
+                            throw new Error(`HTTP error! status: ${response.status}, body: ${text}`);
+                        });
                     }
                     return response.json();
                 })
                 .then(data => {
-                    // Update event form
-                    eventIdInput.value = data.id;
-                    nameInput.value = data.name;
-                    typeSelect.value = data.event_type;
+                    console.log('API Response data:', data);
+                    try {
+                        // Update event form
+                        eventIdInput.value = data.id;
+                        nameInput.value = data.name;
+                        typeSelect.value = data.event_type;
                     
                     // Update new fields
                     const genderSelect = document.getElementById('gender');
@@ -1082,15 +1104,32 @@ document.addEventListener('DOMContentLoaded', function() {
                         });
                     }
                     
-                    eventFormTitle.textContent = `Step 1: Edit Event Details`;
-                    // Add completion indicator safely
-                    const completionTag = document.createElement('span');
-                    completionTag.className = 'tag is-success ml-2';
-                    completionTag.innerHTML = '<span class="icon is-small"><i class="fas fa-check"></i></span><span>Complete</span>';
-                    eventFormTitle.appendChild(completionTag);
+                    const eventFormTitle = document.getElementById('event-form-title');
+                    if (eventFormTitle) {
+                        eventFormTitle.textContent = `Step 1: Edit Event Details`;
+                        // Add completion indicator safely
+                        const completionTag = document.createElement('span');
+                        completionTag.className = 'tag is-success ml-2';
+                        
+                        const iconSpan = document.createElement('span');
+                        iconSpan.className = 'icon is-small';
+                        const icon = document.createElement('i');
+                        icon.className = 'fas fa-check';
+                        iconSpan.appendChild(icon);
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = 'Complete';
+                        
+                        completionTag.appendChild(iconSpan);
+                        completionTag.appendChild(textSpan);
+                        eventFormTitle.appendChild(completionTag);
+                    }
                     
                     // Update bookings section  
-                    bookingsTitle.textContent = `Step 3: Bookings for ${data.name}`;
+                    const bookingsTitle = document.getElementById('bookings-title');
+                    if (bookingsTitle) {
+                        bookingsTitle.textContent = `Step 3: Bookings for ${data.name}`;
+                    }
                     if (noBookingsMessage) noBookingsMessage.style.display = 'none';
                     if (toggleBookingBtn) {
                         toggleBookingBtn.style.display = 'inline-flex';
@@ -1108,7 +1147,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Add warning indicator safely
                         const warningTag = document.createElement('span');
                         warningTag.className = 'tag is-warning ml-2';
-                        warningTag.innerHTML = '<span class="icon is-small"><i class="fas fa-exclamation"></i></span><span>Add teams</span>';
+                        
+                        const iconSpan = document.createElement('span');
+                        iconSpan.className = 'icon is-small';
+                        const icon = document.createElement('i');
+                        icon.className = 'fas fa-exclamation';
+                        iconSpan.appendChild(icon);
+                        
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = 'Add teams';
+                        
+                        warningTag.appendChild(iconSpan);
+                        warningTag.appendChild(textSpan);
                         teamsTitle.appendChild(warningTag);
                     }
                     if (noTeamsMessage) noTeamsMessage.style.display = 'none';
@@ -1116,10 +1166,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Load bookings for this event
                     loadEventBookings(eventId);
+                    } catch (formError) {
+                        console.error('Error updating form elements:', formError);
+                        throw formError;
+                    }
                 })
                 .catch(error => {
                     console.error('Error loading event:', error);
-                    alert('Error loading event data. Please try again.');
+                    console.error('Error details:', error.message);
+                    alert('Error loading event data. Please try again. Check console for details.');
                 });
         }
     });
