@@ -1586,54 +1586,69 @@ def edit_event_team(team_id):
         form = TeamMemberForm()
         
         if form.validate_on_submit():
-            # Capture existing team members for audit log
-            existing_members = db.session.scalars(
-                sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
-            ).all()
-            old_members = [f"{member.member.firstname} {member.member.lastname} ({member.position})" 
-                          for member in existing_members]
-            
-            # Clear existing team members
-            for member in existing_members:
-                db.session.delete(member)
-            
-            # Update team name
-            old_team_name = team.team_name
-            team.team_name = form.team_name.data
-            
-            # Add new team members based on form data
-            team_positions = current_app.config.get('TEAM_POSITIONS', {})
-            positions = team_positions.get(team.event.format, [])
-            new_members = []
-            
-            for position in positions:
-                field_name = f"position_{position.lower().replace(' ', '_')}"
-                member_id = getattr(form, field_name).data
+            try:
+                # Capture existing team members for audit log
+                existing_members = db.session.scalars(
+                    sa.select(TeamMember).where(TeamMember.event_team_id == team.id)
+                ).all()
+                old_members = [f"{member.member.firstname} {member.member.lastname} ({member.position})" 
+                              for member in existing_members]
                 
-                if member_id and member_id > 0:  # Skip empty selections
+                # Update team name
+                old_team_name = team.team_name
+                team.team_name = form.team_name.data
+                
+                # Build new team composition from form data
+                team_positions = current_app.config.get('TEAM_POSITIONS', {})
+                positions = team_positions.get(team.event.format, [])
+                new_team_data = {}
+                new_members = []
+                
+                for position in positions:
+                    field_name = f"position_{position.lower().replace(' ', '_')}"
+                    member_id = getattr(form, field_name).data
+                    
+                    if member_id and member_id > 0:  # Skip empty selections
+                        new_team_data[position] = member_id
+                        member_obj = db.session.get(Member, member_id)
+                        if member_obj:
+                            new_members.append(f"{member_obj.firstname} {member_obj.lastname} ({position})")
+                
+                # Only update team members if we have valid new data
+                # Clear existing team members ONLY after we know new data is valid
+                for member in existing_members:
+                    db.session.delete(member)
+                
+                # Add new team members
+                for position, member_id in new_team_data.items():
                     team_member = TeamMember(
                         event_team_id=team.id,
                         member_id=member_id,
                         position=position
                     )
                     db.session.add(team_member)
-                    member_obj = db.session.get(Member, member_id)
-                    new_members.append(f"{member_obj.firstname} {member_obj.lastname} ({position})")
-            
-            db.session.commit()
-            
-            # Audit log the team update
-            changes = {}
-            if old_team_name != team.team_name:
-                changes['team_name'] = old_team_name
-            changes['old_members'] = old_members
-            changes['new_members'] = new_members
-            
-            audit_log_update('EventTeam', team.id, 
-                            f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
-            
-            flash(f'Team "{team.team_name}" updated successfully!', 'success')
-            return redirect(url_for('admin.manage_events'))
+                
+                # Commit all changes together
+                db.session.commit()
+                
+                # Audit log the team update
+                changes = {}
+                if old_team_name != team.team_name:
+                    changes['team_name'] = old_team_name
+                changes['old_members'] = old_members
+                changes['new_members'] = new_members
+                
+                audit_log_update('EventTeam', team.id, 
+                                f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
+                
+                flash(f'Team "{team.team_name}" updated successfully!', 'success')
+                return redirect(url_for('admin.manage_events'))
+                
+            except Exception as e:
+                # Rollback transaction on any error to preserve existing data
+                db.session.rollback()
+                current_app.logger.error(f"Error updating team {team.id}: {str(e)}")
+                flash('An error occurred while updating the team. No changes were made.', 'error')
         
         # Pre-populate form with existing data
         if request.method == 'GET':
@@ -1784,6 +1799,194 @@ def delete_event_team(team_id):
     except Exception as e:
         current_app.logger.error(f"Error in delete_event_team: {str(e)}")
         flash('An error occurred while deleting the team.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/create_teams_from_pool/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def create_teams_from_pool(event_id):
+    """
+    Create teams from pool members with 'available' status
+    """
+    try:
+        from app.models import EventTeam, TeamMember
+        from app.audit import audit_log_create, audit_log_bulk_operation
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event or not event.has_pool_enabled():
+            flash('Event not found or pool not enabled.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission
+        if not current_user.is_admin and current_user not in event.event_managers:
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Get available pool members
+        available_members = event.pool.get_available_members()
+        if not available_members:
+            flash('No available members in the pool to create teams.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get team configuration from app config
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(event.format, [])
+        
+        if not positions:
+            flash(f'No team positions configured for format: {event.format}', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        team_size = len(positions)
+        num_complete_teams = len(available_members) // team_size
+        
+        if num_complete_teams == 0:
+            flash(f'Not enough available members ({len(available_members)}) to create a complete team (need {team_size}).', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get existing team count for numbering
+        existing_teams_count = db.session.scalar(
+            sa.select(sa.func.count(EventTeam.id)).where(EventTeam.event_id == event_id)
+        ) or 0
+        
+        teams_created = 0
+        members_assigned = 0
+        
+        # Create teams
+        for team_num in range(num_complete_teams):
+            team_number = existing_teams_count + team_num + 1
+            team_name = f"Team {team_number}"
+            
+            # Create the team
+            new_team = EventTeam(
+                event_id=event_id,
+                team_name=team_name,
+                team_number=team_number
+            )
+            db.session.add(new_team)
+            db.session.flush()  # Get team ID
+            
+            # Assign members to positions
+            team_members_info = []
+            for i, position in enumerate(positions):
+                member_idx = (team_num * team_size) + i
+                if member_idx < len(available_members):
+                    member = available_members[member_idx]
+                    
+                    # Create team member assignment
+                    team_member = TeamMember(
+                        event_team_id=new_team.id,
+                        member_id=member.id,
+                        position=position
+                    )
+                    db.session.add(team_member)
+                    
+                    # Update pool registration status to 'selected'
+                    pool_registration = event.pool.get_member_registration(member.id)
+                    if pool_registration:
+                        pool_registration.set_selected()
+                    
+                    team_members_info.append(f"{member.firstname} {member.lastname} ({position})")
+                    members_assigned += 1
+            
+            teams_created += 1
+            
+            # Audit log each team creation
+            audit_log_create('EventTeam', new_team.id, 
+                            f'Created team from pool: {team_name} for event "{event.name}"',
+                            {'members': team_members_info, 'created_from_pool': True})
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Audit log bulk operation
+        audit_log_bulk_operation('TEAM_CREATION_FROM_POOL', 'EventTeam', teams_created,
+                                f'Created {teams_created} teams from pool for event "{event.name}"',
+                                {'members_assigned': members_assigned, 'event_id': event_id})
+        
+        remaining_members = len(available_members) - members_assigned
+        message = f'Successfully created {teams_created} teams with {members_assigned} members assigned.'
+        if remaining_members > 0:
+            message += f' {remaining_members} members remain available in the pool.'
+        
+        flash(message, 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating teams from pool: {str(e)}")
+        flash('An error occurred while creating teams from the pool.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/bulk_update_pool_status/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def bulk_update_pool_status(event_id):
+    """
+    Bulk update pool member statuses (e.g., mark all as available)
+    """
+    try:
+        from app.audit import audit_log_bulk_operation
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event or not event.has_pool_enabled():
+            flash('Event not found or pool not enabled.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check permission
+        if not current_user.is_admin and current_user not in event.event_managers:
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        action = request.form.get('action')
+        if action not in ['mark_all_available', 'clear_selections']:
+            flash('Invalid action.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        registrations = event.pool.registrations
+        updated_count = 0
+        
+        if action == 'mark_all_available':
+            # Mark all registered members as available
+            for registration in registrations:
+                if registration.status == 'registered':
+                    registration.set_available()
+                    updated_count += 1
+        
+        elif action == 'clear_selections':
+            # Reset all selected members back to available
+            for registration in registrations:
+                if registration.status == 'selected':
+                    registration.set_available()
+                    updated_count += 1
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_bulk_operation('POOL_STATUS_UPDATE', 'PoolRegistration', updated_count,
+                                f'Bulk {action} for event "{event.name}"',
+                                {'event_id': event_id, 'action': action})
+        
+        flash(f'Updated {updated_count} pool member statuses.', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in bulk pool update: {str(e)}")
+        flash('An error occurred while updating pool statuses.', 'error')
         return redirect(url_for('admin.manage_events'))
 
 
