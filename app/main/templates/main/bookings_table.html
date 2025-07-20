@@ -139,7 +139,12 @@
                         
                         // Handle roll-up vs event bookings
                         if (booking.booking_type === 'rollup') {
-                            line = `<span class="tag is-info is-small">Roll-Up</span> ${booking.event_name}`;
+                            line = `<span class="tag is-info is-small">Roll-Up</span> ${booking.organizer}`;
+                            
+                            // Add player count
+                            if (booking.player_count !== undefined) {
+                                line += ` (${booking.player_count} players)`;
+                            }
                             
                             // Add notes if available
                             if (booking.organizer_notes) {

@@ -269,7 +269,11 @@ def get_bookings_range(start_date, end_date):
                 'organizer_notes': booking.organizer_notes
             }
             
-            if booking.event:
+            if booking.booking_type == 'rollup':
+                # For roll-ups, include player count
+                booking_info['player_count'] = len(booking.booking_players)
+            elif booking.event:
+                # For regular events, include event details
                 booking_info['event_name'] = booking.event.name
                 booking_info['event_type'] = booking.event.event_type
                 booking_info['vs'] = booking.vs
