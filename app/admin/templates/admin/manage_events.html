@@ -144,6 +144,317 @@
         </form>
     </div>
 
+    <!-- Pool Management Section -->
+    {% if selected_event %}
+    <div class="box" id="pool-section">
+        <div class="level">
+            <div class="level-left">
+                <div>
+                    <h2 class="subtitle">
+                        Step 1.5: Pool Registration for {{ selected_event.name }}
+                        {% if selected_event.has_pool_enabled() %}
+                            <span class="tag is-info ml-2">
+                                <span class="icon is-small"><i class="fas fa-swimming-pool"></i></span>
+                                <span>Pool Enabled</span>
+                            </span>
+                            {% if selected_event.pool.is_open %}
+                                <span class="tag is-success ml-1">
+                                    <span class="icon is-small"><i class="fas fa-door-open"></i></span>
+                                    <span>Open</span>
+                                </span>
+                            {% else %}
+                                <span class="tag is-warning ml-1">
+                                    <span class="icon is-small"><i class="fas fa-door-closed"></i></span>
+                                    <span>Closed</span>
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            <span class="tag is-light ml-2">
+                                <span class="icon is-small"><i class="fas fa-ban"></i></span>
+                                <span>No Pool</span>
+                            </span>
+                        {% endif %}
+                    </h2>
+                    {% set workflow_status = selected_event.get_workflow_status() %}
+                    <p class="help">
+                        Workflow Stage: <strong>{{ workflow_status.stage.replace('_', ' ').title() }}</strong>
+                        {% if workflow_status.pool_enabled %}
+                            • {{ workflow_status.pool_members }} registered 
+                            • {{ workflow_status.available_members }} available for teams
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="level-right">
+                {% if not selected_event.has_pool_enabled() %}
+                    <form method="POST" action="{{ url_for('admin.create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                        {{ csrf_token() }}
+                        <button type="submit" class="button is-primary">
+                            <span class="icon">
+                                <i class="fas fa-plus"></i>
+                            </span>
+                            <span>Enable Pool Registration</span>
+                        </button>
+                    </form>
+                {% else %}
+                    <div class="field is-grouped">
+                        {% if selected_event.pool.is_open %}
+                            <form method="POST" action="{{ url_for('admin.toggle_pool_status', event_id=selected_event.id) }}" style="display: inline;">
+                                {{ csrf_token() }}
+                                <input type="hidden" name="action" value="close">
+                                <button type="submit" class="button is-warning">
+                                    <span class="icon">
+                                        <i class="fas fa-door-closed"></i>
+                                    </span>
+                                    <span>Close Pool</span>
+                                </button>
+                            </form>
+                        {% else %}
+                            <form method="POST" action="{{ url_for('admin.toggle_pool_status', event_id=selected_event.id) }}" style="display: inline;">
+                                {{ csrf_token() }}
+                                <input type="hidden" name="action" value="open">
+                                <button type="submit" class="button is-success">
+                                    <span class="icon">
+                                        <i class="fas fa-door-open"></i>
+                                    </span>
+                                    <span>Reopen Pool</span>
+                                </button>
+                            </form>
+                        {% endif %}
+                        
+                        <div class="dropdown is-hoverable ml-2">
+                            <div class="dropdown-trigger">
+                                <button class="button is-info" aria-haspopup="true" aria-controls="pool-actions-menu">
+                                    <span>Pool Actions</span>
+                                    <span class="icon is-small">
+                                        <i class="fas fa-angle-down" aria-hidden="true"></i>
+                                    </span>
+                                </button>
+                            </div>
+                            <div class="dropdown-menu" id="pool-actions-menu" role="menu">
+                                <div class="dropdown-content">
+                                    {% if workflow_status.pool_members > 0 %}
+                                        <a href="#" class="dropdown-item" onclick="showAutoSelectModal()">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-magic"></i>
+                                            </span>
+                                            Auto-Select Members
+                                        </a>
+                                        <a href="#" class="dropdown-item" onclick="showBulkStatusModal()">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-users-cog"></i>
+                                            </span>
+                                            Bulk Status Update
+                                        </a>
+                                        <hr class="dropdown-divider">
+                                    {% endif %}
+                                    {% if workflow_status.available_members >= 4 %}
+                                        <a href="#" class="dropdown-item" onclick="showCreateTeamsModal()">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-users"></i>
+                                            </span>
+                                            Create Teams from Pool
+                                        </a>
+                                    {% endif %}
+                                    {% if workflow_status.teams_with_members > 0 %}
+                                        <a href="#" class="dropdown-item" onclick="showCreateBookingModal()">
+                                            <span class="icon is-small">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </span>
+                                            Create Booking from Teams
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if selected_event.has_pool_enabled() %}
+            <!-- Pool Members Display -->
+            <div class="content">
+                {% if selected_event.pool.registrations %}
+                    <h4 class="title is-6">Pool Members ({{ selected_event.pool.registrations | length }})</h4>
+                    <div class="table-container">
+                        <table class="table is-fullwidth is-striped">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Status</th>
+                                    <th>Registered</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for registration in selected_event.pool.registrations %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ registration.member.firstname }} {{ registration.member.lastname }}</strong>
+                                        {% if registration.member.username %}
+                                            <br><small class="has-text-grey">{{ registration.member.username }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="tag 
+                                            {% if registration.status == 'registered' %}is-info
+                                            {% elif registration.status == 'available' %}is-success
+                                            {% elif registration.status == 'selected' %}is-primary
+                                            {% elif registration.status == 'withdrawn' %}is-light
+                                            {% endif %}">
+                                            {{ registration.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>{{ registration.registered_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        {% if registration.status != 'withdrawn' %}
+                                            <div class="field is-grouped">
+                                                {% if registration.status == 'registered' %}
+                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
+                                                        {{ csrf_token() }}
+                                                        <input type="hidden" name="status" value="available">
+                                                        <button type="submit" class="button is-small is-success" title="Mark as available for team selection">
+                                                            <span class="icon is-small">
+                                                                <i class="fas fa-check"></i>
+                                                            </span>
+                                                            <span>Available</span>
+                                                        </button>
+                                                    </form>
+                                                {% elif registration.status == 'available' %}
+                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
+                                                        {{ csrf_token() }}
+                                                        <input type="hidden" name="status" value="registered">
+                                                        <button type="submit" class="button is-small is-info" title="Return to registered status">
+                                                            <span class="icon is-small">
+                                                                <i class="fas fa-undo"></i>
+                                                            </span>
+                                                            <span>Registered</span>
+                                                        </button>
+                                                    </form>
+                                                {% elif registration.status == 'selected' %}
+                                                    <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
+                                                        {{ csrf_token() }}
+                                                        <input type="hidden" name="status" value="available">
+                                                        <button type="submit" class="button is-small is-warning" title="Return to available status">
+                                                            <span class="icon is-small">
+                                                                <i class="fas fa-undo"></i>
+                                                            </span>
+                                                            <span>Available</span>
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="notification is-info">
+                        <p><strong>No pool registrations yet.</strong></p>
+                        <p>Members can register via the "Upcoming Events" page when the pool is open.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Workflow Progress Indicator -->
+            <div class="notification is-light">
+                <h5 class="title is-6">
+                    <span class="icon">
+                        <i class="fas fa-route"></i>
+                    </span>
+                    Workflow Progress
+                </h5>
+                <div class="content">
+                    <div class="columns is-mobile">
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <span class="icon is-large {% if workflow_status.pool_members > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
+                                    <i class="fas fa-2x fa-users"></i>
+                                </span>
+                                <p class="is-size-7">
+                                    <strong>{{ workflow_status.pool_members }}</strong><br>
+                                    Registered
+                                </p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <span class="icon is-large {% if workflow_status.available_members > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
+                                    <i class="fas fa-2x fa-user-check"></i>
+                                </span>
+                                <p class="is-size-7">
+                                    <strong>{{ workflow_status.available_members }}</strong><br>
+                                    Available
+                                </p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <span class="icon is-large {% if workflow_status.teams_count > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
+                                    <i class="fas fa-2x fa-users-cog"></i>
+                                </span>
+                                <p class="is-size-7">
+                                    <strong>{{ workflow_status.teams_count }}</strong><br>
+                                    Teams
+                                </p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <span class="icon is-large {% if workflow_status.bookings_count > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
+                                    <i class="fas fa-2x fa-calendar-check"></i>
+                                </span>
+                                <p class="is-size-7">
+                                    <strong>{{ workflow_status.bookings_count }}</strong><br>
+                                    Bookings
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% set can_create_teams, teams_message = selected_event.can_create_teams_from_pool() %}
+                    {% set can_create_booking, booking_message = selected_event.can_create_booking_from_teams() %}
+                    
+                    <div class="tags">
+                        {% if workflow_status.stage == 'awaiting_registrations' %}
+                            <span class="tag is-warning">
+                                <span class="icon is-small"><i class="fas fa-clock"></i></span>
+                                <span>Awaiting member registrations</span>
+                            </span>
+                        {% elif workflow_status.stage == 'ready_for_selection' %}
+                            <span class="tag is-info">
+                                <span class="icon is-small"><i class="fas fa-hand-pointer"></i></span>
+                                <span>Ready for member selection</span>
+                            </span>
+                        {% elif workflow_status.stage == 'ready_for_teams' %}
+                            <span class="tag is-primary">
+                                <span class="icon is-small"><i class="fas fa-users"></i></span>
+                                <span>{{ teams_message }}</span>
+                            </span>
+                        {% elif workflow_status.stage == 'ready_for_booking' %}
+                            <span class="tag is-success">
+                                <span class="icon is-small"><i class="fas fa-calendar-plus"></i></span>
+                                <span>{{ booking_message }}</span>
+                            </span>
+                        {% elif workflow_status.stage == 'complete' %}
+                            <span class="tag is-success">
+                                <span class="icon is-small"><i class="fas fa-check-circle"></i></span>
+                                <span>Workflow complete</span>
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Teams Section -->
     <div class="box" id="teams-section" {% if not selected_event %}style="opacity: 0.6;"{% endif %}>
         <div class="level">
@@ -1089,6 +1400,247 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Pool Management Modal Functions
+    function showAutoSelectModal() {
+        const eventId = document.getElementById('page-data').dataset.selectedEventId;
+        if (!eventId) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal is-active';
+        modal.innerHTML = `
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title">Auto-Select Pool Members</p>
+                    <button class="delete" aria-label="close" onclick="closeModal(this)"></button>
+                </header>
+                <section class="modal-card-body">
+                    <form method="POST" action="/admin/auto_select_pool_members/${eventId}">
+                        <input type="hidden" name="csrf_token" value="${getCSRFToken()}">
+                        <div class="field">
+                            <label class="label">Selection Method</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select name="method">
+                                        <option value="oldest_first">Oldest Registration First</option>
+                                        <option value="random">Random Selection</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label">Number of Members to Select</label>
+                            <div class="control">
+                                <input type="number" name="count" class="input" min="1" max="20" required>
+                            </div>
+                            <p class="help">Select how many members to mark as available for team creation</p>
+                        </div>
+                    </form>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-success" onclick="submitAutoSelect()">Auto-Select</button>
+                    <button class="button" onclick="closeModal(this)">Cancel</button>
+                </footer>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function showBulkStatusModal() {
+        const eventId = document.getElementById('page-data').dataset.selectedEventId;
+        if (!eventId) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal is-active';
+        modal.innerHTML = `
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title">Bulk Status Update</p>
+                    <button class="delete" aria-label="close" onclick="closeModal(this)"></button>
+                </header>
+                <section class="modal-card-body">
+                    <form method="POST" action="/admin/bulk_update_pool_status/${eventId}">
+                        <input type="hidden" name="csrf_token" value="${getCSRFToken()}">
+                        <div class="field">
+                            <label class="label">Action</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select name="action">
+                                        <option value="mark_all_available">Mark All Registered as Available</option>
+                                        <option value="clear_selections">Clear All Selections (Return to Available)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <p class="help">Choose the bulk action to apply to pool members</p>
+                        </div>
+                    </form>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-warning" onclick="submitBulkStatus()">Apply Changes</button>
+                    <button class="button" onclick="closeModal(this)">Cancel</button>
+                </footer>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function showCreateTeamsModal() {
+        const eventId = document.getElementById('page-data').dataset.selectedEventId;
+        if (!eventId) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal is-active';
+        modal.innerHTML = `
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title">Create Teams from Pool</p>
+                    <button class="delete" aria-label="close" onclick="closeModal(this)"></button>
+                </header>
+                <section class="modal-card-body">
+                    <form method="POST" action="/admin/create_teams_from_pool/${eventId}">
+                        <input type="hidden" name="csrf_token" value="${getCSRFToken()}">
+                        <div class="notification is-info">
+                            <p><strong>This will create teams using available pool members.</strong></p>
+                            <p>Members will be automatically assigned to positions and their status will be updated to "selected".</p>
+                        </div>
+                    </form>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-primary" onclick="submitCreateTeams()">Create Teams</button>
+                    <button class="button" onclick="closeModal(this)">Cancel</button>
+                </footer>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function showCreateBookingModal() {
+        const eventId = document.getElementById('page-data').dataset.selectedEventId;
+        const eventName = document.getElementById('page-data').dataset.selectedEventName;
+        if (!eventId) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal is-active';
+        modal.innerHTML = `
+            <div class="modal-background"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title">Create Booking from Teams</p>
+                    <button class="delete" aria-label="close" onclick="closeModal(this)"></button>
+                </header>
+                <section class="modal-card-body">
+                    <form method="POST" action="/admin/copy_teams_to_booking/${eventId}">
+                        <input type="hidden" name="csrf_token" value="${getCSRFToken()}">
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Booking Date</label>
+                                    <div class="control">
+                                        <input type="date" name="booking_date" class="input" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Session</label>
+                                    <div class="control">
+                                        <div class="select is-fullwidth">
+                                            <select name="session" required>
+                                                <option value="1">Morning (AM)</option>
+                                                <option value="2">Afternoon (PM)</option>
+                                                <option value="3">Evening</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Opposition Team</label>
+                                    <div class="control">
+                                        <input type="text" name="vs" class="input" placeholder="e.g., Riverdale Bowls Club">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Home/Away</label>
+                                    <div class="control">
+                                        <div class="select is-fullwidth">
+                                            <select name="home_away">
+                                                <option value="home">Home</option>
+                                                <option value="away">Away</option>
+                                                <option value="neutral">Neutral</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="label">Priority</label>
+                            <div class="control">
+                                <input type="text" name="priority" class="input" placeholder="e.g., League Match">
+                            </div>
+                        </div>
+                    </form>
+                </section>
+                <footer class="modal-card-foot">
+                    <button class="button is-success" onclick="submitCreateBooking()">Create Booking</button>
+                    <button class="button" onclick="closeModal(this)">Cancel</button>
+                </footer>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function closeModal(element) {
+        const modal = element.closest('.modal');
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    function submitAutoSelect() {
+        const modal = document.querySelector('.modal.is-active');
+        const form = modal.querySelector('form');
+        form.submit();
+    }
+
+    function submitBulkStatus() {
+        const modal = document.querySelector('.modal.is-active');
+        const form = modal.querySelector('form');
+        form.submit();
+    }
+
+    function submitCreateTeams() {
+        const modal = document.querySelector('.modal.is-active');
+        const form = modal.querySelector('form');
+        form.submit();
+    }
+
+    function submitCreateBooking() {
+        const modal = document.querySelector('.modal.is-active');
+        const form = modal.querySelector('form');
+        form.submit();
+    }
+
+    function getCSRFToken() {
+        const token = document.querySelector('input[name="csrf_token"]');
+        return token ? token.value : '';
+    }
+
+    // Close modal when clicking background
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal-background')) {
+            closeModal(e.target);
+        }
+    });
 });
 </script>
 
