@@ -1990,6 +1990,331 @@ def bulk_update_pool_status(event_id):
         return redirect(url_for('admin.manage_events'))
 
 
+@bp.route('/copy_teams_to_booking/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def copy_teams_to_booking(event_id):
+    """
+    Create a booking from event teams (Stage 5: Booking system redesign)
+    """
+    try:
+        from app.models import EventTeam, BookingTeam, BookingTeamMember, Booking
+        from app.forms import BookingForm
+        from app.audit import audit_log_create, audit_log_bulk_operation
+        import json
+        
+        # Get form data
+        booking_date = request.form.get('booking_date')
+        session = request.form.get('session', type=int)
+        vs = request.form.get('vs', '')
+        home_away = request.form.get('home_away', 'home')
+        priority = request.form.get('priority', '')
+        
+        if not booking_date or not session:
+            flash('Booking date and session are required.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Parse date
+        from datetime import datetime
+        try:
+            booking_date = datetime.strptime(booking_date, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if user has permission
+        if not current_user.is_admin and current_user not in event.event_managers:
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Get event teams
+        event_teams = db.session.scalars(
+            sa.select(EventTeam).where(EventTeam.event_id == event_id)
+            .order_by(EventTeam.team_number)
+        ).all()
+        
+        if not event_teams:
+            flash('No teams found for this event.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Create the booking
+        new_booking = Booking(
+            booking_date=booking_date,
+            session=session,
+            organizer_id=current_user.id,
+            rink_count=len(event_teams),  # One rink per team
+            booking_type='event',
+            priority=priority,
+            vs=vs,
+            home_away=home_away,
+            event_id=event_id
+        )
+        
+        db.session.add(new_booking)
+        db.session.flush()  # Get booking ID
+        
+        teams_copied = 0
+        members_copied = 0
+        
+        # Copy each event team to booking team
+        for event_team in event_teams:
+            # Create booking team
+            booking_team = BookingTeam(
+                booking_id=new_booking.id,
+                event_team_id=event_team.id,
+                team_name=event_team.team_name,
+                team_number=event_team.team_number
+            )
+            db.session.add(booking_team)
+            db.session.flush()  # Get booking team ID
+            
+            # Copy team members
+            for team_member in event_team.team_members:
+                booking_team_member = BookingTeamMember(
+                    booking_team_id=booking_team.id,
+                    member_id=team_member.member_id,
+                    position=team_member.position,
+                    is_substitute=False,
+                    availability_status='pending'
+                )
+                db.session.add(booking_team_member)
+                members_copied += 1
+            
+            teams_copied += 1
+        
+        # Commit all changes
+        db.session.commit()
+        
+        # Audit logging
+        audit_log_create('Booking', new_booking.id, 
+                        f'Created booking from event teams for {event.name} on {booking_date}',
+                        {'teams_copied': teams_copied, 'members_copied': members_copied, 
+                         'vs': vs, 'home_away': home_away})
+        
+        audit_log_bulk_operation('TEAM_TO_BOOKING_COPY', 'BookingTeam', teams_copied,
+                                f'Copied {teams_copied} teams to booking for {event.name}',
+                                {'booking_id': new_booking.id, 'event_id': event_id})
+        
+        flash(f'Successfully created booking with {teams_copied} teams and {members_copied} members.', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error copying teams to booking: {str(e)}")
+        flash('An error occurred while creating the booking.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/add_substitute_to_team/<int:booking_team_id>', methods=['POST'])
+@login_required
+@admin_required
+def add_substitute_to_team(booking_team_id):
+    """
+    Add a substitute to a booking team
+    """
+    try:
+        from app.models import BookingTeam, BookingTeamMember
+        from app.audit import audit_log_create
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        booking_team = db.session.get(BookingTeam, booking_team_id)
+        if not booking_team:
+            flash('Team not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        member_id = request.form.get('member_id', type=int)
+        position = request.form.get('position', '')
+        
+        if not member_id or not position:
+            flash('Member and position are required.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=booking_team.booking.event_id))
+        
+        # Check if member is already in the team
+        existing = db.session.scalar(
+            sa.select(BookingTeamMember).where(
+                BookingTeamMember.booking_team_id == booking_team_id,
+                BookingTeamMember.member_id == member_id
+            )
+        )
+        
+        if existing:
+            flash('Member is already in this team.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=booking_team.booking.event_id))
+        
+        # Add substitute
+        substitute = BookingTeamMember(
+            booking_team_id=booking_team_id,
+            member_id=member_id,
+            position=position,
+            is_substitute=True,
+            availability_status='pending'
+        )
+        
+        db.session.add(substitute)
+        db.session.commit()
+        
+        # Get member name for feedback
+        member = db.session.get(Member, member_id)
+        member_name = f"{member.firstname} {member.lastname}" if member else "Unknown"
+        
+        # Audit log
+        audit_log_create('BookingTeamMember', substitute.id,
+                        f'Added substitute {member_name} to team {booking_team.team_name}',
+                        {'position': position, 'is_substitute': True})
+        
+        flash(f'Added {member_name} as substitute {position} to {booking_team.team_name}.', 'success')
+        return redirect(url_for('admin.manage_events', event_id=booking_team.booking.event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding substitute: {str(e)}")
+        flash('An error occurred while adding the substitute.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/update_member_availability/<int:booking_team_member_id>', methods=['POST'])
+@login_required
+def update_member_availability(booking_team_member_id):
+    """
+    Update a team member's availability status (accessible to team members and admins)
+    """
+    try:
+        from app.models import BookingTeamMember
+        from app.audit import audit_log_update
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('main.index'))
+        
+        booking_team_member = db.session.get(BookingTeamMember, booking_team_member_id)
+        if not booking_team_member:
+            flash('Team member not found.', 'error')
+            return redirect(url_for('main.index'))
+        
+        # Check permission - member can update their own availability
+        if not current_user.is_admin and current_user.id != booking_team_member.member_id:
+            flash('You can only update your own availability.', 'error')
+            return redirect(url_for('main.index'))
+        
+        new_status = request.form.get('status')
+        if new_status not in ['pending', 'available', 'unavailable']:
+            flash('Invalid status.', 'error')
+            return redirect(url_for('main.index'))
+        
+        old_status = booking_team_member.availability_status
+        booking_team_member.availability_status = new_status
+        
+        if new_status != 'pending':
+            booking_team_member.confirmed_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('BookingTeamMember', booking_team_member.id,
+                        f'Availability updated from {old_status} to {new_status}',
+                        {'old_status': old_status, 'new_status': new_status})
+        
+        flash(f'Availability updated to {new_status}.', 'success')
+        return redirect(url_for('main.index'))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating availability: {str(e)}")
+        flash('An error occurred while updating availability.', 'error')
+        return redirect(url_for('main.index'))
+
+
+@bp.route('/auto_select_pool_members/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def auto_select_pool_members(event_id):
+    """
+    Automatically select pool members for team creation based on criteria
+    """
+    try:
+        from app.audit import audit_log_bulk_operation
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event or not event.has_pool_enabled():
+            flash('Event not found or pool not enabled.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check permission
+        if not current_user.is_admin and current_user not in event.event_managers:
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        selection_method = request.form.get('method', 'oldest_first')
+        num_to_select = request.form.get('count', type=int)
+        
+        if not num_to_select or num_to_select <= 0:
+            flash('Invalid selection count.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Get registered members
+        registered_members = [reg for reg in event.pool.registrations if reg.status == 'registered']
+        
+        if len(registered_members) < num_to_select:
+            flash(f'Only {len(registered_members)} registered members available, cannot select {num_to_select}.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Apply selection method
+        if selection_method == 'oldest_first':
+            selected_registrations = sorted(registered_members, key=lambda r: r.registered_at)[:num_to_select]
+        elif selection_method == 'random':
+            import random
+            selected_registrations = random.sample(registered_members, num_to_select)
+        else:
+            # Default to oldest first
+            selected_registrations = sorted(registered_members, key=lambda r: r.registered_at)[:num_to_select]
+        
+        # Update selected members to 'available' status
+        updated_count = 0
+        for registration in selected_registrations:
+            registration.set_available()
+            updated_count += 1
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_bulk_operation('AUTO_POOL_SELECTION', 'PoolRegistration', updated_count,
+                                f'Auto-selected {updated_count} members using {selection_method} for {event.name}',
+                                {'event_id': event_id, 'method': selection_method})
+        
+        flash(f'Automatically selected {updated_count} members for team creation.', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in auto pool selection: {str(e)}")
+        flash('An error occurred during automatic selection.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
 @bp.route('/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
 @login_required
 def manage_teams(booking_id):

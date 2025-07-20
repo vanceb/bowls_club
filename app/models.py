@@ -216,6 +216,67 @@ class Event(db.Model):
         if not self.has_pool_enabled():
             return 'no_pool'
         return 'open' if self.pool.is_open else 'closed'
+    
+    def can_create_teams_from_pool(self):
+        """Check if teams can be created from pool members"""
+        if not self.has_pool_enabled():
+            return False, "No pool enabled for this event"
+        
+        available_members = self.pool.get_available_members()
+        if not available_members:
+            return False, "No available members in pool"
+        
+        from flask import current_app
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(self.format, [])
+        
+        if not positions:
+            return False, f"No team positions configured for format: {self.format}"
+        
+        team_size = len(positions)
+        if len(available_members) < team_size:
+            return False, f"Not enough available members ({len(available_members)}) for a complete team (need {team_size})"
+        
+        return True, f"Can create {len(available_members) // team_size} teams"
+    
+    def can_create_booking_from_teams(self):
+        """Check if a booking can be created from existing teams"""
+        if not self.event_teams:
+            return False, "No teams exist for this event"
+        
+        teams_with_members = [team for team in self.event_teams if team.team_members]
+        if not teams_with_members:
+            return False, "No teams have assigned members"
+        
+        return True, f"Can create booking with {len(teams_with_members)} teams"
+    
+    def get_workflow_status(self):
+        """Get the current status of the pool-to-team-to-booking workflow"""
+        status = {
+            'pool_enabled': self.has_pool_enabled(),
+            'pool_open': self.is_pool_open(),
+            'pool_members': self.get_pool_member_count(),
+            'available_members': len(self.pool.get_available_members()) if self.has_pool_enabled() else 0,
+            'teams_count': len(self.event_teams),
+            'teams_with_members': len([t for t in self.event_teams if t.team_members]),
+            'bookings_count': len(self.bookings)
+        }
+        
+        # Determine workflow stage
+        if not status['pool_enabled']:
+            status['stage'] = 'no_pool'
+        elif status['pool_members'] == 0:
+            status['stage'] = 'awaiting_registrations'
+        elif status['available_members'] == 0 and status['teams_count'] == 0:
+            status['stage'] = 'ready_for_selection'
+        elif status['teams_count'] == 0:
+            status['stage'] = 'ready_for_teams'
+        elif status['bookings_count'] == 0:
+            status['stage'] = 'ready_for_booking'
+        else:
+            status['stage'] = 'complete'
+        
+        return status
 
 
 class EventPool(db.Model):
