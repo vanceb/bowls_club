@@ -34,8 +34,8 @@ class Config:
         {
             'name': 'My Games',
             'submenu': [
-                {'name': 'Upcoming Events', 'link': 'main.upcoming_events'},
                 {'name': 'View My Games', 'link': 'main.my_games'},
+                {'name': 'Upcoming Events', 'link': 'main.upcoming_events'},
                 {'name': 'Book Roll-Up', 'link': 'main.book_rollup'},
             ]
         },
