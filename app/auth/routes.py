@@ -38,7 +38,7 @@ def login():
                     audit_log_security_event('LOGIN_ATTEMPT_LOCKED_ACCOUNT', 
                                            f'Login attempt on locked account: {user.username}')
                     flash('Your account has been locked. Please contact the administrator.', 'error')
-                    return render_template('login.html', form=form)
+                    return render_template('auth/login.html', form=form)
                 
                 # Successful login
                 login_user(user, remember=form.remember_me.data)
@@ -63,12 +63,12 @@ def login():
                 audit_log_authentication('LOGIN', attempted_username, False)
                 flash('Invalid username or password', 'error')
         
-        return render_template('login.html', form=form)
+        return render_template('auth/login.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in login route: {str(e)}")
         flash('An error occurred during login. Please try again.', 'error')
-        return render_template('login.html', form=LoginForm())
+        return render_template('auth/login.html', form=LoginForm())
 
 
 @bp.route('/logout')
@@ -130,12 +130,12 @@ def reset_password_request():
             
             return redirect(url_for('auth.login'))
         
-        return render_template('reset_password_request.html', form=form)
+        return render_template('auth/reset_password_request.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in reset_password_request route: {str(e)}")
         flash('An error occurred. Please try again.', 'error')
-        return render_template('reset_password_request.html', form=RequestResetForm())
+        return render_template('auth/reset_password_request.html', form=RequestResetForm())
 
 
 @bp.route('/reset_password/<token>', methods=['GET', 'POST'])
@@ -167,7 +167,7 @@ def reset_password(token):
             flash('Your password has been reset successfully. You can now log in.', 'success')
             return redirect(url_for('auth.login'))
         
-        return render_template('reset_password.html', form=form)
+        return render_template('auth/reset_password.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in reset_password route: {str(e)}")
@@ -211,12 +211,12 @@ def profile():
             form.share_email.data = current_user.share_email
             form.share_phone.data = current_user.share_phone
         
-        return render_template('edit_profile.html', form=form)
+        return render_template('auth/edit_profile.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in profile route: {str(e)}")
         flash('An error occurred while loading your profile.', 'error')
-        return render_template('edit_profile.html', form=EditProfileForm(current_user.email))
+        return render_template('auth/edit_profile.html', form=EditProfileForm(current_user.email))
 
 
 @bp.route('/change_password', methods=['GET', 'POST'])
@@ -232,7 +232,7 @@ def change_password():
             # Verify current password
             if not current_user.check_password(form.current_password.data):
                 flash('Current password is incorrect.', 'error')
-                return render_template('change_password.html', form=form)
+                return render_template('auth/change_password.html', form=form)
             
             # Update password
             current_user.set_password(form.password.data)
@@ -244,7 +244,7 @@ def change_password():
             flash('Your password has been changed successfully.', 'success')
             return redirect(url_for('auth.profile'))
         
-        return render_template('change_password.html', form=form)
+        return render_template('auth/change_password.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in change_password route: {str(e)}")

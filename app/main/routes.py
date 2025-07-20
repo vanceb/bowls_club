@@ -21,19 +21,28 @@ def index():
     Home page that displays recent posts and upcoming events
     """
     try:
-        # Get all posts ordered by date (published posts - check if not expired)
         today = date.today()
-        posts = db.session.scalars(
-            sa.select(Post)
-            .where(Post.expires_on >= today)
+        
+        # Fetch pinned posts (posts with pin_until date >= today)
+        pinned_posts = db.session.scalars(
+            sa.select(Post).where(
+                Post.expires_on >= today,
+                Post.pin_until >= today
+            )
             .order_by(Post.publish_on.desc())
         ).all()
         
-        # Get recent 5 posts for display
-        recent_posts = posts[:5]
+        # Fetch non-pinned posts (posts without pin_until or pin_until < today)
+        non_pinned_posts = db.session.scalars(
+            sa.select(Post).where(
+                Post.expires_on >= today,
+                sa.or_(Post.pin_until < today, Post.pin_until == None)
+            )
+            .order_by(Post.publish_on.desc())
+            .limit(5)  # Show 5 recent non-pinned posts
+        ).all()
         
         # Get upcoming events (next 7 days)
-        today = date.today()
         upcoming_events = db.session.scalars(
             sa.select(Booking)
             .join(Event)
@@ -44,17 +53,17 @@ def index():
             .order_by(Booking.booking_date, Booking.session)
         ).all()
         
-        return render_template('index.html', 
-                             recent_posts=recent_posts, 
+        return render_template('main/index.html', 
+                             recent_posts=non_pinned_posts,  # Keep for backwards compatibility
                              upcoming_events=upcoming_events,
-                             pinned_posts=[],
-                             non_pinned_posts=recent_posts,
+                             pinned_posts=pinned_posts,
+                             non_pinned_posts=non_pinned_posts,
                              pagination=None,
                              current_page=1)
     except Exception as e:
         current_app.logger.error(f"Error in index route: {str(e)}")
         flash('An error occurred while loading the home page.', 'error')
-        return render_template('index.html', 
+        return render_template('main/index.html', 
                              recent_posts=[], 
                              upcoming_events=[],
                              pinned_posts=[],
@@ -102,7 +111,7 @@ def post(post_id):
             current_app.logger.error(f"Error sanitizing HTML content: {str(e)}")
             sanitized_content = html_content  # Fallback to unsanitized content
         
-        return render_template('view_post.html', post=post, content=sanitized_content)
+        return render_template('main/view_post.html', post=post, content=sanitized_content)
     except Exception as e:
         current_app.logger.error(f"Error displaying post {post_id}: {str(e)}")
         abort(500)
@@ -136,14 +145,14 @@ def members():
         pagination = Pagination(page=page, per_page=per_page, total=total,
                                css_framework='bulma')
         
-        return render_template('members.html', 
+        return render_template('main/members.html', 
                              members=members, 
                              pagination=pagination,
                              total=total)
     except Exception as e:
         current_app.logger.error(f"Error in members route: {str(e)}")
         flash('An error occurred while loading the members page.', 'error')
-        return render_template('members.html', members=[], pagination=None, total=0)
+        return render_template('main/members.html', members=[], pagination=None, total=0)
 
 
 @bp.route('/bookings')
@@ -160,14 +169,14 @@ def bookings():
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         rinks = current_app.config.get('RINKS', 6)
         
-        return render_template('bookings_table.html', 
+        return render_template('main/bookings_table.html', 
                              today=today.isoformat(),
                              sessions=sessions,
                              rinks=rinks)
     except Exception as e:
         current_app.logger.error(f"Error in bookings route: {str(e)}")
         flash('An error occurred while loading the bookings page.', 'error')
-        return render_template('bookings_table.html', 
+        return render_template('main/bookings_table.html', 
                              today=date.today().isoformat(),
                              sessions={},
                              rinks=6)
@@ -310,7 +319,7 @@ def policy(slug):
         # Sanitize HTML content
         sanitized_content = sanitize_html_content(html_content)
         
-        return render_template('view_policy_page.html', 
+        return render_template('main/view_policy_page.html', 
                              policy_page=policy_page, 
                              content=sanitized_content)
     except Exception as e:
@@ -387,7 +396,7 @@ def my_games():
         # Create CSRF form for POST actions
         csrf_form = FlaskForm()
         
-        return render_template('my_games.html', 
+        return render_template('main/my_games.html', 
                              assignments=assignments,
                              roll_up_invitations=roll_up_invitations,
                              today=today,
@@ -396,7 +405,7 @@ def my_games():
     except Exception as e:
         current_app.logger.error(f"Error in my_games route: {str(e)}")
         flash('An error occurred while loading your games.', 'error')
-        return render_template('my_games.html', 
+        return render_template('main/my_games.html', 
                              assignments=[], 
                              roll_up_invitations=[],
                              today=date.today(),
@@ -461,7 +470,7 @@ def book_rollup():
             flash('Roll-up booking created successfully!', 'success')
             return redirect(url_for('main.my_games'))
         
-        return render_template('book_rollup.html', form=form)
+        return render_template('main/book_rollup.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in book_rollup route: {str(e)}")
@@ -556,7 +565,7 @@ def manage_rollup(booking_id):
         from app.forms import FlaskForm
         csrf_form = FlaskForm()
         
-        return render_template('manage_rollup.html', 
+        return render_template('main/manage_rollup.html', 
                              booking=booking,
                              players=players,
                              session_name=session_name,
@@ -812,11 +821,11 @@ def add_member():
             flash(f'Member {member.firstname} {member.lastname} has been added successfully.', 'success')
             return redirect(url_for('main.members'))
         
-        return render_template('add_member.html', form=form)
+        return render_template('main/add_member.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error adding member: {str(e)}")
         flash('An error occurred while adding the member.', 'error')
-        return render_template('add_member.html', form=MemberForm())
+        return render_template('main/add_member.html', form=MemberForm())
 
 

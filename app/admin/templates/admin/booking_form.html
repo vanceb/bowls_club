@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">{{ title }}</h1>
+    <p class="subtitle">Admin interface for booking management</p>
+    
+    <div class="box">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            {% if form.booking_date %}
+            <div class="field">
+                <label class="label">{{ form.booking_date.label }}</label>
+                <div class="control">
+                    {{ form.booking_date(class="input") }}
+                </div>
+                {% for error in form.booking_date.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.session %}
+            <div class="field">
+                <label class="label">{{ form.session.label }}</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ form.session(class="select") }}
+                    </div>
+                </div>
+                {% for error in form.session.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.rink %}
+            <div class="field">
+                <label class="label">{{ form.rink.label }}</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ form.rink(class="select") }}
+                    </div>
+                </div>
+                {% for error in form.rink.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.status %}
+            <div class="field">
+                <label class="label">{{ form.status.label }}</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        {{ form.status(class="select") }}
+                    </div>
+                </div>
+                {% for error in form.status.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.organizer_notes %}
+            <div class="field">
+                <label class="label">{{ form.organizer_notes.label }}</label>
+                <div class="control">
+                    {{ form.organizer_notes(class="textarea") }}
+                </div>
+                {% for error in form.organizer_notes.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.admin_notes %}
+            <div class="field">
+                <label class="label">{{ form.admin_notes.label }}</label>
+                <div class="control">
+                    {{ form.admin_notes(class="textarea") }}
+                </div>
+                {% for error in form.admin_notes.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="field is-grouped">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-save"></i>
+                        </span>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+                <div class="control">
+                    <a href="{{ url_for('admin.manage_events') }}" class="button">
+                        <span class="icon">
+                            <i class="fas fa-arrow-left"></i>
+                        </span>
+                        <span>Cancel</span>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

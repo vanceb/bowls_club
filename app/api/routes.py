@@ -13,47 +13,50 @@ from app.models import Member, Event, Booking
 def search_members():
     """
     Search for members by name (AJAX endpoint)
+    Returns different data based on user permissions
     """
     try:
+        from app.routes import _search_members_base, _get_member_data
+        
         search_term = request.args.get('q', '').strip()
         
-        if not search_term:
-            # Return all active members if no search term
-            members = db.session.scalars(
-                sa.select(Member)
-                .where(Member.status.in_(['Full', 'Social', 'Life']))
-                .order_by(Member.firstname, Member.lastname)
-            ).all()
-        else:
-            # Search members by name
-            search_pattern = f'%{search_term}%'
-            members = db.session.scalars(
-                sa.select(Member)
-                .where(
-                    Member.status.in_(['Full', 'Social', 'Life']),
-                    sa.or_(
-                        Member.firstname.ilike(search_pattern),
-                        Member.lastname.ilike(search_pattern),
-                        sa.func.concat(Member.firstname, ' ', Member.lastname).ilike(search_pattern)
-                    )
-                )
-                .order_by(Member.firstname, Member.lastname)
-                .limit(20)  # Limit results for performance
-            ).all()
+        # Determine if user should see admin data
+        show_admin_data = current_user.is_authenticated and current_user.is_admin
         
-        # Format results
+        if not search_term:
+            # Return all members if no search term (admin) or active members (regular users)
+            if show_admin_data:
+                members = db.session.scalars(sa.select(Member).order_by(Member.lastname, Member.firstname)).all()
+            else:
+                members = db.session.scalars(
+                    sa.select(Member)
+                    .where(Member.status.in_(['Full', 'Social', 'Life']))
+                    .order_by(Member.firstname, Member.lastname)
+                ).all()
+        else:
+            # Use the utility function for consistent search
+            members = _search_members_base(search_term)
+            if not show_admin_data:
+                # Limit results for non-admin users
+                members = members[:20]
+        
+        # Format results based on user permissions
         results = []
         for member in members:
-            results.append({
-                'id': member.id,
-                'firstname': member.firstname,
-                'lastname': member.lastname,
-                'email': member.email,
-                'phone': member.phone,
-                'share_email': member.share_email,
-                'share_phone': member.share_phone,
-                'status': member.status
-            })
+            if show_admin_data:
+                # Admin users get full data
+                member_data = _get_member_data(member, show_private_data=True)
+                
+                # Add admin-specific fields
+                member_data.update({
+                    'last_seen': member.last_seen.strftime('%Y-%m-%d') if member.last_seen else 'Never',
+                    'roles': [{'name': role.name} for role in member.roles] if member.roles else []
+                })
+            else:
+                # Regular users get privacy-filtered data
+                member_data = _get_member_data(member, show_private_data=False)
+            
+            results.append(member_data)
         
         return jsonify({
             'success': True,
@@ -83,27 +86,36 @@ def get_event(event_id):
                 'error': 'Event not found'
             }), 404
         
-        # Format event data
+        # Format event data with correct field names
         event_data = {
             'id': event.id,
             'name': event.name,
             'event_type': event.event_type,
-            'event_gender': event.event_gender,
-            'event_format': event.event_format,
-            'description': event.description,
-            'is_active': event.is_active
+            'gender': event.gender,
+            'format': event.format,
+            'scoring': event.scoring
         }
+        
+        # Add event managers
+        event_managers = []
+        for manager in event.event_managers:
+            event_managers.append({
+                'id': manager.id,
+                'name': f"{manager.firstname} {manager.lastname}"
+            })
+        event_data['event_managers'] = event_managers
         
         # Get event teams if they exist
         teams = []
-        for team in event.teams:
+        for team in event.event_teams:
             team_data = {
                 'id': team.id,
-                'name': team.name,
+                'team_name': team.team_name,
+                'team_number': team.team_number,
                 'members': []
             }
             
-            for member in team.members:
+            for member in team.team_members:
                 team_data['members'].append({
                     'id': member.id,
                     'member_id': member.member_id,
@@ -117,7 +129,7 @@ def get_event(event_id):
         
         return jsonify({
             'success': True,
-            'event': event_data
+            **event_data  # Return event data directly at root level
         })
         
     except Exception as e:
@@ -286,4 +298,53 @@ def get_availability(selected_date, session_id):
         return jsonify({
             'success': False,
             'error': 'An error occurred while checking availability'
+        }), 500
+
+
+@bp.route('/users_with_roles', methods=['GET'])
+@login_required
+def users_with_roles():
+    """
+    Get all users with their assigned roles (AJAX endpoint)
+    Admin only access
+    """
+    try:
+        # Check admin access
+        if not (current_user.is_authenticated and current_user.is_admin):
+            return jsonify({
+                'success': False,
+                'error': 'Admin access required'
+            }), 403
+        
+        # Get all users who have roles assigned
+        users_with_roles = db.session.scalars(
+            sa.select(Member)
+            .join(Member.roles)
+            .order_by(Member.lastname, Member.firstname)
+            .distinct()
+        ).all()
+        
+        # Format results
+        results = []
+        for user in users_with_roles:
+            user_data = {
+                'id': user.id,
+                'firstname': user.firstname,
+                'lastname': user.lastname,
+                'email': user.email,
+                'roles': [{'id': role.id, 'name': role.name} for role in user.roles]
+            }
+            results.append(user_data)
+        
+        return jsonify({
+            'success': True,
+            'users': results,
+            'count': len(results)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in users_with_roles API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while retrieving users with roles'
         }), 500

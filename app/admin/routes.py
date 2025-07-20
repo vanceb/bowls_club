@@ -150,7 +150,7 @@ def edit_member(member_id):
                 flash('Member deleted successfully', 'success')
                 return redirect(url_for('admin.manage_members'))
 
-        return render_template('edit_member.html', form=form, member=member)
+        return render_template('admin/edit_member.html', form=form, member=member)
         
     except Exception as e:
         current_app.logger.error(f"Error in edit_member: {str(e)}")
@@ -185,7 +185,7 @@ def admin_reset_password(member_id):
             flash(f'Password reset successfully for {member.firstname} {member.lastname}!', 'success')
             return redirect(url_for('admin.edit_member', member_id=member.id))
         
-        return render_template('admin_reset_password.html', 
+        return render_template('admin/admin_reset_password.html', 
                              form=form, 
                              member=member,
                              form_title=f'Reset Password for {member.firstname} {member.lastname}',
@@ -482,7 +482,8 @@ def manage_roles():
         return render_template('admin/manage_roles.html', 
                              roles=roles, 
                              users_with_roles=users_with_roles, 
-                             csrf_form=csrf_form)
+                             csrf_form=csrf_form,
+                             core_roles=current_app.config.get('CORE_ROLES', []))
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_roles: {str(e)}")
@@ -498,43 +499,25 @@ def write_post():
     Admin interface for writing posts
     """
     try:
-        # Calculate default dates
-        today = date.today()
-        default_expires_on = today + timedelta(days=current_app.config.get('POST_EXPIRATION_DAYS', 30))
+        from app.forms import WritePostForm
         
-        if request.method == 'POST':
-            # Validate CSRF token
-            csrf_form = FlaskForm()
-            if not csrf_form.validate_on_submit():
-                flash('Security validation failed.', 'error')
-                return redirect(url_for('admin.write_post'))
-                
-            # Process form submission
-            title = request.form.get('title', '').strip()
-            summary = request.form.get('summary', '').strip()
-            content = request.form.get('content', '').strip()
-            tags = request.form.get('tags', '').strip()
-            
-            # Parse dates
-            try:
-                publish_on = datetime.strptime(request.form.get('publish_on'), '%Y-%m-%d').date()
-                expires_on = datetime.strptime(request.form.get('expires_on'), '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                flash('Invalid date format.', 'error')
-                csrf_form = FlaskForm()
-                return render_template('admin/write_post.html', 
-                                     default_publish_on=today.isoformat(),
-                                     default_expires_on=default_expires_on.isoformat(),
-                                     csrf_form=csrf_form)
+        # Create form instance
+        form = WritePostForm()
+        
+        if form.validate_on_submit():
+            # Get form data
+            title = form.title.data.strip()
+            summary = form.summary.data.strip()
+            content = request.form.get('content', '').strip()  # Content field might not be in the form
+            tags = form.tags.data.strip() if form.tags.data else ''
+            publish_on = form.publish_on.data
+            expires_on = form.expires_on.data
+            pin_until = form.pin_until.data
             
             # Validate required fields
             if not title or not summary or not content:
                 flash('Title, summary, and content are required.', 'error')
-                csrf_form = FlaskForm()
-                return render_template('admin/write_post.html',
-                                     default_publish_on=today.isoformat(),
-                                     default_expires_on=default_expires_on.isoformat(),
-                                     csrf_form=csrf_form)
+                return render_template('admin/write_post.html', form=form)
             
             # Generate secure filenames using UUID
             markdown_filename = generate_secure_filename(title, '.md')
@@ -546,6 +529,7 @@ def write_post():
                 summary=summary,
                 publish_on=publish_on,
                 expires_on=expires_on,
+                pin_until=pin_until,
                 tags=tags,
                 markdown_filename=markdown_filename,
                 html_filename=html_filename,
@@ -568,11 +552,7 @@ def write_post():
                 if not markdown_path or not html_path:
                     db.session.rollback()
                     flash('Error creating secure file paths.', 'error')
-                    csrf_form = FlaskForm()
-                    return render_template('admin/write_post.html',
-                                         default_publish_on=today.isoformat(),
-                                         default_expires_on=default_expires_on.isoformat(),
-                                         csrf_form=csrf_form)
+                    return render_template('admin/write_post.html', form=form)
                 
                 # Create markdown metadata header
                 metadata = f"""---
@@ -580,6 +560,7 @@ title: {title}
 summary: {summary}
 publish_on: {publish_on.isoformat()}
 expires_on: {expires_on.isoformat()}
+pin_until: {pin_until.isoformat() if pin_until else ''}
 tags: {tags}
 ---
 
@@ -607,18 +588,10 @@ tags: {tags}
                 db.session.rollback()
                 current_app.logger.error(f"Error creating post: {str(e)}")
                 flash('An error occurred while creating the post.', 'error')
-                csrf_form = FlaskForm()
-                return render_template('admin/write_post.html',
-                                     default_publish_on=today.isoformat(),
-                                     default_expires_on=default_expires_on.isoformat(),
-                                     csrf_form=csrf_form)
+                return render_template('admin/write_post.html', form=form)
         
-        # GET request - render form with default dates
-        csrf_form = FlaskForm()
-        return render_template('admin/write_post.html',
-                             default_publish_on=today.isoformat(),
-                             default_expires_on=default_expires_on.isoformat(),
-                             csrf_form=csrf_form)
+        # GET request - render form
+        return render_template('admin/write_post.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in write_post: {str(e)}")
@@ -720,10 +693,26 @@ def manage_policy_pages():
             sa.select(PolicyPage).order_by(PolicyPage.sort_order, PolicyPage.title)
         ).all()
         
+        # Check if we should show orphaned files
+        show_orphaned = request.args.get('show_orphaned', '').lower() == 'true'
+        orphaned_pages = []
+        
+        if show_orphaned:
+            from app.utils import find_orphaned_policy_pages
+            orphaned_pages = find_orphaned_policy_pages()
+            
+            # Provide feedback message if no orphaned files found
+            if not orphaned_pages:
+                flash('No orphaned policy page files found! All files are properly tracked in the database.', 'success')
+        
         # Create a simple form for CSRF protection
         csrf_form = FlaskForm()
         
-        return render_template('admin/manage_policy_pages.html', policy_pages=policy_pages, csrf_form=csrf_form)
+        return render_template('admin/manage_policy_pages.html', 
+                             policy_pages=policy_pages, 
+                             csrf_form=csrf_form,
+                             show_orphaned=show_orphaned,
+                             orphaned_pages=orphaned_pages)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_policy_pages: {str(e)}")
@@ -731,7 +720,7 @@ def manage_policy_pages():
         return redirect(url_for('main.index'))
 
 
-@bp.route('/manage_events')
+@bp.route('/manage_events', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_events():
@@ -739,12 +728,154 @@ def manage_events():
     Admin interface for managing events
     """
     try:
-        # Get all events
-        events = db.session.scalars(
-            sa.select(Event).order_by(Event.name)
-        ).all()
+        from app.forms import EventForm, EventSelectionForm, BookingForm
+        from app.models import EventTeam, Booking
+        from app.audit import audit_log_create, audit_log_update
         
-        return render_template('admin/manage_events.html', events=events)
+        # Get selected event ID from request
+        selected_event_id = request.args.get('event_id', type=int) or request.form.get('event_id', type=int)
+        selected_event = None
+        event_teams = []
+        event_bookings = []
+        can_create_bookings = False
+        
+        # Initialize forms
+        selection_form = EventSelectionForm()
+        event_form = EventForm()
+        booking_form = BookingForm()
+        
+        # Handle form submissions
+        if request.method == 'POST':
+            # Handle event creation/updating
+            if 'submit' in request.form and event_form.validate_on_submit():
+                if event_form.event_id.data:
+                    # Update existing event
+                    event = db.session.get(Event, event_form.event_id.data)
+                    if event:
+                        # Capture changes for audit log
+                        changes = get_model_changes(event, {
+                            'name': event_form.name.data,
+                            'event_type': event_form.event_type.data,
+                            'gender': event_form.gender.data,
+                            'format': event_form.format.data,
+                            'scoring': event_form.scoring.data
+                        })
+                        
+                        # Update event
+                        event.name = event_form.name.data
+                        event.event_type = event_form.event_type.data
+                        event.gender = event_form.gender.data
+                        event.format = event_form.format.data
+                        event.scoring = event_form.scoring.data
+                        
+                        # Update event managers
+                        event.event_managers.clear()
+                        for manager_id in event_form.event_managers.data:
+                            manager = db.session.get(Member, manager_id)
+                            if manager:
+                                event.event_managers.append(manager)
+                        
+                        db.session.commit()
+                        
+                        # Audit log
+                        audit_log_update('Event', event.id, f'Updated event: {event.name}', changes)
+                        
+                        flash(f'Event "{event.name}" updated successfully!', 'success')
+                        selected_event_id = event.id
+                else:
+                    # Create new event
+                    event = Event(
+                        name=event_form.name.data,
+                        event_type=event_form.event_type.data,
+                        gender=event_form.gender.data,
+                        format=event_form.format.data,
+                        scoring=event_form.scoring.data
+                    )
+                    
+                    # Add event managers
+                    for manager_id in event_form.event_managers.data:
+                        manager = db.session.get(Member, manager_id)
+                        if manager:
+                            event.event_managers.append(manager)
+                    
+                    db.session.add(event)
+                    db.session.commit()
+                    
+                    # Audit log
+                    audit_log_create('Event', event.id, f'Created event: {event.name}')
+                    
+                    flash(f'Event "{event.name}" created successfully!', 'success')
+                    selected_event_id = event.id
+            
+            # Handle booking creation/updating
+            elif 'create_booking' in request.form and booking_form.validate_on_submit():
+                if selected_event_id:
+                    # Create new booking
+                    booking = Booking(
+                        booking_date=booking_form.booking_date.data,
+                        session=booking_form.session.data,
+                        organizer_id=current_user.id,
+                        rink_count=booking_form.rink_count.data,
+                        booking_type='event',
+                        priority=booking_form.priority.data,
+                        vs=booking_form.vs.data,
+                        home_away=booking_form.home_away.data,
+                        event_id=selected_event_id
+                    )
+                    
+                    db.session.add(booking)
+                    db.session.commit()
+                    
+                    # Audit log
+                    audit_log_create('Booking', booking.id, f'Created event booking for {booking.booking_date}')
+                    
+                    flash('Booking created successfully!', 'success')
+        
+        # Get selected event and related data
+        if selected_event_id:
+            selected_event = db.session.get(Event, selected_event_id)
+            if selected_event:
+                # Get event teams
+                event_teams = db.session.scalars(
+                    sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
+                    .order_by(EventTeam.team_name)
+                ).all()
+                
+                # Get event bookings
+                event_bookings = db.session.scalars(
+                    sa.select(Booking).where(Booking.event_id == selected_event_id)
+                    .order_by(Booking.booking_date, Booking.session)
+                ).all()
+                
+                # Check if we can create bookings (need at least one team)
+                can_create_bookings = len(event_teams) > 0
+                
+                # Pre-populate event form with selected event data
+                if request.method == 'GET':
+                    event_form.event_id.data = selected_event.id
+                    event_form.name.data = selected_event.name
+                    event_form.event_type.data = selected_event.event_type
+                    event_form.gender.data = selected_event.gender
+                    event_form.format.data = selected_event.format
+                    event_form.scoring.data = selected_event.scoring
+                    event_form.event_managers.data = [manager.id for manager in selected_event.event_managers]
+                
+                # Set selection form to selected event
+                selection_form.selected_event.data = selected_event_id
+        
+        # Get team positions for display
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        
+        return render_template('admin/manage_events.html', 
+                             events=[], # Not used in template
+                             selection_form=selection_form,
+                             event_form=event_form,
+                             booking_form=booking_form,
+                             selected_event=selected_event,
+                             event_teams=event_teams,
+                             event_bookings=event_bookings,
+                             can_create_bookings=can_create_bookings,
+                             team_positions=team_positions)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_events: {str(e)}")
@@ -1556,6 +1687,140 @@ def manage_teams(booking_id):
         current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")
         flash('An error occurred while managing teams.', 'error')
         return redirect(url_for('main.bookings'))
+
+
+@bp.route('/add_user_to_role', methods=['POST'])
+@login_required
+@admin_required
+def add_user_to_role():
+    """
+    Add a user to a role (AJAX endpoint)
+    """
+    try:
+        from app.models import Role
+        import json
+        
+        data = request.get_json()
+        user_id = data.get('user_id')
+        role_id = data.get('role_id')
+        
+        if not user_id or not role_id:
+            return jsonify({
+                'success': False,
+                'error': 'User ID and Role ID are required'
+            }), 400
+        
+        # Get user and role
+        user = db.session.get(Member, user_id)
+        role = db.session.get(Role, role_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+            
+        if not role:
+            return jsonify({
+                'success': False,
+                'error': 'Role not found'
+            }), 404
+        
+        # Check if user already has this role
+        if role in user.roles:
+            return jsonify({
+                'success': False,
+                'error': 'User already has this role'
+            }), 400
+        
+        # Add role to user
+        user.roles.append(role)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('Member', user.id, 
+                        f'Added role "{role.name}" to user {user.firstname} {user.lastname}',
+                        {'action': 'add_role', 'role_name': role.name})
+        
+        return jsonify({
+            'success': True,
+            'message': f'Role "{role.name}" added to {user.firstname} {user.lastname}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error adding user to role: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while adding the user to the role'
+        }), 500
+
+
+@bp.route('/remove_user_from_role', methods=['POST'])
+@login_required
+@admin_required
+def remove_user_from_role():
+    """
+    Remove a user from a role (AJAX endpoint)
+    """
+    try:
+        from app.models import Role
+        import json
+        
+        data = request.get_json()
+        user_id = data.get('user_id')
+        role_id = data.get('role_id')
+        
+        if not user_id or not role_id:
+            return jsonify({
+                'success': False,
+                'error': 'User ID and Role ID are required'
+            }), 400
+        
+        # Get user and role
+        user = db.session.get(Member, user_id)
+        role = db.session.get(Role, role_id)
+        
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+            
+        if not role:
+            return jsonify({
+                'success': False,
+                'error': 'Role not found'
+            }), 404
+        
+        # Check if user has this role
+        if role not in user.roles:
+            return jsonify({
+                'success': False,
+                'error': 'User does not have this role'
+            }), 400
+        
+        # Remove role from user
+        user.roles.remove(role)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('Member', user.id, 
+                        f'Removed role "{role.name}" from user {user.firstname} {user.lastname}',
+                        {'action': 'remove_role', 'role_name': role.name})
+        
+        return jsonify({
+            'success': True,
+            'message': f'Role "{role.name}" removed from {user.firstname} {user.lastname}'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error removing user from role: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while removing the user from the role'
+        }), 500
 
 
 @bp.route('/test')

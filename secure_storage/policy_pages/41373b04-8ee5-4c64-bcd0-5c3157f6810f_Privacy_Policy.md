@@ -8,7 +8,7 @@ sort_order: 1
 title: Privacy Policy
 ---
 
-# Privacy Policy
+# Privacy Policy - Paignton Bowls Club
 
 ## Information We Collect
 

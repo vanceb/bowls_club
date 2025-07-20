@@ -25,8 +25,8 @@ from werkzeug.security import generate_password_hash
 
 
 def create_initial_roles():
-    """Create the standard roles for the bowls club."""
-    roles_to_create = Config.STANDARD_ROLES
+    """Create the core roles for the bowls club."""
+    roles_to_create = Config.CORE_ROLES
     
     print("Creating initial roles...")
     created_count = 0
