@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">Upcoming Events</h1>
+    <p class="subtitle">Register your interest in upcoming events. Event managers will create teams from the pool of registered members.</p>
+
+    {% if events_data %}
+    <!-- Group events by registration status -->
+    {% set open_events = [] %}
+    {% set registered_events = [] %}
+    {% set closed_events = [] %}
+    
+    {% for event_info in events_data %}
+        {% if event_info.pool_open and event_info.registration_status == 'not_registered' %}
+            {% set _ = open_events.append(event_info) %}
+        {% elif event_info.registration_status in ['registered', 'available'] %}
+            {% set _ = registered_events.append(event_info) %}
+        {% else %}
+            {% set _ = closed_events.append(event_info) %}
+        {% endif %}
+    {% endfor %}
+
+    <!-- Open for Registration Section -->
+    {% if open_events %}
+    <div class="box">
+        <h3 class="title is-4 has-text-success">
+            <span class="icon">
+                <i class="fas fa-door-open"></i>
+            </span>
+            <span>Open for Registration ({{ open_events | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Events currently accepting registrations</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Event Details</th>
+                        <th style="width: 15%;">Type/Format</th>
+                        <th style="width: 15%;">Registered</th>
+                        <th style="width: 20%;">Managers</th>
+                        <th style="width: 25%;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event_info in open_events %}
+                    {% set event = event_info.event %}
+                    <tr class="has-background-success-light">
+                        <td>
+                            <strong>{{ event.name }}</strong><br>
+                            <span class="has-text-grey">Created {{ event.created_at.strftime('%b %d, %Y') }}</span>
+                            {% if event.scoring %}
+                            <br><small class="has-text-info">{{ event.scoring }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag is-primary">{{ event.get_event_type_name() }}</span><br>
+                            <small>{{ event.get_gender_name() }}</small><br>
+                            <small>{{ event.get_format_name() }}</small>
+                        </td>
+                        <td>
+                            <div class="has-text-centered">
+                                <p class="title is-5 has-text-info">{{ event_info.pool_count }}</p>
+                                <p class="heading">members</p>
+                            </div>
+                        </td>
+                        <td>
+                            {% for manager in event.event_managers %}
+                                <span class="tag is-light is-small">{{ manager.firstname }} {{ manager.lastname }}</span>
+                                {% if not loop.last %}<br>{% endif %}
+                            {% endfor %}
+                            {% if not event.event_managers %}
+                                <span class="has-text-grey">No managers assigned</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('main.register_for_event') }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <input type="hidden" name="event_id" value="{{ event.id }}">
+                                <button type="submit" class="button is-success" 
+                                        onclick="return confirm('Register your interest in this event? You can withdraw later if needed.')">
+                                    <span class="icon">
+                                        <i class="fas fa-user-plus"></i>
+                                    </span>
+                                    <span>Register Interest</span>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Your Registered Events Section -->
+    {% if registered_events %}
+    <div class="box">
+        <h3 class="title is-4 has-text-info">
+            <span class="icon">
+                <i class="fas fa-check-circle"></i>
+            </span>
+            <span>Your Registered Events ({{ registered_events | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Events you've registered for</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">Event Details</th>
+                        <th style="width: 15%;">Type/Format</th>
+                        <th style="width: 15%;">Status</th>
+                        <th style="width: 20%;">Registration</th>
+                        <th style="width: 25%;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event_info in registered_events %}
+                    {% set event = event_info.event %}
+                    {% set registration = event_info.registration %}
+                    <tr class="has-background-info-light">
+                        <td>
+                            <strong>{{ event.name }}</strong><br>
+                            <span class="has-text-grey">Created {{ event.created_at.strftime('%b %d, %Y') }}</span>
+                            {% if event.scoring %}
+                            <br><small class="has-text-info">{{ event.scoring }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag is-primary">{{ event.get_event_type_name() }}</span><br>
+                            <small>{{ event.get_gender_name() }}</small><br>
+                            <small>{{ event.get_format_name() }}</small>
+                        </td>
+                        <td>
+                            {% if event_info.pool_open %}
+                                <span class="tag is-success">
+                                    <span class="icon">
+                                        <i class="fas fa-door-open"></i>
+                                    </span>
+                                    <span>Open</span>
+                                </span>
+                            {% else %}
+                                <span class="tag is-warning">
+                                    <span class="icon">
+                                        <i class="fas fa-door-closed"></i>
+                                    </span>
+                                    <span>Closed</span>
+                                </span>
+                            {% endif %}
+                            <br>
+                            <small class="has-text-grey">{{ event_info.pool_count }} members registered</small>
+                        </td>
+                        <td>
+                            <span class="tag is-info">
+                                <span class="icon">
+                                    <i class="fas fa-user-check"></i>
+                                </span>
+                                <span>{{ registration.status.title() }}</span>
+                            </span>
+                            <br>
+                            <small class="has-text-grey">
+                                Registered {{ registration.registered_at.strftime('%b %d at %I:%M %p') }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if event_info.pool_open %}
+                            <form method="POST" action="{{ url_for('main.withdraw_from_event') }}" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <input type="hidden" name="event_id" value="{{ event.id }}">
+                                <button type="submit" class="button is-warning is-small" 
+                                        onclick="return confirm('Withdraw your registration from this event?')">
+                                    <span class="icon">
+                                        <i class="fas fa-user-minus"></i>
+                                    </span>
+                                    <span>Withdraw</span>
+                                </button>
+                            </form>
+                            {% else %}
+                                <small class="has-text-grey">
+                                    Registration closed - contact event manager for changes
+                                </small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Closed Events Section -->
+    {% if closed_events %}
+    <div class="box">
+        <h3 class="title is-4 has-text-grey">
+            <span class="icon">
+                <i class="fas fa-door-closed"></i>
+            </span>
+            <span>Closed Events ({{ closed_events | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Events that are no longer accepting registrations</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Event Details</th>
+                        <th style="width: 20%;">Type/Format</th>
+                        <th style="width: 15%;">Registered</th>
+                        <th style="width: 35%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event_info in closed_events %}
+                    {% set event = event_info.event %}
+                    <tr>
+                        <td>
+                            <strong>{{ event.name }}</strong><br>
+                            <span class="has-text-grey">Created {{ event.created_at.strftime('%b %d, %Y') }}</span>
+                            {% if event.scoring %}
+                            <br><small class="has-text-info">{{ event.scoring }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag is-light">{{ event.get_event_type_name() }}</span><br>
+                            <small>{{ event.get_gender_name() }}</small><br>
+                            <small>{{ event.get_format_name() }}</small>
+                        </td>
+                        <td>
+                            <div class="has-text-centered">
+                                <p class="title is-6">{{ event_info.pool_count }}</p>
+                                <p class="heading">members</p>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="tag is-light">
+                                <span class="icon">
+                                    <i class="fas fa-door-closed"></i>
+                                </span>
+                                <span>Registration Closed</span>
+                            </span>
+                            {% if event_info.registration_status == 'withdrawn' %}
+                            <br>
+                            <span class="tag is-light">
+                                <span class="icon">
+                                    <i class="fas fa-user-times"></i>
+                                </span>
+                                <span>Withdrawn</span>
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="box">
+        <div class="notification is-info">
+            <div class="content has-text-centered">
+                <p class="title is-4">
+                    <span class="icon is-large">
+                        <i class="fas fa-calendar-plus"></i>
+                    </span>
+                </p>
+                <p class="title is-5">No upcoming events with pools</p>
+                <p>There are currently no events with pool registration available.</p>
+                <p>Event managers will create events with pool registration when new competitions or games are planned.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary Statistics -->
+    {% if events_data %}
+    <div class="box">
+        <h3 class="title is-5">Summary</h3>
+        <div class="columns">
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Open for Registration</p>
+                    <p class="title is-4 has-text-success">{{ open_events | length }}</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Your Registrations</p>
+                    <p class="title is-4 has-text-info">{{ registered_events | length }}</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Closed Events</p>
+                    <p class="title is-4 has-text-grey">{{ closed_events | length }}</p>
+                </div>
+            </div>
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Total Events</p>
+                    <p class="title is-4">{{ events_data | length }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

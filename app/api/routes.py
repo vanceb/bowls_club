@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 from app.api import bp
 from app import db
-from app.models import Member, Event, Booking
+from app.models import Member, Event, Booking, EventPool, PoolRegistration
 
 
 @bp.route('/search_members', methods=['GET'])
@@ -347,4 +347,316 @@ def users_with_roles():
         return jsonify({
             'success': False,
             'error': 'An error occurred while retrieving users with roles'
+        }), 500
+
+
+@bp.route('/events/upcoming', methods=['GET'])
+@login_required
+def get_upcoming_events():
+    """
+    Get upcoming events with pool registration enabled
+    Returns user's registration status for each event
+    """
+    try:
+        # Get all events that have pools enabled
+        events_with_pools = db.session.scalars(
+            sa.select(Event)
+            .join(Event.pool)
+            .where(Event.has_pool == True)
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        # Format events data
+        events_data = []
+        for event in events_with_pools:
+            event_info = {
+                'id': event.id,
+                'name': event.name,
+                'event_type': event.get_event_type_name(),
+                'gender': event.get_gender_name(),
+                'format': event.get_format_name(),
+                'scoring': event.scoring,
+                'created_at': event.created_at.isoformat(),
+                'pool_open': event.is_pool_open(),
+                'pool_count': event.get_pool_member_count(),
+                'registration_status': 'not_registered',
+                'managers': [
+                    {
+                        'id': manager.id,
+                        'name': f"{manager.firstname} {manager.lastname}"
+                    }
+                    for manager in event.event_managers
+                ]
+            }
+            
+            # Check if user is registered
+            if event.pool:
+                user_registration = event.pool.get_member_registration(current_user.id)
+                if user_registration:
+                    event_info['registration_status'] = user_registration.status
+                    event_info['registered_at'] = user_registration.registered_at.isoformat()
+            
+            events_data.append(event_info)
+        
+        return jsonify({
+            'success': True,
+            'events': events_data,
+            'count': len(events_data)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_upcoming_events API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while retrieving upcoming events'
+        }), 500
+
+
+@bp.route('/events/<int:event_id>/register', methods=['POST'])
+@login_required
+def register_for_event_api():
+    """
+    Register current user for an event pool (API endpoint)
+    """
+    try:
+        from app.audit import audit_log_create
+        
+        event_id = request.view_args.get('event_id')
+        if not event_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing event ID'
+            }), 400
+        
+        # Get the event
+        event = db.session.get(Event, event_id)
+        if not event:
+            return jsonify({
+                'success': False,
+                'error': 'Event not found'
+            }), 404
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'This event does not have pool registration enabled'
+            }), 400
+        
+        # Check if pool is open
+        if not event.is_pool_open():
+            return jsonify({
+                'success': False,
+                'error': 'Registration for this event is closed'
+            }), 400
+        
+        # Check if user is already registered
+        existing_registration = event.pool.get_member_registration(current_user.id)
+        if existing_registration and existing_registration.is_active:
+            return jsonify({
+                'success': False,
+                'error': f'You are already registered for {event.name}'
+            }), 400
+        
+        # Create new registration
+        registration = PoolRegistration(
+            pool_id=event.pool.id,
+            member_id=current_user.id,
+            status='registered'
+        )
+        
+        db.session.add(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('PoolRegistration', registration.id, 
+                        f'User {current_user.username} registered for event: {event.name}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully registered for {event.name}',
+            'registration': {
+                'id': registration.id,
+                'status': registration.status,
+                'registered_at': registration.registered_at.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in register_for_event_api: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while registering for the event'
+        }), 500
+
+
+@bp.route('/events/<int:event_id>/withdraw', methods=['POST'])
+@login_required
+def withdraw_from_event_api():
+    """
+    Withdraw current user from an event pool (API endpoint)
+    """
+    try:
+        from app.audit import audit_log_update
+        
+        event_id = request.view_args.get('event_id')
+        if not event_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing event ID'
+            }), 400
+        
+        # Get the event
+        event = db.session.get(Event, event_id)
+        if not event:
+            return jsonify({
+                'success': False,
+                'error': 'Event not found'
+            }), 404
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'This event does not have pool registration'
+            }), 400
+        
+        # Get user's registration
+        registration = event.pool.get_member_registration(current_user.id)
+        if not registration or not registration.is_active:
+            return jsonify({
+                'success': False,
+                'error': f'You are not registered for {event.name}'
+            }), 400
+        
+        # Check if pool is still open
+        if not event.is_pool_open():
+            return jsonify({
+                'success': False,
+                'error': 'Registration for this event is closed. Contact the event manager to make changes.'
+            }), 400
+        
+        # Withdraw the registration
+        registration.withdraw()
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('PoolRegistration', registration.id, 
+                        f'User {current_user.username} withdrew from event: {event.name}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully withdrawn from {event.name}',
+            'registration': {
+                'id': registration.id,
+                'status': registration.status,
+                'last_updated': registration.last_updated.isoformat()
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in withdraw_from_event_api: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while withdrawing from the event'
+        }), 500
+
+
+@bp.route('/events/<int:event_id>/pool', methods=['GET'])
+@login_required
+def get_event_pool():
+    """
+    Get pool members for an event (Event Manager access)
+    """
+    try:
+        # Check if user has Event Manager role or is admin
+        if not (current_user.is_admin or any(role.name == 'Event Manager' for role in current_user.roles)):
+            return jsonify({
+                'success': False,
+                'error': 'Event Manager access required'
+            }), 403
+        
+        event_id = request.view_args.get('event_id')
+        if not event_id:
+            return jsonify({
+                'success': False,
+                'error': 'Missing event ID'
+            }), 400
+        
+        # Get the event
+        event = db.session.get(Event, event_id)
+        if not event:
+            return jsonify({
+                'success': False,
+                'error': 'Event not found'
+            }), 404
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            return jsonify({
+                'success': False,
+                'error': 'This event does not have pool registration enabled'
+            }), 400
+        
+        # Get pool registrations
+        registrations = db.session.scalars(
+            sa.select(PoolRegistration)
+            .join(PoolRegistration.member)
+            .where(PoolRegistration.pool_id == event.pool.id)
+            .order_by(Member.firstname, Member.lastname)
+        ).all()
+        
+        # Format pool data
+        pool_data = {
+            'event': {
+                'id': event.id,
+                'name': event.name,
+                'event_type': event.get_event_type_name(),
+                'gender': event.get_gender_name(),
+                'format': event.get_format_name()
+            },
+            'pool': {
+                'id': event.pool.id,
+                'is_open': event.pool.is_open,
+                'created_at': event.pool.created_at.isoformat(),
+                'closed_at': event.pool.closed_at.isoformat() if event.pool.closed_at else None,
+                'auto_close_date': event.pool.auto_close_date.isoformat() if event.pool.auto_close_date else None
+            },
+            'registrations': []
+        }
+        
+        for registration in registrations:
+            pool_data['registrations'].append({
+                'id': registration.id,
+                'member': {
+                    'id': registration.member.id,
+                    'name': f"{registration.member.firstname} {registration.member.lastname}",
+                    'email': registration.member.email if registration.member.share_email else None,
+                    'phone': registration.member.phone if registration.member.share_phone else None
+                },
+                'status': registration.status,
+                'registered_at': registration.registered_at.isoformat(),
+                'last_updated': registration.last_updated.isoformat(),
+                'is_active': registration.is_active
+            })
+        
+        # Group by status
+        pool_data['summary'] = {
+            'total': len(registrations),
+            'registered': len([r for r in registrations if r.status == 'registered']),
+            'available': len([r for r in registrations if r.status == 'available']),
+            'selected': len([r for r in registrations if r.status == 'selected']),
+            'withdrawn': len([r for r in registrations if r.status == 'withdrawn'])
+        }
+        
+        return jsonify({
+            'success': True,
+            **pool_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in get_event_pool API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'An error occurred while retrieving event pool data'
         }), 500

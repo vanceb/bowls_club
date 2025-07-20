@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from app.main import bp
 from app import db
-from app.models import Member, Post, Booking, Event, PolicyPage, BookingPlayer
+from app.models import Member, Post, Booking, Event, PolicyPage, BookingPlayer, EventPool, PoolRegistration
 from app.utils import sanitize_html_content, get_secure_post_path
 from app.forms import RollUpResponseForm, FlaskForm
 
@@ -325,6 +325,59 @@ def policy(slug):
     except Exception as e:
         current_app.logger.error(f"Error displaying policy {slug}: {str(e)}")
         abort(500)
+
+
+@bp.route('/upcoming_events')
+@login_required
+def upcoming_events():
+    """
+    Display upcoming events that are open for registration
+    Show user's registration status for each event
+    """
+    try:
+        from app.audit import audit_log_create, audit_log_delete
+        
+        # Get today's date
+        today = date.today()
+        
+        # Get all events that have pools enabled
+        events_with_pools = db.session.scalars(
+            sa.select(Event)
+            .join(Event.pool)
+            .where(Event.has_pool == True)
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        # For each event, get the user's registration status
+        events_data = []
+        for event in events_with_pools:
+            event_info = {
+                'event': event,
+                'registration_status': 'not_registered',
+                'registration': None,
+                'pool_count': event.get_pool_member_count() if event.pool else 0,
+                'pool_open': event.is_pool_open()
+            }
+            
+            # Check if user is registered
+            if event.pool:
+                user_registration = event.pool.get_member_registration(current_user.id)
+                if user_registration:
+                    event_info['registration'] = user_registration
+                    event_info['registration_status'] = user_registration.status
+            
+            events_data.append(event_info)
+        
+        return render_template('main/upcoming_events.html', 
+                             events_data=events_data,
+                             today=today)
+                             
+    except Exception as e:
+        current_app.logger.error(f"Error in upcoming_events route: {str(e)}")
+        flash('An error occurred while loading upcoming events.', 'error')
+        return render_template('main/upcoming_events.html', 
+                             events_data=[],
+                             today=date.today())
 
 
 @bp.route('/my_games', methods=['GET', 'POST'])
@@ -827,5 +880,131 @@ def add_member():
         current_app.logger.error(f"Error adding member: {str(e)}")
         flash('An error occurred while adding the member.', 'error')
         return render_template('main/add_member.html', form=MemberForm())
+
+
+@bp.route('/register_for_event', methods=['POST'])
+@login_required
+def register_for_event():
+    """
+    Register current user for an event pool
+    """
+    try:
+        from app.audit import audit_log_create
+        from app.forms import FlaskForm
+        
+        # Validate CSRF
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        event_id = request.form.get('event_id')
+        if not event_id:
+            flash('Missing event information.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Get the event
+        event = db.session.get(Event, int(event_id))
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            flash('This event does not have pool registration enabled.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Check if pool is open
+        if not event.is_pool_open():
+            flash('Registration for this event is closed.', 'warning')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Check if user is already registered
+        existing_registration = event.pool.get_member_registration(current_user.id)
+        if existing_registration and existing_registration.is_active:
+            flash(f'You are already registered for {event.name}.', 'warning')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Create new registration
+        registration = PoolRegistration(
+            pool_id=event.pool.id,
+            member_id=current_user.id,
+            status='registered'
+        )
+        
+        db.session.add(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('PoolRegistration', registration.id, 
+                        f'User {current_user.username} registered for event: {event.name}')
+        
+        flash(f'Successfully registered for {event.name}!', 'success')
+        return redirect(url_for('main.upcoming_events'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error registering for event: {str(e)}")
+        flash('An error occurred while registering for the event.', 'error')
+        return redirect(url_for('main.upcoming_events'))
+
+
+@bp.route('/withdraw_from_event', methods=['POST'])
+@login_required
+def withdraw_from_event():
+    """
+    Withdraw current user from an event pool
+    """
+    try:
+        from app.audit import audit_log_update
+        from app.forms import FlaskForm
+        
+        # Validate CSRF
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        event_id = request.form.get('event_id')
+        if not event_id:
+            flash('Missing event information.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Get the event
+        event = db.session.get(Event, int(event_id))
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            flash('This event does not have pool registration.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Get user's registration
+        registration = event.pool.get_member_registration(current_user.id)
+        if not registration or not registration.is_active:
+            flash(f'You are not registered for {event.name}.', 'warning')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Check if pool is still open
+        if not event.is_pool_open():
+            flash('Registration for this event is closed. Contact the event manager to make changes.', 'warning')
+            return redirect(url_for('main.upcoming_events'))
+        
+        # Withdraw the registration
+        registration.withdraw()
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('PoolRegistration', registration.id, 
+                        f'User {current_user.username} withdrew from event: {event.name}')
+        
+        flash(f'Successfully withdrawn from {event.name}.', 'success')
+        return redirect(url_for('main.upcoming_events'))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error withdrawing from event: {str(e)}")
+        flash('An error occurred while withdrawing from the event.', 'error')
+        return redirect(url_for('main.upcoming_events'))
 
 

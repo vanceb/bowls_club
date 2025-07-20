@@ -9,7 +9,7 @@ from markdown2 import markdown
 
 from app.admin import bp
 from app import db
-from app.models import Member, Role, Event, Post, PolicyPage, Booking
+from app.models import Member, Role, Event, Post, PolicyPage, Booking, EventPool, PoolRegistration
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
 from app.forms import EditMemberForm, PasswordResetForm, FlaskForm, WritePostForm
 from app.utils import generate_secure_filename, get_secure_post_path, sanitize_html_content
@@ -863,6 +863,26 @@ def manage_events():
                 # Set selection form to selected event
                 selection_form.selected_event.data = selected_event_id
         
+        # Get pool data if event has pool enabled
+        pool_data = None
+        pool_registrations = []
+        if selected_event and selected_event.has_pool_enabled():
+            pool_registrations = db.session.scalars(
+                sa.select(PoolRegistration)
+                .join(PoolRegistration.member)
+                .where(PoolRegistration.pool_id == selected_event.pool.id)
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            
+            pool_data = {
+                'pool': selected_event.pool,
+                'total_registrations': len(pool_registrations),
+                'registered_count': len([r for r in pool_registrations if r.status == 'registered']),
+                'available_count': len([r for r in pool_registrations if r.status == 'available']),
+                'selected_count': len([r for r in pool_registrations if r.status == 'selected']),
+                'withdrawn_count': len([r for r in pool_registrations if r.status == 'withdrawn'])
+            }
+        
         # Get team positions for display
         team_positions = current_app.config.get('TEAM_POSITIONS', {})
         
@@ -875,12 +895,164 @@ def manage_events():
                              event_teams=event_teams,
                              event_bookings=event_bookings,
                              can_create_bookings=can_create_bookings,
-                             team_positions=team_positions)
+                             team_positions=team_positions,
+                             pool_data=pool_data,
+                             pool_registrations=pool_registrations)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_events: {str(e)}")
         flash('An error occurred while loading events.', 'error')
         return redirect(url_for('main.index'))
+
+
+@bp.route('/toggle_event_pool/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def toggle_event_pool(event_id):
+    """
+    Toggle pool registration status for an event (open/close)
+    """
+    try:
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            flash('This event does not have pool registration enabled.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Toggle pool status
+        if event.pool.is_open:
+            event.pool.close_pool()
+            flash(f'Pool registration for "{event.name}" has been closed.', 'info')
+            action = 'closed'
+        else:
+            event.pool.reopen_pool()
+            flash(f'Pool registration for "{event.name}" has been reopened.', 'success')
+            action = 'reopened'
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('EventPool', event.pool.id, 
+                        f'Pool registration {action} for event: {event.name}')
+        
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error toggling event pool: {str(e)}")
+        flash('An error occurred while updating pool status.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/create_event_pool/<int:event_id>', methods=['POST'])
+@login_required
+@admin_required
+def create_event_pool(event_id):
+    """
+    Create a new pool for an event
+    """
+    try:
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Check if event already has a pool
+        if event.has_pool_enabled():
+            flash('This event already has pool registration enabled.', 'warning')
+            return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+        # Create new pool
+        new_pool = EventPool(
+            event_id=event_id,
+            is_open=True
+        )
+        
+        # Enable pool on event
+        event.has_pool = True
+        
+        db.session.add(new_pool)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('EventPool', new_pool.id, 
+                        f'Created pool for event: {event.name}')
+        
+        flash(f'Pool registration has been enabled for "{event.name}".', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating event pool: {str(e)}")
+        flash('An error occurred while creating the pool.', 'error')
+        return redirect(url_for('admin.manage_events'))
+
+
+@bp.route('/update_registration_status/<int:registration_id>', methods=['POST'])
+@login_required
+@admin_required
+def update_registration_status(registration_id):
+    """
+    Update a pool registration status (for Event Managers)
+    """
+    try:
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        new_status = request.form.get('status')
+        if new_status not in PoolRegistration.get_valid_statuses():
+            flash('Invalid status.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        registration = db.session.get(PoolRegistration, registration_id)
+        if not registration:
+            flash('Registration not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        old_status = registration.status
+        event_id = registration.pool.event_id
+        member_name = f"{registration.member.firstname} {registration.member.lastname}"
+        
+        # Update status
+        if new_status == 'registered':
+            registration.reregister()
+        elif new_status == 'available':
+            registration.set_available()
+        elif new_status == 'selected':
+            registration.set_selected()
+        elif new_status == 'withdrawn':
+            registration.withdraw()
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('PoolRegistration', registration.id, 
+                        f'Status updated from {old_status} to {new_status} for {member_name}')
+        
+        flash(f'{member_name} status updated to {new_status.title()}.', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error updating registration status: {str(e)}")
+        flash('An error occurred while updating the registration status.', 'error')
+        return redirect(url_for('admin.manage_events'))
 
 
 # Placeholder templates return simple messages for now
