@@ -130,7 +130,7 @@
                 let cellContent = '';
                 
                 if (bookedCount === 0) {
-                    cellContent = `${totalRinks} available`;
+                    cellContent = `${totalRinks} Rinks available`;
                     cellClass = 'has-background-light';
                 } else {
                     // Build detailed booking lines
@@ -178,7 +178,8 @@
                     cellContent = bookingLines.join('<br>');
                     
                     if (availableRinks > 0) {
-                        cellContent += `<br><small class="has-text-grey">${availableRinks} available</small>`;
+                        const rinkText = availableRinks === 1 ? 'Rink' : 'Rinks';
+                        cellContent += `<br><small class="has-text-grey">${availableRinks} ${rinkText} available</small>`;
                         cellClass = 'has-background-warning-light';
                     } else {
                         cellContent += '<br><small class="has-text-grey">Fully booked</small>';
