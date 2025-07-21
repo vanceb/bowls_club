@@ -6,6 +6,7 @@ import sqlalchemy as sa
 from app.api import bp
 from app import db
 from app.models import Member, Event, Booking, EventPool, PoolRegistration
+from app.routes import role_required, admin_required
 
 
 @bp.route('/search_members', methods=['GET'])
@@ -74,6 +75,7 @@ def search_members():
 
 @bp.route('/event/<int:event_id>')
 @login_required
+@role_required('Event Manager')
 def get_event(event_id):
     """
     Get event details (AJAX endpoint)
@@ -93,7 +95,13 @@ def get_event(event_id):
             'event_type': event.event_type,
             'gender': event.gender,
             'format': event.format,
-            'scoring': event.scoring
+            'scoring': event.scoring,
+            # Add computed fields for JavaScript summaries
+            'event_type_name': event.get_event_type_name(),
+            'format_name': event.get_format_name(),
+            'teams_count': len(event.event_teams) if event.event_teams else 0,
+            'bookings_count': len(event.bookings) if event.bookings else 0,
+            'has_pool_enabled': event.has_pool_enabled()
         }
         
         # Add event managers
@@ -303,19 +311,13 @@ def get_availability(selected_date, session_id):
 
 @bp.route('/users_with_roles', methods=['GET'])
 @login_required
+@admin_required
 def users_with_roles():
     """
     Get all users with their assigned roles (AJAX endpoint)
     Admin only access
     """
     try:
-        # Check admin access
-        if not (current_user.is_authenticated and current_user.is_admin):
-            return jsonify({
-                'success': False,
-                'error': 'Admin access required'
-            }), 403
-        
         # Get all users who have roles assigned
         users_with_roles = db.session.scalars(
             sa.select(Member)
@@ -564,18 +566,12 @@ def withdraw_from_event_api():
 
 @bp.route('/events/<int:event_id>/pool', methods=['GET'])
 @login_required
+@role_required('Event Manager')
 def get_event_pool():
     """
     Get pool members for an event (Event Manager access)
     """
     try:
-        # Check if user has Event Manager role or is admin
-        if not (current_user.is_admin or any(role.name == 'Event Manager' for role in current_user.roles)):
-            return jsonify({
-                'success': False,
-                'error': 'Event Manager access required'
-            }), 403
-        
         event_id = request.view_args.get('event_id')
         if not event_id:
             return jsonify({

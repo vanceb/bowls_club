@@ -11,6 +11,7 @@ from app import db
 from app.models import Member, Post, Booking, Event, PolicyPage, BookingPlayer, EventPool, PoolRegistration
 from app.utils import sanitize_html_content, get_secure_post_path
 from app.forms import RollUpResponseForm, FlaskForm
+from app.routes import role_required
 
 
 @bp.route("/")
@@ -340,6 +341,10 @@ def upcoming_events():
     """
     try:
         from app.audit import audit_log_create, audit_log_delete
+        from app.forms import FlaskForm
+        
+        # Create CSRF form for the template
+        csrf_form = FlaskForm()
         
         # Get today's date
         today = date.today()
@@ -347,7 +352,6 @@ def upcoming_events():
         # Get all events that have pools enabled
         events_with_pools = db.session.scalars(
             sa.select(Event)
-            .join(Event.pool)
             .where(Event.has_pool == True)
             .order_by(Event.created_at.desc())
         ).all()
@@ -355,33 +359,44 @@ def upcoming_events():
         # For each event, get the user's registration status
         events_data = []
         for event in events_with_pools:
+            # Skip events that claim to have pools but don't actually have pool records
+            if not event.pool:
+                current_app.logger.warning(f"Event {event.name} (ID: {event.id}) has has_pool=True but no pool record")
+                continue
+                
             event_info = {
                 'event': event,
                 'registration_status': 'not_registered',
                 'registration': None,
-                'pool_count': event.get_pool_member_count() if event.pool else 0,
+                'pool_count': event.get_pool_member_count(),
                 'pool_open': event.is_pool_open()
             }
             
             # Check if user is registered
-            if event.pool:
-                user_registration = event.pool.get_member_registration(current_user.id)
-                if user_registration:
-                    event_info['registration'] = user_registration
-                    event_info['registration_status'] = user_registration.status
+            user_registration = event.pool.get_member_registration(current_user.id)
+            if user_registration:
+                event_info['registration'] = user_registration
+                event_info['registration_status'] = user_registration.status
             
             events_data.append(event_info)
         
         return render_template('main/upcoming_events.html', 
                              events_data=events_data,
-                             today=today)
+                             today=today,
+                             csrf_form=csrf_form)
                              
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         current_app.logger.error(f"Error in upcoming_events route: {str(e)}")
-        flash('An error occurred while loading upcoming events.', 'error')
+        current_app.logger.error(f"Full traceback: {error_details}")
+        flash(f'An error occurred while loading upcoming events: {str(e)}', 'error')
+        from app.forms import FlaskForm
+        csrf_form = FlaskForm()
         return render_template('main/upcoming_events.html', 
                              events_data=[],
-                             today=date.today())
+                             today=date.today(),
+                             csrf_form=csrf_form)
 
 
 @bp.route('/my_games', methods=['GET', 'POST'])
@@ -838,6 +853,7 @@ def add_rollup_player(booking_id):
 
 @bp.route('/add_member', methods=['GET', 'POST'])
 @login_required
+@role_required('User Manager')
 def add_member():
     """
     Add a new member to the system

@@ -10,269 +10,316 @@
     </div>
     
     <h1 class="title">Events Management</h1>
-    
-    <!-- Workflow Overview -->
-    {% if selected_event %}
-    <div class="notification is-info is-light">
-        <h4 class="title is-6">
-            <span class="icon">
-                <i class="fas fa-info-circle"></i>
-            </span>
-            <span>Event Management Workflow</span>
-        </h4>
-        <div class="content">
-            <p><strong>Understanding Event Teams vs Booking Teams:</strong></p>
-            <ul>
-                <li><strong>Event Teams</strong> (below) are <em>templates</em> that define the standard teams for this event type</li>
-                <li><strong>Booking Teams</strong> are <em>copies</em> of event teams, created automatically when you schedule a game</li>
-                <li>Event Managers can make substitutions on booking teams without affecting the original event templates</li>
-                <li>This allows you to have consistent team templates while managing game-specific changes</li>
-            </ul>
-        </div>
-    </div>
-    {% endif %}
-    
-    <!-- Event Selection Form -->
-    <div class="box">
-        <h2 class="subtitle">Select Event</h2>
-        <div class="field">
-            <div class="control">
-                <div class="select is-fullwidth">
-                    {{ selection_form.selected_event() }}
-                </div>
-            </div>
-        </div>
-    </div>
+    <p class="subtitle">Manage events through a structured workflow</p>
 
-    <!-- Event Details Form -->
-    <div class="box">
-        <h2 class="subtitle" id="event-form-title">
-            {% if selected_event %}
-                Step 1: Edit Event Details
-                <span class="tag is-success ml-2">
-                    <span class="icon is-small"><i class="fas fa-check"></i></span>
-                    <span>Complete</span>
-                </span>
-            {% else %}
-                Step 1: Create New Event
-            {% endif %}
-        </h2>
+    <!-- Staged Workflow Container -->
+    <div id="staged-workflow" class="staged-workflow">
         
-        <form method="POST" id="event-form">
-            {{ event_form.hidden_tag() }}
-            {{ event_form.event_id() }}
-            
-            <div class="field">
-                <label class="label">Event Name</label>
-                <div class="control">
-                    {{ event_form.name(class="input") }}
-                </div>
-                {% for error in event_form.name.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-
-            <div class="field">
-                <label class="label">Event Type</label>
-                <div class="control">
-                    <div class="select is-fullwidth">
-                        {{ event_form.event_type() }}
-                    </div>
-                </div>
-                {% for error in event_form.event_type.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-
-            <div class="field-body">
-                <div class="field">
-                    <label class="label">Gender</label>
-                    <div class="control">
-                        <div class="select is-fullwidth">
-                            {{ event_form.gender() }}
+        <!-- Event Selection - Always Visible -->
+        <div class="box mb-4">
+            <div class="level">
+                <div class="level-left">
+                    <div class="level-item">
+                        <div>
+                            <h4 class="title is-5">Select Event</h4>
+                            <p class="help">Choose an existing event to manage or create a new one</p>
                         </div>
                     </div>
-                    {% for error in event_form.gender.errors %}
-                        <p class="help is-danger">{{ error }}</p>
-                    {% endfor %}
                 </div>
-
-                <div class="field">
-                    <label class="label">Format</label>
-                    <div class="control">
-                        <div class="select is-fullwidth">
-                            {{ event_form.format() }}
-                        </div>
-                    </div>
-                    {% for error in event_form.format.errors %}
-                        <p class="help is-danger">{{ error }}</p>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div class="field">
-                <label class="label">Scoring</label>
-                <div class="control">
-                    {{ event_form.scoring(class="input") }}
-                </div>
-                <p class="help">Optional scoring method or format (e.g., "Best of 3 sets", "21 points")</p>
-                {% for error in event_form.scoring.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-
-            <div class="field">
-                <label class="label">Event Managers</label>
-                <div class="control">
-                    {{ event_form.event_managers() }}
-                </div>
-                <p class="help">Select one or more people responsible for organizing this event</p>
-                {% for error in event_form.event_managers.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-
-
-            <div class="field">
-                <div class="control">
-                    {{ event_form.submit(class="button is-primary") }}
-                    {% if selected_event %}
-                        <a href="{{ url_for('admin.manage_events') }}" class="button is-light">Cancel</a>
-                    {% endif %}
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- Pool Management Section -->
-    {% if selected_event %}
-    <div class="box" id="pool-section">
-        <div class="level">
-            <div class="level-left">
-                <div>
-                    <h2 class="subtitle">
-                        Step 1.5: Pool Registration for {{ selected_event.name }}
-                        {% if selected_event.has_pool_enabled() %}
-                            <span class="tag is-info ml-2">
-                                <span class="icon is-small"><i class="fas fa-swimming-pool"></i></span>
-                                <span>Pool Enabled</span>
-                            </span>
-                            {% if selected_event.is_pool_open() %}
-                                <span class="tag is-success ml-1">
-                                    <span class="icon is-small"><i class="fas fa-door-open"></i></span>
-                                    <span>Open</span>
-                                </span>
-                            {% else %}
-                                <span class="tag is-warning ml-1">
-                                    <span class="icon is-small"><i class="fas fa-door-closed"></i></span>
-                                    <span>Closed</span>
-                                </span>
-                            {% endif %}
-                        {% else %}
-                            <span class="tag is-light ml-2">
-                                <span class="icon is-small"><i class="fas fa-ban"></i></span>
-                                <span>No Pool</span>
-                            </span>
-                        {% endif %}
-                    </h2>
-                    {% set workflow_status = selected_event.get_workflow_status() %}
-                    <p class="help">
-                        Workflow Stage: <strong>{{ workflow_status.stage.replace('_', ' ').title() }}</strong>
-                        {% if workflow_status.pool_enabled %}
-                            • {{ workflow_status.pool_members }} registered 
-                            • {{ workflow_status.available_members }} available for teams
-                        {% endif %}
-                    </p>
-                </div>
-            </div>
-            <div class="level-right">
-                {% if not selected_event.has_pool_enabled() %}
-                    <form method="POST" action="{{ url_for('admin.create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
-                        {{ event_form.csrf_token }}
-                        <button type="submit" class="button is-primary">
-                            <span class="icon">
-                                <i class="fas fa-plus"></i>
-                            </span>
-                            <span>Enable Pool Registration</span>
-                        </button>
-                    </form>
-                {% else %}
-                    <div class="field is-grouped">
-                        {% if selected_event.is_pool_open() %}
-                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
-                                {{ event_form.csrf_token }}
-                                <button type="submit" class="button is-warning">
-                                    <span class="icon">
-                                        <i class="fas fa-door-closed"></i>
-                                    </span>
-                                    <span>Close Registration</span>
-                                </button>
-                            </form>
-                        {% else %}
-                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
-                                {{ event_form.csrf_token }}
-                                <button type="submit" class="button is-success">
-                                    <span class="icon">
-                                        <i class="fas fa-door-open"></i>
-                                    </span>
-                                    <span>Open Registration</span>
-                                </button>
-                            </form>
-                        {% endif %}
-                    
-                    <div class="dropdown is-hoverable ml-2">
-                            <div class="dropdown-trigger">
-                                <button class="button is-info" aria-haspopup="true" aria-controls="pool-actions-menu">
-                                    <span>Pool Actions</span>
-                                    <span class="icon is-small">
-                                        <i class="fas fa-angle-down" aria-hidden="true"></i>
-                                    </span>
-                                </button>
-                            </div>
-                            <div class="dropdown-menu" id="pool-actions-menu" role="menu">
-                                <div class="dropdown-content">
-                                    {% if workflow_status.pool_members > 0 %}
-                                        <a href="#" class="dropdown-item" onclick="showAutoSelectModal()">
-                                            <span class="icon is-small">
-                                                <i class="fas fa-magic"></i>
-                                            </span>
-                                            Auto-Select Members
-                                        </a>
-                                        <a href="#" class="dropdown-item" onclick="showBulkStatusModal()">
-                                            <span class="icon is-small">
-                                                <i class="fas fa-users-cog"></i>
-                                            </span>
-                                            Bulk Status Update
-                                        </a>
-                                        <hr class="dropdown-divider">
-                                    {% endif %}
-                                    {% if workflow_status.available_members >= 4 %}
-                                        <a href="#" class="dropdown-item" onclick="showCreateTeamsModal()">
-                                            <span class="icon is-small">
-                                                <i class="fas fa-users"></i>
-                                            </span>
-                                            Create Teams from Pool
-                                        </a>
-                                    {% endif %}
-                                    {% if workflow_status.teams_with_members > 0 %}
-                                        <a href="#" class="dropdown-item" onclick="showCreateBookingModal()">
-                                            <span class="icon is-small">
-                                                <i class="fas fa-calendar-plus"></i>
-                                            </span>
-                                            Create Booking from Teams
-                                        </a>
-                                    {% endif %}
+                <div class="level-right">
+                    <div class="level-item">
+                        <div class="field">
+                            <div class="control">
+                                <div class="select">
+                                    {{ selection_form.selected_event() }}
                                 </div>
                             </div>
                         </div>
                     </div>
-                {% endif %}
+                </div>
             </div>
         </div>
 
-        {% if selected_event.has_pool_enabled() %}
-            <!-- Pool Members Display -->
-            <div class="content">
+        <!-- Stage 1: Event Details -->
+        <div class="box stage-box" data-stage="1" data-stage-name="event-details">
+            <div class="stage-header">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <span class="stage-number">1</span>
+                            <span class="stage-title">Event Details</span>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="stage-summary" id="event-details-stage-summary">
+                                {% if selected_event %}
+                                    {{ selected_event.get_event_type_name() }} - {{ selected_event.get_format_name() }}
+                                {% else %}
+                                    Configure event details
+                                {% endif %}
+                            </span>
+                            <span class="icon stage-toggle">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="stage-content">
+                <form method="POST" id="event-form">
+                    {{ event_form.hidden_tag() }}
+                    {{ event_form.event_id() }}
+                    
+                    <div class="columns">
+                        <div class="column is-half">
+                            <div class="field">
+                                <label class="label">{{ event_form.name.label }}</label>
+                                <div class="control">
+                                    {{ event_form.name(class="input") }}
+                                </div>
+                                {% for error in event_form.name.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column is-half">
+                            <div class="field">
+                                <label class="label">{{ event_form.scoring.label }}</label>
+                                <div class="control">
+                                    {{ event_form.scoring(class="input") }}
+                                </div>
+                                <p class="help">Optional scoring method (e.g., "Best of 3 sets")</p>
+                                {% for error in event_form.scoring.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column is-one-third">
+                            <div class="field">
+                                <label class="label">{{ event_form.event_type.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.event_type() }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.event_type.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column is-one-third">
+                            <div class="field">
+                                <label class="label">{{ event_form.gender.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.gender() }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.gender.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column is-one-third">
+                            <div class="field">
+                                <label class="label">{{ event_form.format.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.format() }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.format.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <label class="label">{{ event_form.event_managers.label }}</label>
+                        <div class="control">
+                            <div class="field is-grouped is-grouped-multiline">
+                                {% for subfield in event_form.event_managers %}
+                                    <div class="control">
+                                        <label class="checkbox">
+                                            {{ subfield() }}
+                                            {{ subfield.label.text }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <p class="help">Select one or more people responsible for organizing this event</p>
+                        {% for error in event_form.event_managers.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field">
+                        <div class="control">
+                            {{ event_form.submit(class="button is-primary") }}
+                            {% if selected_event %}
+                                <a href="{{ url_for('admin.manage_events') }}" class="button is-light">Reset</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Stage 2: Pool Management -->
+        <div class="box stage-box" data-stage="2" data-stage-name="pool-management">
+            <div class="stage-header">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <span class="stage-number">2</span>
+                            <span class="stage-title">Pool Management</span>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="stage-summary" id="pool-management-stage-summary">
+                                {% if selected_event and selected_event.has_pool_enabled() %}
+                                    {% if pool_registrations %}
+                                        {{ pool_registrations | length }} members
+                                        {% if selected_event.is_pool_open() %}
+                                            (Open)
+                                        {% else %}
+                                            (Closed)
+                                        {% endif %}
+                                    {% else %}
+                                        Pool enabled, no registrations
+                                    {% endif %}
+                                {% elif selected_event %}
+                                    Pool not enabled
+                                {% else %}
+                                    Select an event first
+                                {% endif %}
+                            </span>
+                            <span class="icon stage-toggle">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="stage-content">
+                {% if selected_event %}
+                    {% set workflow_status = selected_event.get_workflow_status() %}
+                    
+                    <!-- Pool Status Controls -->
+                    <div class="level mb-4">
+                        <div class="level-left">
+                            <div class="level-item">
+                                {% if selected_event.has_pool_enabled() %}
+                                    <span class="tag is-info">
+                                        <span class="icon is-small"><i class="fas fa-swimming-pool"></i></span>
+                                        <span>Pool Enabled</span>
+                                    </span>
+                                    {% if selected_event.is_pool_open() %}
+                                        <span class="tag is-success ml-1">
+                                            <span class="icon is-small"><i class="fas fa-door-open"></i></span>
+                                            <span>Open</span>
+                                        </span>
+                                    {% else %}
+                                        <span class="tag is-warning ml-1">
+                                            <span class="icon is-small"><i class="fas fa-door-closed"></i></span>
+                                            <span>Closed</span>
+                                        </span>
+                                    {% endif %}
+                                    <span class="help ml-2">
+                                        {% if workflow_status.pool_enabled %}
+                                            {{ workflow_status.pool_members }} registered • {{ workflow_status.available_members }} available for teams
+                                        {% endif %}
+                                    </span>
+                                {% else %}
+                                    <span class="tag is-light">
+                                        <span class="icon is-small"><i class="fas fa-ban"></i></span>
+                                        <span>No Pool</span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                {% if not selected_event.has_pool_enabled() %}
+                                    <form method="POST" action="{{ url_for('admin.create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                        {{ event_form.csrf_token }}
+                                        <button type="submit" class="button is-primary">
+                                            <span class="icon"><i class="fas fa-plus"></i></span>
+                                            <span>Enable Pool Registration</span>
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <div class="field is-grouped">
+                                        {% if selected_event.is_pool_open() %}
+                                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                                {{ event_form.csrf_token }}
+                                                <button type="submit" class="button is-warning">
+                                                    <span class="icon"><i class="fas fa-door-closed"></i></span>
+                                                    <span>Close Registration</span>
+                                                </button>
+                                            </form>
+                                        {% else %}
+                                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                                {{ event_form.csrf_token }}
+                                                <button type="submit" class="button is-success">
+                                                    <span class="icon"><i class="fas fa-door-open"></i></span>
+                                                    <span>Open Registration</span>
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                        
+                                        <div class="dropdown is-hoverable ml-2">
+                                            <div class="dropdown-trigger">
+                                                <button class="button is-info" aria-haspopup="true" aria-controls="pool-actions-menu">
+                                                    <span>Pool Actions</span>
+                                                    <span class="icon is-small">
+                                                        <i class="fas fa-angle-down" aria-hidden="true"></i>
+                                                    </span>
+                                                </button>
+                                            </div>
+                                            <div class="dropdown-menu" id="pool-actions-menu" role="menu">
+                                                <div class="dropdown-content">
+                                                    {% if workflow_status.pool_members > 0 %}
+                                                        <a href="#" class="dropdown-item" onclick="showAutoSelectModal()">
+                                                            <span class="icon is-small"><i class="fas fa-magic"></i></span>
+                                                            Auto-Select Members
+                                                        </a>
+                                                        <a href="#" class="dropdown-item" onclick="showBulkStatusModal()">
+                                                            <span class="icon is-small"><i class="fas fa-users-cog"></i></span>
+                                                            Bulk Status Update
+                                                        </a>
+                                                        <hr class="dropdown-divider">
+                                                    {% endif %}
+                                                    {% if workflow_status.available_members >= 4 %}
+                                                        <a href="#" class="dropdown-item" onclick="showCreateTeamsModal()">
+                                                            <span class="icon is-small"><i class="fas fa-users"></i></span>
+                                                            Create Teams from Pool
+                                                        </a>
+                                                    {% endif %}
+                                                    {% if workflow_status.teams_with_members > 0 %}
+                                                        <a href="#" class="dropdown-item" onclick="showCreateBookingModal()">
+                                                            <span class="icon is-small"><i class="fas fa-calendar-plus"></i></span>
+                                                            Create Booking from Teams
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pool Members Section -->
+                    {% if selected_event.has_pool_enabled() %}
                 {% if pool_registrations %}
                     <h4 class="title is-6">Pool Members ({{ pool_registrations | length }})</h4>
                     
@@ -291,7 +338,7 @@
                     </div>
                     
                     <div class="table-container">
-                        <table class="table is-fullwidth is-striped">
+                        <table class="table is-striped">
                             <thead>
                                 <tr>
                                     <th>Member</th>
@@ -375,145 +422,73 @@
                         </div>
                     </form>
                 </div>
-            </div>
 
-            <!-- Workflow Progress Indicator -->
-            <div class="notification is-light">
-                <h5 class="title is-6">
-                    <span class="icon">
-                        <i class="fas fa-route"></i>
-                    </span>
-                    Workflow Progress
-                </h5>
-                <div class="content">
-                    <div class="columns is-mobile">
-                        <div class="column">
-                            <div class="has-text-centered">
-                                <span class="icon is-large {% if workflow_status.pool_members > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
-                                    <i class="fas fa-2x fa-users"></i>
-                                </span>
-                                <p class="is-size-7">
-                                    <strong>{{ workflow_status.pool_members }}</strong><br>
-                                    Registered
-                                </p>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="has-text-centered">
-                                <span class="icon is-large {% if workflow_status.available_members > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
-                                    <i class="fas fa-2x fa-user-check"></i>
-                                </span>
-                                <p class="is-size-7">
-                                    <strong>{{ workflow_status.available_members }}</strong><br>
-                                    Available
-                                </p>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="has-text-centered">
-                                <span class="icon is-large {% if workflow_status.teams_count > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
-                                    <i class="fas fa-2x fa-users-cog"></i>
-                                </span>
-                                <p class="is-size-7">
-                                    <strong>{{ workflow_status.teams_count }}</strong><br>
-                                    Teams
-                                </p>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="has-text-centered">
-                                <span class="icon is-large {% if workflow_status.bookings_count > 0 %}has-text-success{% else %}has-text-grey-light{% endif %}">
-                                    <i class="fas fa-2x fa-calendar-check"></i>
-                                </span>
-                                <p class="is-size-7">
-                                    <strong>{{ workflow_status.bookings_count }}</strong><br>
-                                    Bookings
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {% set can_create_teams, teams_message = selected_event.can_create_teams_from_pool() %}
-                    {% set can_create_booking, booking_message = selected_event.can_create_booking_from_teams() %}
-                    
-                    <div class="tags">
-                        {% if workflow_status.stage == 'awaiting_registrations' %}
-                            <span class="tag is-warning">
-                                <span class="icon is-small"><i class="fas fa-clock"></i></span>
-                                <span>Awaiting member registrations</span>
-                            </span>
-                        {% elif workflow_status.stage == 'ready_for_selection' %}
-                            <span class="tag is-info">
-                                <span class="icon is-small"><i class="fas fa-hand-pointer"></i></span>
-                                <span>Ready for member selection</span>
-                            </span>
-                        {% elif workflow_status.stage == 'ready_for_teams' %}
-                            <span class="tag is-primary">
-                                <span class="icon is-small"><i class="fas fa-users"></i></span>
-                                <span>{{ teams_message }}</span>
-                            </span>
-                        {% elif workflow_status.stage == 'ready_for_booking' %}
-                            <span class="tag is-success">
-                                <span class="icon is-small"><i class="fas fa-calendar-plus"></i></span>
-                                <span>{{ booking_message }}</span>
-                            </span>
-                        {% elif workflow_status.stage == 'complete' %}
-                            <span class="tag is-success">
-                                <span class="icon is-small"><i class="fas fa-check-circle"></i></span>
-                                <span>Workflow complete</span>
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        {% endif %}
-    </div>
-
-    <!-- Teams Section -->
-    <div class="box" id="teams-section" {% if not selected_event %}style="opacity: 0.6;"{% endif %}>
-        <div class="level">
-            <div class="level-left">
-                <div>
-                    <h2 class="subtitle" id="teams-title">
-                        {% if selected_event %}
-                            Step 2: Teams for {{ selected_event.name }}
-                        {% else %}
-                            Step 2: Event Teams
-                        {% endif %}
-                        {% if selected_event %}
-                            {% if selected_event.has_teams() %}
-                                <span class="tag is-success ml-2">
-                                    <span class="icon is-small"><i class="fas fa-check"></i></span>
-                                    <span>{{ selected_event.event_teams | length }} team(s)</span>
-                                </span>
-                            {% else %}
-                                <span class="tag is-warning ml-2">
-                                    <span class="icon is-small"><i class="fas fa-exclamation"></i></span>
-                                    <span>No teams</span>
-                                </span>
-                            {% endif %}
-                        {% endif %}
-                    </h2>
-                    {% if not selected_event %}
-                        <p class="help">Create an event first to manage teams</p>
-                    {% elif not selected_event.has_teams() %}
-                        <p class="help">Add at least one team before creating bookings</p>
                     {% endif %}
-                </div>
-            </div>
-            <div class="level-right">
-                <a href="#" id="add-team-btn" class="button is-success hidden-initially">
-                    <span class="icon">
-                        <i class="fas fa-plus"></i>
-                    </span>
-                    <span>Add Team</span>
-                </a>
+                {% else %}
+                    <div class="notification is-info">
+                        <p>Select an event to manage pool registration.</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
+
+        <!-- Stage 3: Team Selection -->
+        <div class="box stage-box" data-stage="3" data-stage-name="team-selection">
+            <div class="stage-header">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <span class="stage-number">3</span>
+                            <span class="stage-title">Team Selection</span>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="stage-summary" id="team-selection-stage-summary">
+                                {% if selected_event and event_teams %}
+                                    {{ event_teams | length }} teams created
+                                {% elif selected_event %}
+                                    No teams created yet
+                                {% else %}
+                                    Select an event first
+                                {% endif %}
+                            </span>
+                            <span class="icon stage-toggle">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="stage-content">
+                {% if selected_event %}
+                    <!-- Team Management Header -->
+                    <div class="level mb-4">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <div>
+                                    <h5 class="title is-6">Event Teams</h5>
+                                    {% if selected_event.has_teams() %}
+                                        <p class="help">{{ selected_event.event_teams | length }} team(s) created. Teams are templates for creating bookings.</p>
+                                    {% else %}
+                                        <p class="help">Create template teams for this event. These will be used to generate game bookings.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                <a href="#" id="add-team-btn" class="button is-success">
+                                    <span class="icon"><i class="fas fa-plus"></i></span>
+                                    <span>Add Team</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
         
         <!-- Teams List -->
         {% if event_teams %}
-        <div class="columns is-multiline">
+        <div class="columns">
             {% for team in event_teams %}
             <div class="column is-half">
                 <div class="card">
@@ -580,52 +555,72 @@
             <p>Use the "Add Team" button above to create your first team. Each team will need to be assigned players for the {{ selected_event.get_format_name() if selected_event else 'selected' }} format.</p>
             <p class="is-size-7 mt-2"><strong>Note:</strong> These are template teams. When you create bookings, copies of these teams will be made for each game, allowing individual substitutions without affecting the original templates.</p>
         </div>
-        {% endif %}
-        
-        <!-- Default message when no event is selected -->
-        <div id="no-teams-message" class="notification is-info">
-            <p>Select an event from the dropdown above to view and manage its teams.</p>
+                {% endif %}
+                {% else %}
+                    <div class="notification is-info">
+                        <p>Select an event to manage teams.</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-    </div>
 
-    <!-- Bookings Section -->
-    <div class="box" id="bookings-section" {% if not can_create_bookings %}style="opacity: 0.6;"{% endif %}>
-        <div class="level">
-            <div class="level-left">
-                <div>
-                    <h2 class="subtitle" id="bookings-title">
-                        {% if selected_event %}
-                            Step 3: Bookings for {{ selected_event.name }}
-                        {% else %}
-                            Step 3: Event Bookings
-                        {% endif %}
-                        {% if selected_event and event_bookings %}
-                            <span class="tag is-success ml-2">
-                                <span class="icon is-small"><i class="fas fa-check"></i></span>
-                                <span>{{ event_bookings | length }} booking(s)</span>
+        <!-- Stage 4: Bookings -->
+        <div class="box stage-box" data-stage="4" data-stage-name="bookings">
+            <div class="stage-header">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <span class="stage-number">4</span>
+                            <span class="stage-title">Bookings</span>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="stage-summary" id="bookings-stage-summary">
+                                {% if selected_event and event_bookings %}
+                                    {{ event_bookings | length }} bookings scheduled
+                                {% elif selected_event %}
+                                    No bookings yet
+                                {% else %}
+                                    Select an event first
+                                {% endif %}
                             </span>
-                        {% endif %}
-                    </h2>
-                    {% if not selected_event %}
-                        <p class="help">Create an event and add teams first</p>
-                    {% elif not can_create_bookings %}
-                        <p class="help">Add at least one team before creating bookings</p>
-                    {% elif not event_bookings %}
-                        <p class="help">Schedule games using your event teams</p>
-                    {% endif %}
+                            <span class="icon stage-toggle">
+                                <i class="fas fa-chevron-down"></i>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="level-right">
-                <button id="toggle-booking-form" 
-                        class="button {% if can_create_bookings %}is-success{% else %}is-success{% endif %} hidden-initially"
-                        {% if not can_create_bookings %}disabled title="Add teams first before creating bookings"{% endif %}>
-                    <span class="icon">
-                        <i class="fas fa-plus"></i>
-                    </span>
-                    <span>Add Booking</span>
-                </button>
-            </div>
-        </div>
+            <div class="stage-content">
+                {% if selected_event %}
+                    <!-- Bookings Management Header -->
+                    <div class="level mb-4">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <div>
+                                    <h5 class="title is-6">Event Bookings</h5>
+                                    {% if event_bookings %}
+                                        <p class="help">{{ event_bookings | length }} booking(s) scheduled. Manage game times and teams below.</p>
+                                    {% elif can_create_bookings %}
+                                        <p class="help">Schedule games using your event teams.</p>
+                                    {% else %}
+                                        <p class="help">Add teams first before creating bookings.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                <button id="toggle-booking-form" 
+                                        class="button is-success"
+                                        {% if not can_create_bookings %}disabled title="Add teams first before creating bookings"{% endif %}>
+                                    <span class="icon"><i class="fas fa-plus"></i></span>
+                                    <span>Schedule Game</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
         
         <!-- Add Booking Form (initially hidden) -->
         <div id="booking-form-section" class="box is-hidden booking-form-bg">
@@ -748,7 +743,7 @@
         
         {% if event_bookings %}
         <div class="table-container">
-            <table class="table is-fullwidth is-striped is-hoverable">
+            <table class="table is-striped is-hoverable">
                 <tbody>
                     {% for booking in event_bookings %}
                     <tr id="booking-row-{{ booking.id }}">
@@ -912,17 +907,92 @@
             <p>No bookings found for this event. Click "Add Booking" to create the first booking.</p>
         </div>
         {% endif %}
-        <!-- Default message when no event is selected -->
-        <div id="no-bookings-message" class="notification is-info">
-            <p>Select an event from the dropdown above to view and manage its bookings.</p>
+                {% else %}
+                    <div class="notification is-info">
+                        <p>Select an event to manage bookings.</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-    </div>
-    {% endif %}
+
+    </div> <!-- End staged-workflow -->
 
 </div>
 
 <script>
+// Stage toggling functionality
+let activeStage = 1; // Default to stage 1
+
+function toggleStage(stageNumber) {
+    console.log('toggleStage called with:', stageNumber);
+    
+    // Close all stages
+    document.querySelectorAll('.stage-box').forEach(box => {
+        box.classList.remove('is-active');
+    });
+    
+    // Open clicked stage
+    const stageBox = document.querySelector(`[data-stage="${stageNumber}"]`);
+    console.log('Found stage box:', stageBox);
+    if (stageBox) {
+        stageBox.classList.add('is-active');
+        activeStage = stageNumber;
+        console.log('Stage', stageNumber, 'activated');
+    } else {
+        console.log('Stage box not found for stage:', stageNumber);
+    }
+}
+
+// Initialize stages on page load
+function initializeStages() {
+    console.log('initializeStages called');
+    
+    // Always start with stage 1 for simplicity
+    toggleStage(1);
+    
+    // Optional: Smart stage detection (can be enabled later)
+    /*
+    const selectedEventId = document.getElementById('page-data')?.dataset.selectedEventId;
+    
+    if (!selectedEventId) {
+        toggleStage(1);
+    } else {
+        const hasPool = {% if selected_event and selected_event.has_pool_enabled() %}true{% else %}false{% endif %};
+        const hasTeams = {% if event_teams %}true{% else %}false{% endif %};
+        const hasBookings = {% if bookings %}true{% else %}false{% endif %};
+        
+        if (hasBookings) {
+            toggleStage(4);
+        } else if (hasTeams) {
+            toggleStage(3);
+        } else if (hasPool) {
+            toggleStage(2);
+        } else {
+            toggleStage(1);
+        }
+    }
+    */
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing stages');
+    
+    // Initialize stages
+    initializeStages();
+    
+    // Add click handlers to stage headers
+    document.querySelectorAll('.stage-header').forEach(function(header) {
+        header.addEventListener('click', function() {
+            const stageBox = this.closest('.stage-box');
+            const stageNumber = parseInt(stageBox.dataset.stage);
+            console.log('Stage header clicked:', stageNumber);
+            toggleStage(stageNumber);
+        });
+    });
+    
+    // Event selection change handler (removed duplicate - using the one below)
+    
+    // Continue with existing functionality below
     // Smooth scroll helper function
     function scrollToSection(sectionId, offset = 100) {
         const section = document.getElementById(sectionId);
@@ -948,6 +1018,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check URL parameters for navigation hints after form submission
     const urlParams = new URLSearchParams(window.location.search);
     const scrollTo = urlParams.get('scroll_to');
+    const stageToOpen = urlParams.get('stage');
+    
     if (scrollTo) {
         // Immediately scroll to prevent jump, then smooth scroll
         const section = document.getElementById(scrollTo);
@@ -958,6 +1030,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.search.replace(/[&?]scroll_to=[^&]*/g, '');
             window.history.replaceState({}, '', cleanUrl);
         }
+    } else if (stageToOpen) {
+        // Open specific stage (e.g., when returning from team edit error)
+        const stageNumber = parseInt(stageToOpen);
+        if (stageNumber >= 1 && stageNumber <= 4) {
+            toggleStage(stageNumber);
+        }
+        // Clean up URL without causing reload
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.search.replace(/[&?]stage=[^&]*/g, '');
+        window.history.replaceState({}, '', cleanUrl);
     } else {
         // Restore previous scroll position if no specific target
         const savedPosition = sessionStorage.getItem('scrollPosition');
@@ -967,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    const eventSelect = document.getElementById('selected_event');
+    const eventSelect = document.querySelector('select[name="selected_event"]');
     const eventForm = document.getElementById('event-form');
     const eventIdInput = document.getElementById('event_id');
     const nameInput = document.getElementById('name');
@@ -1040,6 +1121,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     checkbox.checked = false;
                 });
             }
+            
+            // Clear stage summaries for new event
+            clearStageSummaries();
             
             eventFormTitle.textContent = 'Step 1: Create New Event';
             
@@ -1164,6 +1248,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (noTeamsMessage) noTeamsMessage.style.display = 'none';
                     if (addTeamBtn) addTeamBtn.style.display = 'inline-flex';
                     
+                    // Update stage summaries
+                    updateStageSummaries(data);
+                    
                     // Load bookings for this event
                     loadEventBookings(eventId);
                     } catch (formError) {
@@ -1179,6 +1266,59 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Function to update stage summaries based on event data
+    function updateStageSummaries(eventData) {
+        // Update Event Details summary
+        const eventDetailsSummary = document.getElementById('event-details-stage-summary');
+        if (eventDetailsSummary && eventData) {
+            eventDetailsSummary.textContent = `${eventData.event_type_name || 'Unknown Type'} - ${eventData.format_name || 'Unknown Format'}`;
+        }
+        
+        // Update Pool Management summary (will need separate API call for full pool data)
+        const poolSummary = document.getElementById('pool-management-stage-summary');
+        if (poolSummary && eventData) {
+            if (eventData.has_pool_enabled) {
+                // Will be updated when pool data is loaded
+                poolSummary.textContent = 'Pool enabled';
+            } else {
+                poolSummary.textContent = 'Pool not enabled';
+            }
+        }
+        
+        // Update Team Selection summary (will need team data)
+        const teamSummary = document.getElementById('team-selection-stage-summary');
+        if (teamSummary && eventData) {
+            if (eventData.teams_count > 0) {
+                teamSummary.textContent = `${eventData.teams_count} teams created`;
+            } else {
+                teamSummary.textContent = 'No teams created yet';
+            }
+        }
+        
+        // Update Bookings summary (will need booking data)
+        const bookingsSummary = document.getElementById('bookings-stage-summary');
+        if (bookingsSummary && eventData) {
+            if (eventData.bookings_count > 0) {
+                bookingsSummary.textContent = `${eventData.bookings_count} bookings scheduled`;
+            } else {
+                bookingsSummary.textContent = 'No bookings yet';
+            }
+        }
+    }
+
+    // Function to clear stage summaries when no event is selected
+    function clearStageSummaries() {
+        const eventDetailsSummary = document.getElementById('event-details-stage-summary');
+        const poolSummary = document.getElementById('pool-management-stage-summary');
+        const teamSummary = document.getElementById('team-selection-stage-summary');
+        const bookingsSummary = document.getElementById('bookings-stage-summary');
+        
+        if (eventDetailsSummary) eventDetailsSummary.textContent = 'Configure event details';
+        if (poolSummary) poolSummary.textContent = 'Select an event first';
+        if (teamSummary) teamSummary.textContent = 'Select an event first';
+        if (bookingsSummary) bookingsSummary.textContent = 'Select an event first';
+    }
+
     // Function to load bookings for an event
     function loadEventBookings(eventId) {
         // For now, we'll reload the page with the event_id parameter

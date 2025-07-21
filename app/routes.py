@@ -45,14 +45,26 @@ def role_required(*required_roles):
             
             # Admin users bypass role checks
             if current_user.is_admin:
+                current_app.logger.info(f"Admin user {current_user.username} bypassing role check for {required_roles}")
                 return f(*args, **kwargs)
             
             # Check if user has any of the required roles
             user_roles = [role.name for role in current_user.roles]
+            current_app.logger.info(f"User {current_user.username} (admin: {current_user.is_admin}) has roles {user_roles}, checking against required roles {required_roles}")
             if not any(role in user_roles for role in required_roles):
+                current_app.logger.warning(f"Access denied for user {current_user.username} with roles {user_roles} to resource requiring {required_roles}")
                 audit_log_security_event('ACCESS_DENIED', 
                                        f'User {current_user.username} with roles {user_roles} attempted to access resource requiring roles {required_roles}')
-                abort(403)
+                
+                # Handle API requests with JSON response
+                if request.path.startswith('/api/') or request.is_json or 'application/json' in request.headers.get('Accept', ''):
+                    from flask import jsonify
+                    return jsonify({
+                        'success': False,
+                        'error': f'Access denied. Required roles: {", ".join(required_roles)}'
+                    }), 403
+                else:
+                    abort(403)
             
             return f(*args, **kwargs)
         return decorated_function

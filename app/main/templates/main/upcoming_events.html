@@ -76,7 +76,7 @@
                         </td>
                         <td>
                             <form method="POST" action="{{ url_for('main.register_for_event') }}" style="display: inline;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                {{ csrf_form.csrf_token }}
                                 <input type="hidden" name="event_id" value="{{ event.id }}">
                                 <button type="submit" class="button is-success" 
                                         onclick="return confirm('Register your interest in this event? You can withdraw later if needed.')">
@@ -168,7 +168,7 @@
                         <td>
                             {% if event_info.pool_open %}
                             <form method="POST" action="{{ url_for('main.withdraw_from_event') }}" style="display: inline;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                {{ csrf_form.csrf_token }}
                                 <input type="hidden" name="event_id" value="{{ event.id }}">
                                 <button type="submit" class="button is-warning is-small" 
                                         onclick="return confirm('Withdraw your registration from this event?')">

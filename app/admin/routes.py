@@ -1707,12 +1707,13 @@ def edit_event_team(team_id):
         
     except Exception as e:
         current_app.logger.error(f"Error in edit_event_team: {str(e)}")
+        current_app.logger.error(f"Full traceback: ", exc_info=True)
         flash('An error occurred while editing the team.', 'error')
         # Try to get event_id from team if possible
         try:
             team = db.session.get(EventTeam, team_id)
             if team:
-                return redirect(url_for('admin.manage_events', event_id=team.event_id))
+                return redirect(url_for('admin.manage_events', event_id=team.event_id, stage=3))
         except:
             pass
         return redirect(url_for('admin.manage_events'))
@@ -2428,10 +2429,14 @@ def manage_teams(booking_id):
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         session_name = sessions.get(booking.session, 'Unknown Session')
         
+        # Create CSRF form for template
+        csrf_form = FlaskForm()
+        
         return render_template('admin/manage_teams.html', 
                              booking=booking,
                              teams=teams,
-                             session_name=session_name)
+                             session_name=session_name,
+                             csrf_form=csrf_form)
         
     except Exception as e:
         current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")

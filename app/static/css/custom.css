@@ -67,4 +67,84 @@
   display: inline;
 }
 
+/* Staged Workflow Styles */
+.staged-workflow {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Stage styling using standard box approach */
+.stage-box {
+    margin-bottom: 1rem;
+}
+
+.stage-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    padding: 1rem;
+    border-bottom: 1px solid hsl(0, 0%, 86%);
+    background-color: hsl(0, 0%, 98%);
+    border-radius: 6px 6px 0 0;
+}
+
+.stage-header:hover {
+    background-color: hsl(0, 0%, 96%);
+}
+
+.stage-box.is-active .stage-header {
+    background-color: hsl(204, 86%, 53%, 0.1);
+    border-bottom-color: hsl(204, 86%, 53%);
+}
+
+.stage-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: hsl(0, 0%, 86%);
+    color: hsl(0, 0%, 29%);
+    font-weight: bold;
+    font-size: 0.75rem;
+    margin-right: 0.75rem;
+}
+
+.stage-box.is-active .stage-number {
+    background: hsl(204, 86%, 53%);
+    color: white;
+}
+
+.stage-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: hsl(0, 0%, 21%);
+}
+
+.stage-summary {
+    font-size: 0.875rem;
+    color: hsl(0, 0%, 48%);
+    margin-right: 0.5rem;
+}
+
+.stage-content {
+    display: none;
+    padding: 1.5rem;
+    border-radius: 0 0 6px 6px;
+}
+
+.stage-box.is-active .stage-content {
+    display: block;
+}
+
+.stage-toggle {
+    transition: transform 0.3s ease;
+    color: hsl(0, 0%, 48%);
+}
+
+.stage-box.is-active .stage-toggle {
+    transform: rotate(180deg);
+    color: hsl(204, 86%, 53%);
+}
+
 
