@@ -25,18 +25,77 @@ Reusable template components in `partials/`:
 - `notify.html` - Flash message notifications
 - `post_item.html` - Individual post display component
 
-## CSS Framework
+## CSS and Styling Guidelines
 
-### Bulma CSS
-- Uses Bulma CSS framework for styling
-- Common classes: `.container`, `.box`, `.button`, `.table`, `.field`, `.control`
-- Layout: `.columns`, `.column`, `.level`, `.level-left`, `.level-right`
-- Colors: `.is-primary`, `.is-success`, `.is-warning`, `.is-danger`
-- Sizing: `.is-small`, `.is-medium`, `.is-large`
+**CRITICAL: Prioritize Bulma CSS classes over custom CSS**
 
-### Custom Styles
-- Additional custom CSS in `/static/css/custom.css`
-- Use Bulma classes first, custom CSS only when necessary
+### 1. Use Bulma CSS Wherever Possible
+- **Always check Bulma documentation first** before writing custom CSS
+- Bulma provides comprehensive styling for layouts, components, forms, and utilities
+- Common Bulma patterns to use:
+  - **Layout**: `.container`, `.columns`, `.column`, `.section`, `.box`
+  - **Components**: `.button`, `.card`, `.table`, `.modal`, `.navbar`
+  - **Forms**: `.field`, `.control`, `.input`, `.select`, `.textarea`
+  - **Utilities**: `.is-primary`, `.is-success`, `.is-danger`, `.has-text-centered`
+  - **Modifiers**: `.is-large`, `.is-fullwidth`, `.is-pulled-right`, `.is-hidden`
+
+### 2. Ensure Application-Wide Consistency
+- **Use consistent Bulma classes across all templates**
+- Follow established patterns from existing templates
+- Example consistent patterns:
+  - Use `.button.is-primary` for main actions
+  - Use `.button.is-light` for secondary actions  
+  - Use `.table.is-striped.is-hoverable` for data tables
+  - Use `.box` for content containers
+  - Use `.field` and `.control` for all form elements
+
+### 3. Custom CSS as Last Resort Only
+- **Only create custom CSS when Bulma cannot achieve the requirement**
+- Keep custom CSS to an absolute minimum
+- **All custom CSS must go in `/app/static/css/custom.css`**
+- Document the reason for custom CSS in comments
+- Prefer CSS custom properties (variables) for reusable values
+
+### Examples of Proper CSS Usage:
+
+#### ✅ Good Practice - Use Bulma Classes:
+```html
+<!-- Use existing Bulma classes -->
+<div class="box">
+    <div class="buttons">
+        <button class="button is-primary">Save</button>
+        <button class="button is-light">Cancel</button>
+    </div>
+</div>
+```
+
+#### ❌ Bad Practice - Custom CSS for Bulma Features:
+```html
+<!-- DON'T create custom CSS for what Bulma already provides -->
+<style>
+.my-custom-button { 
+    background: #00d1b2; 
+    padding: 0.5rem 1rem; 
+}
+</style>
+<button class="my-custom-button">Save</button>
+```
+
+#### ✅ Acceptable Custom CSS - When Bulma Insufficient:
+```css
+/* custom.css - Only when Bulma cannot achieve the specific requirement */
+.workflow-stage-progress {
+    /* Custom animation not available in Bulma */
+    animation: pulse 2s infinite;
+}
+```
+
+### CSS Development Process:
+1. **Check existing templates** for similar styling patterns
+2. **Review Bulma documentation** for available classes
+3. **Try Bulma class combinations** before considering custom CSS
+4. **Only add to custom.css** if Bulma truly cannot achieve the requirement
+5. **Keep custom CSS minimal** and well-documented
 
 ## JavaScript Guidelines
 

@@ -182,6 +182,40 @@ audit_log_delete('Member', member_id, f'Deleted member: {member_name}')
 - When creating new components, look at existing components first
 - When editing code, look at surrounding context to understand framework choices
 
+## Code Reuse and Minimalism
+
+**CRITICAL: Prioritize code reuse and minimize new code creation**
+
+### 1. Keep Additional Code Minimal
+- **Wherever possible, reuse existing code, functions, forms, and templates**
+- Before creating new functions, check if existing utilities can be extended or reused
+- Before creating new forms, check if existing forms can be modified or extended
+- Before creating new templates, check if existing templates or partials can be reused
+- Prefer extending existing classes over creating new ones
+- Prefer adding parameters to existing functions over creating duplicate functions
+
+### 2. **NEVER** Remove or Break Existing Functionality
+- **CRITICAL**: Do not remove existing routes, functions, or features
+- **CRITICAL**: Do not modify existing function signatures that would break calling code
+- **CRITICAL**: Do not change existing database models in ways that break existing data
+- When fixing bugs, ensure the fix doesn't break other functionality that depends on the current behavior
+- When adding features, ensure they don't interfere with existing workflows
+- Always test that existing functionality still works after your changes
+
+### Examples of Good Practice:
+- **✅ Extend existing forms**: Add new fields to existing forms rather than creating duplicate forms
+- **✅ Reuse existing templates**: Use existing templates with conditional sections rather than creating new ones
+- **✅ Extend existing routes**: Add optional parameters to existing routes rather than creating new endpoints
+- **✅ Reuse existing utilities**: Extend existing utility functions rather than creating similar new ones
+- **✅ Preserve existing APIs**: When modifying functions, maintain backward compatibility
+
+### Examples of Bad Practice:
+- **❌ Create duplicate forms**: Creating `NewPasswordForm` when `PasswordChangeForm` already exists
+- **❌ Remove working code**: Deleting existing functions or routes that other code depends on
+- **❌ Break existing signatures**: Changing function parameters without checking all callers
+- **❌ Create redundant templates**: Building new templates when existing ones could be extended
+- **❌ Ignore existing patterns**: Using different coding patterns instead of following established conventions
+
 ## Git Workflow - GitHub Flow
 
 **CRITICAL: This repository uses GitHub Flow. ALL changes must go through feature branches and Pull Requests.**
