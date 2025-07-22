@@ -48,9 +48,8 @@
     </table>
 
     <script>
-        document.getElementById('search-input').addEventListener('input', function () {
-            const query = this.value;
-            fetch(`/api/search_members?q=${encodeURIComponent(query)}`)
+        function loadMembers(query = '') {
+            fetch(`/api/search_members?q=${encodeURIComponent(query)}&route=members`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
@@ -92,6 +91,16 @@
                     const tbody = document.getElementById('members-table-body');
                     tbody.innerHTML = '<tr><td colspan="4" class="has-text-centered has-text-danger">Error loading search results. Please try again.</td></tr>';
                 });
+        }
+
+        // Load all members when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMembers();
+        });
+
+        // Set up search functionality
+        document.getElementById('search-input').addEventListener('input', function () {
+            loadMembers(this.value);
         });
     </script>
 {% endblock %}

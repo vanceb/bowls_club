@@ -14,32 +14,55 @@ from app.routes import role_required, admin_required
 def search_members():
     """
     Search for members by name (AJAX endpoint)
-    Returns different data based on user permissions
+    Returns different data based on user permissions and route context
     """
     try:
-        from app.routes import _search_members_base, _get_member_data
+        from app.routes import _get_member_data
         
         search_term = request.args.get('q', '').strip()
+        route_context = request.args.get('route', 'members')  # 'members' or 'manage_members'
         
-        # Determine if user should see admin data
+        # Determine if user should see admin data and if pending members should be included
         show_admin_data = current_user.is_authenticated and current_user.is_admin
+        include_pending = route_context == 'manage_members' and show_admin_data
         
         if not search_term:
-            # Return all members if no search term (admin) or active members (regular users)
-            if show_admin_data:
+            # Return all members based on route context and permissions
+            if include_pending:
+                # Manage Members route: show ALL members including pending
                 members = db.session.scalars(sa.select(Member).order_by(Member.lastname, Member.firstname)).all()
             else:
+                # Members route: show only active members
                 members = db.session.scalars(
                     sa.select(Member)
                     .where(Member.status.in_(['Full', 'Social', 'Life']))
-                    .order_by(Member.firstname, Member.lastname)
+                    .order_by(Member.lastname, Member.firstname)
                 ).all()
         else:
-            # Use the utility function for consistent search
-            members = _search_members_base(search_term)
-            if not show_admin_data:
-                # Limit results for non-admin users
-                members = members[:20]
+            # Search members based on route context
+            if include_pending:
+                # Manage Members route: search ALL members including pending
+                members = db.session.scalars(sa.select(Member).where(sa.or_(
+                    Member.username.ilike(f'%{search_term}%'),
+                    Member.firstname.ilike(f'%{search_term}%'),
+                    Member.lastname.ilike(f'%{search_term}%'),
+                    Member.email.ilike(f'%{search_term}%')
+                )).order_by(Member.lastname, Member.firstname)).all()
+            else:
+                # Members route: search only active members
+                members = db.session.scalars(sa.select(Member).where(sa.and_(
+                    Member.status.in_(['Full', 'Social', 'Life']),
+                    sa.or_(
+                        Member.username.ilike(f'%{search_term}%'),
+                        Member.firstname.ilike(f'%{search_term}%'),
+                        Member.lastname.ilike(f'%{search_term}%'),
+                        Member.email.ilike(f'%{search_term}%')
+                    )
+                )).order_by(Member.lastname, Member.firstname)).all()
+                
+                # Limit results for non-admin users on Members route
+                if not show_admin_data:
+                    members = members[:20]
         
         # Format results based on user permissions
         results = []
