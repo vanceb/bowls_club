@@ -5,7 +5,6 @@ from flask_login import login_required, current_user
 from functools import wraps
 import sqlalchemy as sa
 import os
-from markdown2 import markdown
 
 from app.admin import bp
 from app import db
@@ -571,7 +570,8 @@ tags: {tags}
                     markdown_file.write(metadata + content)
                 
                 # Convert markdown to HTML and save
-                html_content = markdown(content, extras=['fenced-code-blocks', 'tables'])
+                import markdown2
+                html_content = markdown2.markdown(content, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
                 sanitized_html = sanitize_html_content(html_content)
                 
                 with open(html_path, 'w', encoding='utf-8') as html_file:
@@ -1184,7 +1184,8 @@ def edit_post(post_id):
                 file.write(updated_markdown)
 
             # Convert the updated Markdown to HTML and overwrite the HTML file
-            updated_html = markdown(form.content.data, extras=["tables"])
+            import markdown2
+            updated_html = markdown2.markdown(form.content.data, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
             with open(html_path, 'w') as file:
                 file.write(updated_html)
 
@@ -1333,7 +1334,8 @@ def create_policy_page():
                 f.write(metadata + "\n" + form.content.data)
             
             # Convert to HTML and write HTML file
-            html_content = markdown(form.content.data, extras=['fenced-code-blocks', 'tables'])
+            import markdown2
+            html_content = markdown2.markdown(form.content.data, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
             sanitized_html = sanitize_html_content(html_content)
             with open(html_path, 'w', encoding='utf-8') as f:
                 f.write(sanitized_html)
@@ -1425,7 +1427,8 @@ def edit_policy_page(policy_page_id):
                         f.write(metadata + "\n" + form.content.data)
                     
                     # Convert to HTML and write HTML file
-                    html_content = markdown(form.content.data, extras=['fenced-code-blocks', 'tables'])
+                    import markdown2
+                    html_content = markdown2.markdown(form.content.data, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
                     sanitized_html = sanitize_html_content(html_content)
                     with open(html_path, 'w', encoding='utf-8') as f:
                         f.write(sanitized_html)
