@@ -835,12 +835,56 @@ def manage_events():
                     )
                     
                     db.session.add(booking)
+                    db.session.flush()  # Get booking ID
+                    
+                    # Copy event teams to booking teams if they exist
+                    teams_copied = 0
+                    members_copied = 0
+                    event_teams = db.session.scalars(
+                        sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
+                    ).all()
+                    
+                    if event_teams:
+                        from app.models import BookingTeam, BookingTeamMember
+                        
+                        for event_team in event_teams:
+                            # Create booking team
+                            booking_team = BookingTeam(
+                                booking_id=booking.id,
+                                event_team_id=event_team.id,
+                                team_name=event_team.team_name,
+                                team_number=event_team.team_number
+                            )
+                            db.session.add(booking_team)
+                            db.session.flush()  # Get booking team ID
+                            
+                            # Copy team members
+                            for team_member in event_team.team_members:
+                                booking_team_member = BookingTeamMember(
+                                    booking_team_id=booking_team.id,
+                                    member_id=team_member.member_id,
+                                    position=team_member.position,
+                                    is_substitute=False,
+                                    availability_status='pending'
+                                )
+                                db.session.add(booking_team_member)
+                                members_copied += 1
+                            
+                            teams_copied += 1
+                    
                     db.session.commit()
                     
                     # Audit log
-                    audit_log_create('Booking', booking.id, f'Created event booking for {booking.booking_date}')
+                    if teams_copied > 0:
+                        audit_log_create('Booking', booking.id, 
+                                        f'Created event booking for {booking.booking_date} with {teams_copied} teams and {members_copied} members')
+                    else:
+                        audit_log_create('Booking', booking.id, f'Created event booking for {booking.booking_date}')
                     
-                    flash('Booking created successfully!', 'success')
+                    if teams_copied > 0:
+                        flash(f'Booking created successfully with {teams_copied} teams and {members_copied} members!', 'success')
+                    else:
+                        flash('Booking created successfully!', 'success')
         
         # Get selected event and related data
         if selected_event_id:
@@ -889,9 +933,7 @@ def manage_events():
                 'pool': selected_event.pool,
                 'total_registrations': len(pool_registrations),
                 'registered_count': len([r for r in pool_registrations if r.status == 'registered']),
-                'available_count': len([r for r in pool_registrations if r.status == 'available']),
                 'selected_count': len([r for r in pool_registrations if r.status == 'selected']),
-                'withdrawn_count': len([r for r in pool_registrations if r.status == 'withdrawn'])
             }
         
         # Get team positions for display
@@ -1033,59 +1075,6 @@ def create_event_pool(event_id):
     except Exception as e:
         current_app.logger.error(f"Error creating event pool: {str(e)}")
         flash('An error occurred while creating the pool.', 'error')
-        return redirect(url_for('admin.manage_events'))
-
-
-@bp.route('/update_registration_status/<int:registration_id>', methods=['POST'])
-@login_required
-@role_required('Event Manager')
-def update_registration_status(registration_id):
-    """
-    Update a pool registration status (for Event Managers)
-    """
-    try:
-        # Validate CSRF token
-        csrf_form = FlaskForm()
-        if not csrf_form.validate_on_submit():
-            flash('Security validation failed.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        new_status = request.form.get('status')
-        if new_status not in PoolRegistration.get_valid_statuses():
-            flash('Invalid status.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        registration = db.session.get(PoolRegistration, registration_id)
-        if not registration:
-            flash('Registration not found.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        old_status = registration.status
-        event_id = registration.pool.event_id
-        member_name = f"{registration.member.firstname} {registration.member.lastname}"
-        
-        # Update status
-        if new_status == 'registered':
-            registration.reregister()
-        elif new_status == 'available':
-            registration.set_available()
-        elif new_status == 'selected':
-            registration.set_selected()
-        elif new_status == 'withdrawn':
-            registration.withdraw()
-        
-        db.session.commit()
-        
-        # Audit log
-        audit_log_update('PoolRegistration', registration.id, 
-                        f'Status updated from {old_status} to {new_status} for {member_name}')
-        
-        flash(f'{member_name} status updated to {new_status.title()}.', 'success')
-        return redirect(url_for('admin.manage_events', event_id=event_id))
-        
-    except Exception as e:
-        current_app.logger.error(f"Error updating registration status: {str(e)}")
-        flash('An error occurred while updating the registration status.', 'error')
         return redirect(url_for('admin.manage_events'))
 
 
@@ -1651,6 +1640,108 @@ def edit_event_team(team_id):
                         if member_obj:
                             new_members.append(f"{member_obj.firstname} {member_obj.lastname} ({position})")
                 
+                # Validate no duplicate member assignments within this team
+                all_member_ids = list(new_team_data.values())
+                new_member_ids = set(all_member_ids)
+                
+                # Check for duplicates within the same team
+                if len(all_member_ids) != len(new_member_ids):
+                    # Find which members are duplicated
+                    member_counts = {}
+                    for member_id in all_member_ids:
+                        member_counts[member_id] = member_counts.get(member_id, 0) + 1
+                    
+                    duplicated_members = []
+                    for member_id, count in member_counts.items():
+                        if count > 1:
+                            member = db.session.get(Member, member_id)
+                            if member:
+                                duplicated_members.append(f"{member.firstname} {member.lastname} (assigned to {count} positions)")
+                    
+                    if duplicated_members:
+                        flash(f'Cannot save team: {', '.join(duplicated_members)}', 'error')
+                        # Re-populate form with existing data and return
+                        form.team_name.data = team.team_name
+                        for member in existing_members:
+                            field_name = f"position_{member.position.lower().replace(' ', '_')}"
+                            if hasattr(form, field_name):
+                                getattr(form, field_name).data = member.member_id
+                        return render_template('admin/edit_event_team.html',
+                                             form=form,
+                                             team=team,
+                                             title=f"Edit {team.team_name}")
+                
+                # Validate no duplicate member assignments across all teams in the event
+                if new_member_ids:
+                    # Check for members assigned to other teams in this event (excluding current team)
+                    other_team_members = db.session.scalars(
+                        sa.select(TeamMember)
+                        .join(EventTeam)
+                        .where(EventTeam.event_id == team.event.id)
+                        .where(EventTeam.id != team.id)  # Exclude current team
+                        .where(TeamMember.member_id.in_(new_member_ids))
+                    ).all()
+                    
+                    if other_team_members:
+                        # Build error message with details
+                        conflicts = {}
+                        for tm in other_team_members:
+                            member_name = f"{tm.member.firstname} {tm.member.lastname}"
+                            team_name = tm.event_team.team_name
+                            if member_name not in conflicts:
+                                conflicts[member_name] = []
+                            conflicts[member_name].append(team_name)
+                        
+                        error_details = []
+                        for member_name, teams in conflicts.items():
+                            error_details.append(f"{member_name} is already in {', '.join(teams)}")
+                        
+                        flash(f'Cannot save team: {'; '.join(error_details)}', 'error')
+                        # Re-populate form with existing data and return
+                        form.team_name.data = team.team_name
+                        for member in existing_members:
+                            field_name = f"position_{member.position.lower().replace(' ', '_')}"
+                            if hasattr(form, field_name):
+                                getattr(form, field_name).data = member.member_id
+                        return render_template('admin/edit_event_team.html',
+                                             form=form,
+                                             team=team,
+                                             title=f"Edit {team.team_name}")
+                
+                # Update pool registration statuses if event has pool
+                if team.event.has_pool_enabled():
+                    # Get current member IDs in this team
+                    old_member_ids = {member.member_id for member in existing_members}
+                    
+                    current_app.logger.info(f'Team update - Old members: {old_member_ids}, New members: {new_member_ids}')
+                    
+                    # Members removed from team: set back to 'registered'
+                    removed_member_ids = old_member_ids - new_member_ids
+                    current_app.logger.info(f'Removed member IDs: {removed_member_ids}')
+                    for member_id in removed_member_ids:
+                        pool_registration = team.event.pool.get_member_registration(member_id)
+                        if pool_registration:
+                            current_app.logger.info(f'Removing member {member_id}: status was {pool_registration.status}')
+                            if pool_registration.status == 'selected':
+                                pool_registration.reregister()
+                                current_app.logger.info(f'Set member {member_id} back to registered')
+                        else:
+                            current_app.logger.warning(f'Pool registration not found for member {member_id}')
+                    
+                    # All current team members should be 'selected'
+                    current_app.logger.info(f'Setting all current team members to selected: {new_member_ids}')
+                    for member_id in new_member_ids:
+                        pool_registration = team.event.pool.get_member_registration(member_id)
+                        if pool_registration:
+                            current_app.logger.info(f'Team member {member_id}: status was {pool_registration.status}')
+                            if pool_registration.status == 'registered':
+                                pool_registration.set_selected()
+                                current_app.logger.info(f'Set member {member_id} to selected')
+                            elif pool_registration.status == 'selected':
+                                current_app.logger.info(f'Member {member_id} already selected')
+                        else:
+                            current_app.logger.warning(f'Pool registration not found for member {member_id}')
+                
                 # Only update team members if we have valid new data
                 # Clear existing team members ONLY after we know new data is valid
                 for member in existing_members:
@@ -1826,6 +1917,14 @@ def delete_event_team(team_id):
                   f'Deleting this team will not affect existing bookings (they remain independent), '
                   f'but you won\'t be able to trace them back to this template.', 'warning')
         
+        # Update pool registration statuses if event has pool
+        if team.event.has_pool_enabled():
+            # Set all team members back to 'registered' status
+            for team_member in team.team_members:
+                pool_registration = team.event.pool.get_member_registration(team_member.member_id)
+                if pool_registration and pool_registration.status == 'selected':
+                    pool_registration.reregister()
+        
         # Delete the team (cascade will handle team_members and booking_teams relationship)
         db.session.delete(team)
         db.session.commit()
@@ -1882,8 +1981,8 @@ def create_teams_from_pool(event_id):
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('admin.manage_events'))
         
-        # Get available pool members
-        available_members = event.pool.get_available_members()
+        # Get registered pool members (available for team selection)
+        available_members = event.pool.get_registered_members()
         if not available_members:
             flash('No available members in the pool to create teams.', 'warning')
             return redirect(url_for('admin.manage_events', event_id=event_id))
@@ -1900,7 +1999,7 @@ def create_teams_from_pool(event_id):
         num_complete_teams = len(available_members) // team_size
         
         if num_complete_teams == 0:
-            flash(f'Not enough available members ({len(available_members)}) to create a complete team (need {team_size}).', 'warning')
+            flash(f'Not enough registered members ({len(available_members)}) to create a complete team (need {team_size}).', 'warning')
             return redirect(url_for('admin.manage_events', event_id=event_id))
         
         # Get existing team count for numbering
@@ -2426,11 +2525,89 @@ def manage_teams(booking_id):
                 else:
                     flash('Team name is required.', 'error')
             
+            elif action == 'substitute_player':
+                from app.audit import audit_log_update
+                from datetime import datetime
+                import json
+                
+                booking_team_member_id = request.form.get('booking_team_member_id')
+                new_member_id = request.form.get('new_member_id')
+                reason = request.form.get('reason', 'No reason provided')
+                
+                if booking_team_member_id and new_member_id:
+                    booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                    new_member = db.session.get(Member, int(new_member_id))
+                    
+                    if booking_team_member and new_member:
+                        # Get original player info before substitution
+                        original_player_name = f"{booking_team_member.member.firstname} {booking_team_member.member.lastname}"
+                        substitute_player_name = f"{new_member.firstname} {new_member.lastname}"
+                        position = booking_team_member.position
+                        original_member_id = booking_team_member.member_id
+                        
+                        # Log the substitution
+                        substitution_log_entry = {
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'substitution',
+                            'original_player': original_player_name,
+                            'substitute_player': substitute_player_name,
+                            'position': position,
+                            'made_by': f"{current_user.firstname} {current_user.lastname}",
+                            'reason': reason
+                        }
+                        
+                        # Update the booking team member
+                        booking_team_member.member_id = new_member.id
+                        booking_team_member.is_substitute = True
+                        booking_team_member.substituted_at = datetime.utcnow()
+                        booking_team_member.availability_status = 'pending'  # New player needs to confirm
+                        
+                        # Update substitution log on the team
+                        booking_team = booking_team_member.booking_team
+                        current_log = json.loads(booking_team.substitution_log or '[]')
+                        current_log.append(substitution_log_entry)
+                        booking_team.substitution_log = json.dumps(current_log)
+                        
+                        db.session.commit()
+                        
+                        # Audit log the substitution
+                        audit_log_update('BookingTeamMember', booking_team_member.id, 
+                                       f'Substituted {original_player_name} with {substitute_player_name} for {position}',
+                                       {'original_member_id': original_member_id, 'new_member_id': new_member.id, 'reason': reason})
+                        
+                        flash(f'Successfully substituted {original_player_name} with {substitute_player_name} for {position}', 'success')
+                    else:
+                        flash('Invalid player selection for substitution.', 'error')
+                else:
+                    flash('Missing required information for substitution.', 'error')
+            
             return redirect(url_for('admin.manage_teams', booking_id=booking_id))
         
         # Get session name
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         session_name = sessions.get(booking.session, 'Unknown Session')
+        
+        # Get available members for substitutions (pool members with 'registered' status)
+        available_members = []
+        if booking.event and booking.event.has_pool_enabled():
+            # Get pool members who are registered (not selected for teams yet)
+            from app.models import PoolRegistration
+            available_members = db.session.scalars(
+                sa.select(Member)
+                .join(PoolRegistration, Member.id == PoolRegistration.member_id)
+                .where(PoolRegistration.pool_id == booking.event.pool.id)
+                .where(PoolRegistration.status == 'registered')
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+        else:
+            # Fallback: get active members not already in the booking teams
+            current_member_ids = {member.member_id for team in teams for member in team.booking_team_members}
+            available_members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Social', 'Life']))
+                .where(~Member.id.in_(current_member_ids))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
         
         # Create CSRF form for template
         csrf_form = FlaskForm()
@@ -2439,6 +2616,7 @@ def manage_teams(booking_id):
                              booking=booking,
                              teams=teams,
                              session_name=session_name,
+                             available_members=available_members,
                              csrf_form=csrf_form)
         
     except Exception as e:
@@ -2628,7 +2806,7 @@ def add_member_to_pool(event_id):
         registration = PoolRegistration(
             pool_id=event.pool.id,
             member_id=member_id,
-            status='available'  # Event Manager added, so mark as available
+            status='registered'
         )
         db.session.add(registration)
         db.session.commit()
@@ -2644,6 +2822,57 @@ def add_member_to_pool(event_id):
         current_app.logger.error(f"Error adding member to pool: {str(e)}")
         flash('An error occurred while adding member to pool.', 'error')
         return redirect(url_for('admin.manage_events', event_id=event_id))
+
+
+@bp.route('/delete_from_pool/<int:registration_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def delete_from_pool(registration_id):
+    """
+    Remove a member from the event pool entirely (admin version of user withdrawal)
+    """
+    try:
+        from app.audit import audit_log_delete
+        
+        # Validate CSRF token
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Get the registration
+        registration = db.session.get(PoolRegistration, registration_id)
+        if not registration:
+            flash('Registration not found.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        event = registration.pool.event
+        
+        # Check permission
+        if not current_user.is_admin and current_user not in event.event_managers:
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
+        # Store info for audit log and flash message
+        member_name = f"{registration.member.firstname} {registration.member.lastname}"
+        event_name = event.name
+        event_id = event.id
+        
+        # Delete the registration entirely (same as user withdrawal)
+        db.session.delete(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_delete('PoolRegistration', registration_id, 
+                        f'Event Manager removed {member_name} from pool for event: {event_name}')
+        
+        flash(f'{member_name} removed from event pool successfully!', 'success')
+        return redirect(url_for('admin.manage_events', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error removing member from pool: {str(e)}")
+        flash('An error occurred while removing member from pool.', 'error')
+        return redirect(url_for('admin.manage_events'))
 
 
 @bp.route('/test')
