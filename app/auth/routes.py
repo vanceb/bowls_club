@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from app.auth import bp
 from app import db
 from app.models import Member
-from app.forms import LoginForm, RequestResetForm, ResetPasswordForm, PasswordResetForm, EditProfileForm
+from app.forms import LoginForm, RequestResetForm, ResetPasswordForm, PasswordChangeForm, EditProfileForm
 from app.utils import generate_reset_token, verify_reset_token, send_reset_email
 from app.audit import audit_log_authentication, audit_log_update, audit_log_security_event
 
@@ -118,15 +118,16 @@ def reset_password_request():
                 # Send reset email
                 if send_reset_email(user, token):
                     audit_log_authentication('PASSWORD_RESET_REQUEST', user.username, True)
-                    flash('Password reset instructions have been sent to your email.', 'info')
                 else:
-                    audit_log_authentication('PASSWORD_RESET_REQUEST', user.username, False)
-                    flash('Error sending reset email. Please try again later.', 'error')
+                    audit_log_authentication('PASSWORD_RESET_REQUEST', user.username, False, 
+                                           {'error': 'Failed to send reset email'})
             else:
-                # Don't reveal whether email exists or not
+                # Security: Don't reveal whether email exists or not - same response
                 audit_log_security_event('PASSWORD_RESET_UNKNOWN_EMAIL', 
                                        f'Password reset request for unknown email: {form.email.data}')
-                flash('Password reset instructions have been sent to your email.', 'info')
+            
+            # Always show the same message regardless of email validity (email enumeration protection)
+            flash('If that email address is in our system, you will receive password reset instructions shortly.', 'info')
             
             return redirect(url_for('auth.login'))
         
@@ -151,7 +152,11 @@ def reset_password(token):
         # Verify token
         user = verify_reset_token(token)
         if not user:
-            flash('Invalid or expired reset link.', 'error')
+            # Audit log invalid/expired token attempt
+            audit_log_security_event('PASSWORD_RESET_INVALID_TOKEN', 
+                                   f'Invalid or expired reset token used', 
+                                   {'token_prefix': token[:8] + '...' if len(token) >= 8 else token})
+            flash('Invalid or expired reset link. Please request a new password reset.', 'error')
             return redirect(url_for('auth.reset_password_request'))
         
         form = ResetPasswordForm()
@@ -161,8 +166,9 @@ def reset_password(token):
             user.set_password(form.password.data)
             db.session.commit()
             
-            # Audit log
-            audit_log_authentication('PASSWORD_RESET', user.username, True)
+            # Audit log password reset completion
+            audit_log_authentication('PASSWORD_RESET', user.username, True, 
+                                   {'method': 'email_token', 'user_id': user.id})
             
             flash('Your password has been reset successfully. You can now log in.', 'success')
             return redirect(url_for('auth.login'))
@@ -226,7 +232,7 @@ def change_password():
     Change password for logged-in user
     """
     try:
-        form = PasswordResetForm()
+        form = PasswordChangeForm()
         
         if form.validate_on_submit():
             # Verify current password

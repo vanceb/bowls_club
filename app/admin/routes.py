@@ -11,7 +11,7 @@ from app.admin import bp
 from app import db
 from app.models import Member, Role, Event, Post, PolicyPage, Booking, EventPool, PoolRegistration
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
-from app.forms import EditMemberForm, PasswordResetForm, FlaskForm, WritePostForm
+from app.forms import EditMemberForm, ResetPasswordForm, FlaskForm, WritePostForm
 from app.utils import generate_secure_filename, get_secure_post_path, sanitize_html_content
 from app.routes import role_required
 
@@ -171,10 +171,10 @@ def admin_reset_password(member_id):
             flash('Member not found.', 'error')
             return redirect(url_for('admin.manage_members'))
         
-        form = PasswordResetForm()
+        form = ResetPasswordForm()
         
         if form.validate_on_submit():
-            member.set_password(form.new_password.data)
+            member.set_password(form.password.data)
             db.session.commit()
             
             # Audit log the password reset
