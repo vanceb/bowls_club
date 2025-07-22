@@ -15,52 +15,100 @@ from itsdangerous import URLSafeTimedSerializer
 from app import mail
 import sqlalchemy as sa
 
-def generate_reset_token(email):
+def generate_reset_token(user):
     """
     Generate a secure reset token for password reset functionality.
     
     Args:
-        email (str): The email address to generate token for.
+        user (Member): The user object to generate token for.
         
     Returns:
         str: Secure token string that can be used for password reset.
     """
     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-    return serializer.dumps(email, salt='password-reset-salt')
+    return serializer.dumps(user.email, salt='password-reset-salt')
 
 def verify_reset_token(token, expiration=3600):
     """
-    Verify a password reset token and extract the email address.
+    Verify a password reset token and return the associated user.
     
     Args:
         token (str): The reset token to verify.
         expiration (int): Token expiration time in seconds (default: 3600).
         
     Returns:
-        str or None: Email address if token is valid, None if invalid/expired.
+        Member or None: User object if token is valid, None if invalid/expired.
     """
+    from app.models import Member
+    from app import db
+    
     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
     try:
         email = serializer.loads(token, salt='password-reset-salt', max_age=expiration)
+        # Find the user by email
+        user = db.session.scalar(sa.select(Member).where(Member.email == email))
+        return user
     except Exception:
         return None
-    return email
 
-def send_reset_email(email, reset_url):
+def send_reset_email(user, token):
     """
-    Send a password reset email to the specified email address.
+    Send a password reset email to the specified user.
     
     Args:
-        email (str): The recipient's email address.
-        reset_url (str): The password reset URL to include in the email.
+        user (Member): The user object to send the email to.
+        token (str): The reset token to include in the URL.
+        
+    Returns:
+        bool: True if email was sent successfully, False otherwise.
     """
-    msg = Message('Password Reset Request', recipients=[email])
-    msg.body = f'''To reset your password, visit the following link:
+    try:
+        from flask import url_for
+        
+        # Generate the reset URL
+        reset_url = url_for('auth.reset_password', token=token, _external=True)
+        
+        # Create the email message  
+        sender = (current_app.config.get('MAIL_DEFAULT_SENDER') or 
+                 current_app.config.get('MAIL_USERNAME'))
+        
+        # Debug logging for sender configuration
+        current_app.logger.debug(f"MAIL_DEFAULT_SENDER: {current_app.config.get('MAIL_DEFAULT_SENDER')}")
+        current_app.logger.debug(f"MAIL_USERNAME: {current_app.config.get('MAIL_USERNAME')}")
+        current_app.logger.debug(f"Using sender: {sender}")
+        
+        if not sender:
+            current_app.logger.error("No email sender configured - missing MAIL_DEFAULT_SENDER and MAIL_USERNAME")
+            return False
+        
+        msg = Message(
+            subject='Password Reset Request - Bowls Club',
+            recipients=[user.email],
+            sender=sender
+        )
+        
+        msg.body = f'''Hello {user.firstname},
+
+You have requested to reset your password for your Bowls Club account.
+
+To reset your password, visit the following link:
 {reset_url}
 
-If you did not make this request, simply ignore this email.
+This link will expire in 1 hour for security reasons.
+
+If you did not make this request, simply ignore this email and your password will remain unchanged.
+
+Best regards,
+The Bowls Club Team
 '''
-    mail.send(msg)
+        
+        # Send the email
+        mail.send(msg)
+        return True
+        
+    except Exception as e:
+        current_app.logger.error(f"Error sending reset email to {user.email}: {str(e)}")
+        return False
 
 def render_markdown_with_metadata(markdown_path):
     """
