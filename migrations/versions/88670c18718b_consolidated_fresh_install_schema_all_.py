@@ -1,8 +1,8 @@
-"""Initial database schema
+"""Consolidated fresh install schema - all tables and functionality
 
-Revision ID: 9db589aa1bbe
+Revision ID: 88670c18718b
 Revises: 
-Create Date: 2025-07-11 11:08:23.117264
+Create Date: 2025-07-21 19:25:14.651378
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '9db589aa1bbe'
+revision = '88670c18718b'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -26,13 +26,14 @@ def upgrade():
     sa.Column('format', sa.Integer(), nullable=False),
     sa.Column('scoring', sa.String(length=64), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('has_pool', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('member',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('username', sa.String(length=64), nullable=False),
     sa.Column('email', sa.String(length=120), nullable=False),
-    sa.Column('phone', sa.String(length=15), nullable=False),
+    sa.Column('phone', sa.String(length=15), nullable=True),
     sa.Column('firstname', sa.String(length=64), nullable=False),
     sa.Column('lastname', sa.String(length=64), nullable=False),
     sa.Column('password_hash', sa.String(length=256), nullable=True),
@@ -41,6 +42,9 @@ def upgrade():
     sa.Column('status', sa.String(length=16), nullable=False),
     sa.Column('share_email', sa.Boolean(), nullable=False),
     sa.Column('share_phone', sa.Boolean(), nullable=False),
+    sa.Column('last_login', sa.DateTime(), nullable=True),
+    sa.Column('last_seen', sa.Date(), nullable=True),
+    sa.Column('lockout', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('member', schema=None) as batch_op:
@@ -65,7 +69,11 @@ def upgrade():
     sa.Column('vs', sa.String(length=128), nullable=True),
     sa.Column('home_away', sa.String(length=10), nullable=True),
     sa.Column('event_id', sa.Integer(), nullable=True),
+    sa.Column('booking_type', sa.String(length=20), nullable=False),
+    sa.Column('organizer_id', sa.Integer(), nullable=True),
+    sa.Column('organizer_notes', sa.Text(), nullable=True),
     sa.ForeignKeyConstraint(['event_id'], ['events.id'], ),
+    sa.ForeignKeyConstraint(['organizer_id'], ['member.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('event_member_managers',
@@ -74,6 +82,16 @@ def upgrade():
     sa.ForeignKeyConstraint(['event_id'], ['events.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['member_id'], ['member.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('event_id', 'member_id')
+    )
+    op.create_table('event_pools',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('event_id', sa.Integer(), nullable=False),
+    sa.Column('is_open', sa.Boolean(), nullable=False),
+    sa.Column('auto_close_date', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('closed_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['event_id'], ['events.id'], ),
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_table('event_teams',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -123,6 +141,19 @@ def upgrade():
     sa.ForeignKeyConstraint(['author_id'], ['member.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('booking_players',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('booking_id', sa.Integer(), nullable=False),
+    sa.Column('member_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('invited_by', sa.Integer(), nullable=False),
+    sa.Column('response_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['booking_id'], ['bookings.id'], ),
+    sa.ForeignKeyConstraint(['invited_by'], ['member.id'], ),
+    sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('booking_teams',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('booking_id', sa.Integer(), nullable=False),
@@ -133,6 +164,17 @@ def upgrade():
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['booking_id'], ['bookings.id'], ),
     sa.ForeignKeyConstraint(['event_team_id'], ['event_teams.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('pool_members',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('pool_id', sa.Integer(), nullable=False),
+    sa.Column('member_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('registered_at', sa.DateTime(), nullable=False),
+    sa.Column('last_updated', sa.DateTime(), nullable=False),
+    sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
+    sa.ForeignKeyConstraint(['pool_id'], ['event_pools.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('team_members',
@@ -166,11 +208,14 @@ def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_table('booking_team_members')
     op.drop_table('team_members')
+    op.drop_table('pool_members')
     op.drop_table('booking_teams')
+    op.drop_table('booking_players')
     op.drop_table('posts')
     op.drop_table('policy_pages')
     op.drop_table('member_roles')
     op.drop_table('event_teams')
+    op.drop_table('event_pools')
     op.drop_table('event_member_managers')
     op.drop_table('bookings')
     op.drop_table('roles')

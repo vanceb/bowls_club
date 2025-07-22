@@ -17,6 +17,13 @@ from datetime import datetime
 # Add the app directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Load environment variables from .flaskenv if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv('.flaskenv')
+except ImportError:
+    pass
+
 from app import create_app, db
 from app.models import Role, Member
 from app.audit import audit_log_create, audit_log_system_event
@@ -75,8 +82,9 @@ def verify_database_structure():
     
     expected_tables = [
         'roles', 'member', 'member_roles', 'events', 'event_member_managers',
-        'posts', 'policy_pages', 'bookings', 'event_teams', 'booking_teams',
-        'team_members', 'booking_team_members'
+        'event_pools', 'pool_members', 'posts', 'policy_pages', 'bookings', 
+        'event_teams', 'booking_teams', 'team_members', 'booking_team_members',
+        'booking_players'
     ]
     
     # Get all table names from the database

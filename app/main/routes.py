@@ -852,16 +852,25 @@ def add_rollup_player(booking_id):
 
 
 @bp.route('/add_member', methods=['GET', 'POST'])
-@login_required
-@role_required('User Manager')
 def add_member():
     """
     Add a new member to the system
+    Handles both bootstrap mode (first user) and normal member creation
     """
     try:
         from app.forms import MemberForm
         from app.audit import audit_log_create
         from werkzeug.security import generate_password_hash
+        
+        # Check if we're in bootstrap mode (no users exist)
+        is_bootstrap = Member.is_bootstrap_mode()
+        
+        # If not bootstrap mode, require login and User Manager role
+        if not is_bootstrap:
+            if not current_user.is_authenticated:
+                return redirect(url_for('auth.login'))
+            if not current_user.has_role('User Manager'):
+                abort(403)
         
         form = MemberForm()
         
@@ -873,11 +882,21 @@ def add_member():
                 lastname=form.lastname.data,
                 email=form.email.data,
                 phone=form.phone.data,
-                status=form.status.data,
                 share_email=form.share_email.data,
                 share_phone=form.share_phone.data,
-                is_admin=form.is_admin.data
             )
+            
+            # Bootstrap mode: first user automatically becomes admin with all roles
+            if is_bootstrap:
+                member.is_admin = True
+                member.status = 'Active'
+                # Assign all roles to first user
+                from app.models import Role
+                member.roles = Role.query.all()
+            else:
+                # Normal mode: use form values
+                member.status = form.status.data
+                member.is_admin = form.is_admin.data
             
             # Set password if provided
             if form.password.data:
@@ -889,17 +908,21 @@ def add_member():
             # Audit log
             audit_log_create('Member', member.id, 
                            f'Created member: {member.firstname} {member.lastname} ({member.username})',
-                           {'status': member.status, 'is_admin': member.is_admin})
+                           {'status': member.status, 'is_admin': member.is_admin, 'bootstrap': is_bootstrap})
             
-            flash(f'Member {member.firstname} {member.lastname} has been added successfully.', 'success')
-            return redirect(url_for('main.members'))
+            if is_bootstrap:
+                flash(f'Welcome! Admin user {member.firstname} {member.lastname} has been created successfully. You now have full access to the system.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                flash(f'Member {member.firstname} {member.lastname} has been added successfully.', 'success')
+                return redirect(url_for('main.members'))
         
-        return render_template('main/add_member.html', form=form)
+        return render_template('main/add_member.html', form=form, is_bootstrap=is_bootstrap)
         
     except Exception as e:
         current_app.logger.error(f"Error adding member: {str(e)}")
         flash('An error occurred while adding the member.', 'error')
-        return render_template('main/add_member.html', form=MemberForm())
+        return render_template('main/add_member.html', form=MemberForm(), is_bootstrap=is_bootstrap)
 
 
 @bp.route('/register_for_event', methods=['POST'])

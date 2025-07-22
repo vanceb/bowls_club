@@ -51,17 +51,20 @@ flask run
 
 ### Database Tables
 - `roles` - User roles (Event Manager, Secretary, etc.)
-- `member` - Club members with authentication
+- `member` - Club members with authentication and security features
 - `member_roles` - Many-to-many relationship for member roles
-- `events` - Event types and definitions
+- `events` - Event types and definitions with pool functionality
 - `event_member_managers` - Event managers assignment
+- `event_pools` - Pool registration management for events
+- `pool_members` - Individual member registrations in event pools
 - `posts` - News/announcements system
 - `policy_pages` - Static pages (privacy policy, terms, etc.)
-- `bookings` - Facility bookings with date/time/rinks
+- `bookings` - Facility bookings with date/time/rinks (supports both event and roll-up bookings)
 - `event_teams` - Template teams for events
 - `booking_teams` - Actual teams for specific bookings
 - `team_members` - Players assigned to event teams
 - `booking_team_members` - Player availability for specific games
+- `booking_players` - Roll-up booking player invitations and responses
 
 ### Initial Roles Created
 - Event Manager
@@ -77,7 +80,10 @@ flask run
 ### Features Available
 - ✅ Member management with role-based permissions
 - ✅ Event creation and team management
+- ✅ Pool registration system for events
+- ✅ Pool-to-team workflow for member selection
 - ✅ Booking system with rink availability
+- ✅ Roll-up booking support for informal games
 - ✅ Team formation with position assignments
 - ✅ Player availability confirmation system
 - ✅ Substitution management
@@ -85,6 +91,7 @@ flask run
 - ✅ Static page management
 - ✅ Home/away game tracking
 - ✅ Opposition team management
+- ✅ Comprehensive audit logging
 
 ## Configuration
 
@@ -146,7 +153,7 @@ python create_initial_data.py
 ### Option 2: Stamp Existing Database
 ```bash
 # Mark current database as being at the new baseline
-flask db stamp bbec59aa9936
+flask db stamp 88670c18718b
 
 # Note: This assumes your current database matches the consolidated schema
 ```
