@@ -222,9 +222,9 @@ class Event(db.Model):
         if not self.has_pool_enabled():
             return False, "No pool enabled for this event"
         
-        available_members = self.pool.get_available_members()
-        if not available_members:
-            return False, "No available members in pool"
+        registered_members = self.pool.get_registered_members()
+        if not registered_members:
+            return False, "No registered members in pool"
         
         from flask import current_app
         team_positions = current_app.config.get('TEAM_POSITIONS', {})
@@ -234,10 +234,10 @@ class Event(db.Model):
             return False, f"No team positions configured for format: {self.format}"
         
         team_size = len(positions)
-        if len(available_members) < team_size:
-            return False, f"Not enough available members ({len(available_members)}) for a complete team (need {team_size})"
+        if len(registered_members) < team_size:
+            return False, f"Not enough registered members ({len(registered_members)}) for a complete team (need {team_size})"
         
-        return True, f"Can create {len(available_members) // team_size} teams"
+        return True, f"Can create {len(registered_members) // team_size} teams"
     
     def can_create_booking_from_teams(self):
         """Check if a booking can be created from existing teams"""
@@ -256,7 +256,7 @@ class Event(db.Model):
             'pool_enabled': self.has_pool_enabled(),
             'pool_open': self.is_pool_open(),
             'pool_members': self.get_pool_member_count(),
-            'available_members': len(self.pool.get_available_members()) if self.has_pool_enabled() else 0,
+            'registered_members': len(self.pool.get_registered_members()) if self.has_pool_enabled() else 0,
             'teams_count': len(self.event_teams),
             'teams_with_members': len([t for t in self.event_teams if t.team_members]),
             'bookings_count': len(self.bookings)
@@ -267,7 +267,7 @@ class Event(db.Model):
             status['stage'] = 'no_pool'
         elif status['pool_members'] == 0:
             status['stage'] = 'awaiting_registrations'
-        elif status['available_members'] == 0 and status['teams_count'] == 0:
+        elif status['registered_members'] == 0 and status['teams_count'] == 0:
             status['stage'] = 'ready_for_selection'
         elif status['teams_count'] == 0:
             status['stage'] = 'ready_for_teams'
@@ -315,16 +315,11 @@ class EventPool(db.Model):
 
     def get_registered_members(self):
         """Get all members currently registered in the pool"""
-        return [reg.member for reg in self.registrations if reg.status == 'registered']
-
-    def get_available_members(self):
-        """Get all members with 'available' status"""
-        return [reg.member for reg in self.registrations if reg.status == 'available']
+        return [reg.member for reg in self.registrations]
 
     def is_member_registered(self, member_id):
         """Check if a member is registered in this pool"""
-        return any(reg.member_id == member_id and reg.status in ['registered', 'available'] 
-                  for reg in self.registrations)
+        return any(reg.member_id == member_id for reg in self.registrations)
 
     def get_member_registration(self, member_id):
         """Get the registration record for a specific member"""
@@ -332,7 +327,7 @@ class EventPool(db.Model):
 
     def get_registration_count(self):
         """Get the total number of active registrations"""
-        return len([reg for reg in self.registrations if reg.status in ['registered', 'available']])
+        return len(self.registrations)
 
 
 class PoolRegistration(db.Model):
@@ -345,7 +340,6 @@ class PoolRegistration(db.Model):
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     pool_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('event_pools.id'), nullable=False)
     member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
-    status: so.Mapped[str] = so.mapped_column(sa.String(20), nullable=False, default='registered')
     registered_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
     last_updated: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -354,38 +348,12 @@ class PoolRegistration(db.Model):
     member: so.Mapped['Member'] = so.relationship('Member')
 
     def __repr__(self):
-        return f"<PoolRegistration id={self.id}, member='{self.member.firstname} {self.member.lastname}' if self.member else 'Unknown', status={self.status}>"
-
-    def withdraw(self):
-        """Withdraw the member from the pool"""
-        self.status = 'withdrawn'
-        self.last_updated = datetime.utcnow()
-
-    def reregister(self):
-        """Re-register the member (from withdrawn status)"""
-        if self.status == 'withdrawn':
-            self.status = 'registered'
-            self.last_updated = datetime.utcnow()
-
-    def set_available(self):
-        """Mark member as available for team selection"""
-        self.status = 'available'
-        self.last_updated = datetime.utcnow()
-
-    def set_selected(self):
-        """Mark member as selected for a team"""
-        self.status = 'selected'
-        self.last_updated = datetime.utcnow()
+        return f"<PoolRegistration id={self.id}, member='{self.member.firstname} {self.member.lastname}' if self.member else 'Unknown'>"
 
     @property
     def is_active(self):
-        """Check if registration is active (not withdrawn)"""
-        return self.status in ['registered', 'available', 'selected']
-
-    @classmethod
-    def get_valid_statuses(cls):
-        """Get list of valid registration statuses"""
-        return ['registered', 'available', 'selected', 'withdrawn']
+        """Check if registration is active - if record exists, it's active"""
+        return True
 
 
 class Booking(db.Model):

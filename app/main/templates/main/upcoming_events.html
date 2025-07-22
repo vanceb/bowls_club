@@ -14,7 +14,7 @@
     {% for event_info in events_data %}
         {% if event_info.pool_open and event_info.registration_status == 'not_registered' %}
             {% set _ = open_events.append(event_info) %}
-        {% elif event_info.registration_status in ['registered', 'available'] %}
+        {% elif event_info.registration_status == 'registered' %}
             {% set _ = registered_events.append(event_info) %}
         {% else %}
             {% set _ = closed_events.append(event_info) %}
@@ -158,7 +158,7 @@
                                 <span class="icon">
                                     <i class="fas fa-user-check"></i>
                                 </span>
-                                <span>{{ registration.status.title() }}</span>
+                                <span>Registered</span>
                             </span>
                             <br>
                             <small class="has-text-grey">

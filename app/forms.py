@@ -388,13 +388,12 @@ def create_team_member_form(event_format, event=None):
         import sqlalchemy as sa
         
         if event and event.has_pool_enabled() and event.pool:
-            # Get pool members available for team selection (only 'registered' status)
+            # Get all pool members (all registrations are active)
             from app.models import PoolRegistration
             pool_members = db.session.scalars(
                 sa.select(Member)
                 .join(PoolRegistration, Member.id == PoolRegistration.member_id)
                 .where(PoolRegistration.pool_id == event.pool.id)
-                .where(PoolRegistration.status == 'registered')
                 .order_by(Member.firstname, Member.lastname)
             ).all()
             members = pool_members

@@ -932,8 +932,7 @@ def manage_events():
             pool_data = {
                 'pool': selected_event.pool,
                 'total_registrations': len(pool_registrations),
-                'registered_count': len([r for r in pool_registrations if r.status == 'registered']),
-                'selected_count': len([r for r in pool_registrations if r.status == 'selected']),
+                'registered_count': len(pool_registrations),  # All registrations are 'registered' by existence
             }
         
         # Get team positions for display
@@ -1708,39 +1707,15 @@ def edit_event_team(team_id):
                                              team=team,
                                              title=f"Edit {team.team_name}")
                 
-                # Update pool registration statuses if event has pool
+                # Note: Pool registration status is no longer tracked - existence indicates registration
+                # Team assignment is now tracked solely through BookingTeamMember relationships
+                
+                # Get current member IDs for logging purposes
+                old_member_ids = {member.member_id for member in existing_members}
+                
                 if team.event.has_pool_enabled():
-                    # Get current member IDs in this team
-                    old_member_ids = {member.member_id for member in existing_members}
-                    
                     current_app.logger.info(f'Team update - Old members: {old_member_ids}, New members: {new_member_ids}')
-                    
-                    # Members removed from team: set back to 'registered'
-                    removed_member_ids = old_member_ids - new_member_ids
-                    current_app.logger.info(f'Removed member IDs: {removed_member_ids}')
-                    for member_id in removed_member_ids:
-                        pool_registration = team.event.pool.get_member_registration(member_id)
-                        if pool_registration:
-                            current_app.logger.info(f'Removing member {member_id}: status was {pool_registration.status}')
-                            if pool_registration.status == 'selected':
-                                pool_registration.reregister()
-                                current_app.logger.info(f'Set member {member_id} back to registered')
-                        else:
-                            current_app.logger.warning(f'Pool registration not found for member {member_id}')
-                    
-                    # All current team members should be 'selected'
-                    current_app.logger.info(f'Setting all current team members to selected: {new_member_ids}')
-                    for member_id in new_member_ids:
-                        pool_registration = team.event.pool.get_member_registration(member_id)
-                        if pool_registration:
-                            current_app.logger.info(f'Team member {member_id}: status was {pool_registration.status}')
-                            if pool_registration.status == 'registered':
-                                pool_registration.set_selected()
-                                current_app.logger.info(f'Set member {member_id} to selected')
-                            elif pool_registration.status == 'selected':
-                                current_app.logger.info(f'Member {member_id} already selected')
-                        else:
-                            current_app.logger.warning(f'Pool registration not found for member {member_id}')
+                    current_app.logger.info(f'Pool members remain available for multiple bookings per event')
                 
                 # Only update team members if we have valid new data
                 # Clear existing team members ONLY after we know new data is valid
@@ -1917,13 +1892,7 @@ def delete_event_team(team_id):
                   f'Deleting this team will not affect existing bookings (they remain independent), '
                   f'but you won\'t be able to trace them back to this template.', 'warning')
         
-        # Update pool registration statuses if event has pool
-        if team.event.has_pool_enabled():
-            # Set all team members back to 'registered' status
-            for team_member in team.team_members:
-                pool_registration = team.event.pool.get_member_registration(team_member.member_id)
-                if pool_registration and pool_registration.status == 'selected':
-                    pool_registration.reregister()
+        # Note: Pool registration status no longer tracked - members remain available for other bookings
         
         # Delete the team (cascade will handle team_members and booking_teams relationship)
         db.session.delete(team)
@@ -2039,10 +2008,7 @@ def create_teams_from_pool(event_id):
                     )
                     db.session.add(team_member)
                     
-                    # Update pool registration status to 'selected'
-                    pool_registration = event.pool.get_member_registration(member.id)
-                    if pool_registration:
-                        pool_registration.set_selected()
+                    # Pool members remain available for multiple bookings - no status change needed
                     
                     team_members_info.append(f"{member.firstname} {member.lastname} ({position})")
                     members_assigned += 1
@@ -2076,70 +2042,6 @@ def create_teams_from_pool(event_id):
         flash('An error occurred while creating teams from the pool.', 'error')
         return redirect(url_for('admin.manage_events'))
 
-
-@bp.route('/bulk_update_pool_status/<int:event_id>', methods=['POST'])
-@login_required
-@role_required('Event Manager')
-def bulk_update_pool_status(event_id):
-    """
-    Bulk update pool member statuses (e.g., mark all as available)
-    """
-    try:
-        from app.audit import audit_log_bulk_operation
-        
-        # Validate CSRF token
-        csrf_form = FlaskForm()
-        if not csrf_form.validate_on_submit():
-            flash('Security validation failed.', 'error')
-            return redirect(url_for('admin.manage_events', event_id=event_id))
-        
-        event = db.session.get(Event, event_id)
-        if not event or not event.has_pool_enabled():
-            flash('Event not found or pool not enabled.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        # Check permission
-        if not current_user.is_admin and current_user not in event.event_managers:
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        action = request.form.get('action')
-        if action not in ['mark_all_available', 'clear_selections']:
-            flash('Invalid action.', 'error')
-            return redirect(url_for('admin.manage_events', event_id=event_id))
-        
-        registrations = event.pool.registrations
-        updated_count = 0
-        
-        if action == 'mark_all_available':
-            # Mark all registered members as available
-            for registration in registrations:
-                if registration.status == 'registered':
-                    registration.set_available()
-                    updated_count += 1
-        
-        elif action == 'clear_selections':
-            # Reset all selected members back to available
-            for registration in registrations:
-                if registration.status == 'selected':
-                    registration.set_available()
-                    updated_count += 1
-        
-        db.session.commit()
-        
-        # Audit log
-        audit_log_bulk_operation('POOL_STATUS_UPDATE', 'PoolRegistration', updated_count,
-                                f'Bulk {action} for event "{event.name}"',
-                                {'event_id': event_id, 'action': action})
-        
-        flash(f'Updated {updated_count} pool member statuses.', 'success')
-        return redirect(url_for('admin.manage_events', event_id=event_id))
-        
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error in bulk pool update: {str(e)}")
-        flash('An error occurred while updating pool statuses.', 'error')
-        return redirect(url_for('admin.manage_events'))
 
 
 @bp.route('/copy_teams_to_booking/<int:event_id>', methods=['POST'])
@@ -2427,8 +2329,8 @@ def auto_select_pool_members(event_id):
             flash('Invalid selection count.', 'error')
             return redirect(url_for('admin.manage_events', event_id=event_id))
         
-        # Get registered members
-        registered_members = [reg for reg in event.pool.registrations if reg.status == 'registered']
+        # Get all registered members (all pool registrations are active)
+        registered_members = list(event.pool.registrations)
         
         if len(registered_members) < num_to_select:
             flash(f'Only {len(registered_members)} registered members available, cannot select {num_to_select}.', 'warning')
@@ -2444,20 +2346,8 @@ def auto_select_pool_members(event_id):
             # Default to oldest first
             selected_registrations = sorted(registered_members, key=lambda r: r.registered_at)[:num_to_select]
         
-        # Update selected members to 'available' status
-        updated_count = 0
-        for registration in selected_registrations:
-            registration.set_available()
-            updated_count += 1
-        
-        db.session.commit()
-        
-        # Audit log
-        audit_log_bulk_operation('AUTO_POOL_SELECTION', 'PoolRegistration', updated_count,
-                                f'Auto-selected {updated_count} members using {selection_method} for {event.name}',
-                                {'event_id': event_id, 'method': selection_method})
-        
-        flash(f'Automatically selected {updated_count} members for team creation.', 'success')
+        # Pool status no longer tracked - all registered members are available for team creation
+        flash(f'Pool members are always available for team creation. Use "Create Teams from Pool" instead.', 'info')
         return redirect(url_for('admin.manage_events', event_id=event_id))
         
     except Exception as e:
@@ -2587,16 +2477,15 @@ def manage_teams(booking_id):
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         session_name = sessions.get(booking.session, 'Unknown Session')
         
-        # Get available members for substitutions (pool members with 'registered' status)
+        # Get available members for substitutions 
         available_members = []
         if booking.event and booking.event.has_pool_enabled():
-            # Get pool members who are registered (not selected for teams yet)
+            # Get all pool members (all registrations are active)
             from app.models import PoolRegistration
             available_members = db.session.scalars(
                 sa.select(Member)
                 .join(PoolRegistration, Member.id == PoolRegistration.member_id)
                 .where(PoolRegistration.pool_id == booking.event.pool.id)
-                .where(PoolRegistration.status == 'registered')
                 .order_by(Member.firstname, Member.lastname)
             ).all()
         else:
@@ -2805,8 +2694,7 @@ def add_member_to_pool(event_id):
         # Add member to pool
         registration = PoolRegistration(
             pool_id=event.pool.id,
-            member_id=member_id,
-            status='registered'
+            member_id=member_id
         )
         db.session.add(registration)
         db.session.commit()

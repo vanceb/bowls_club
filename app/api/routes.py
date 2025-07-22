@@ -418,7 +418,7 @@ def get_upcoming_events():
             if event.pool:
                 user_registration = event.pool.get_member_registration(current_user.id)
                 if user_registration:
-                    event_info['registration_status'] = user_registration.status
+                    event_info['registration_status'] = 'registered'  # All pool registrations are 'registered'
                     event_info['registered_at'] = user_registration.registered_at.isoformat()
             
             events_data.append(event_info)
@@ -486,8 +486,7 @@ def register_for_event_api():
         # Create new registration
         registration = PoolRegistration(
             pool_id=event.pool.id,
-            member_id=current_user.id,
-            status='registered'
+            member_id=current_user.id
         )
         
         db.session.add(registration)
@@ -502,7 +501,7 @@ def register_for_event_api():
             'message': f'Successfully registered for {event.name}',
             'registration': {
                 'id': registration.id,
-                'status': registration.status,
+                'status': 'registered',  # All pool registrations are 'registered'
                 'registered_at': registration.registered_at.isoformat()
             }
         })
@@ -574,7 +573,7 @@ def withdraw_from_event_api():
             'message': f'Successfully withdrawn from {event.name}',
             'registration': {
                 'id': registration.id,
-                'status': registration.status,
+                'status': 'registered',  # All pool registrations are 'registered'
                 'last_updated': registration.last_updated.isoformat()
             }
         })
@@ -653,7 +652,7 @@ def get_event_pool():
                     'email': registration.member.email if registration.member.share_email else None,
                     'phone': registration.member.phone if registration.member.share_phone else None
                 },
-                'status': registration.status,
+                'status': 'registered',  # All pool registrations are 'registered'
                 'registered_at': registration.registered_at.isoformat(),
                 'last_updated': registration.last_updated.isoformat(),
                 'is_active': registration.is_active
@@ -663,9 +662,7 @@ def get_event_pool():
         pool_data['summary'] = {
             'total': len(registrations),
             'registered': len([r for r in registrations if r.status == 'registered']),
-            'available': len([r for r in registrations if r.status == 'available']),
-            'selected': len([r for r in registrations if r.status == 'selected']),
-            'withdrawn': len([r for r in registrations if r.status == 'withdrawn'])
+            'selected': len([r for r in registrations if r.status == 'selected'])
         }
         
         return jsonify({

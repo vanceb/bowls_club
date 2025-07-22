@@ -234,7 +234,7 @@
                                     {% endif %}
                                     <span class="help ml-2">
                                         {% if workflow_status.pool_enabled %}
-                                            {{ workflow_status.pool_members }} registered • {{ workflow_status.available_members }} available for teams
+                                            {{ workflow_status.pool_members }} registered • {{ workflow_status.registered_members }} available for teams
                                         {% endif %}
                                     </span>
                                 {% else %}
@@ -297,7 +297,7 @@
                                                         </a>
                                                         <hr class="dropdown-divider">
                                                     {% endif %}
-                                                    {% if workflow_status.available_members >= 4 %}
+                                                    {% if workflow_status.registered_members >= 4 %}
                                                         <a href="#" class="dropdown-item" onclick="showCreateTeamsModal()">
                                                             <span class="icon is-small"><i class="fas fa-users"></i></span>
                                                             Create Teams from Pool
@@ -352,36 +352,27 @@
                                 <tr>
                                     <td>
                                         <strong>{{ registration.member.firstname }} {{ registration.member.lastname }}</strong>
-                                        {% if registration.member.username %}
-                                            <br><small class="has-text-grey">{{ registration.member.username }}</small>
-                                        {% endif %}
                                     </td>
                                     <td>
-                                        <span class="tag 
-                                            {% if registration.status == 'registered' %}is-info
-                                            {% elif registration.status == 'selected' %}is-primary
-                                            {% endif %}">
-                                            {{ registration.status.title() }}
+                                        <span class="tag is-info">
+                                            Registered
                                         </span>
                                     </td>
                                     <td>
                                         <small>{{ registration.registered_at.strftime('%Y-%m-%d %H:%M') }}</small>
                                     </td>
                                     <td>
-                                        {% if registration.status == 'selected' %}
-                                            <form method="POST" action="{{ url_for('admin.update_registration_status', registration_id=registration.id) }}" style="display: inline;">
+                                        <div class="buttons are-small">
+                                            <form method="POST" action="{{ url_for('admin.delete_from_pool', registration_id=registration.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove {{ registration.member.firstname }} {{ registration.member.lastname }} from the pool?')">
                                                 {{ event_form.csrf_token }}
-                                                <input type="hidden" name="status" value="registered">
-                                                <button type="submit" class="button is-small is-warning" title="Return member to pool (remove from team)">
+                                                <button type="submit" class="button is-small is-danger" title="Remove member from pool entirely">
                                                     <span class="icon is-small">
-                                                        <i class="fas fa-undo"></i>
+                                                        <i class="fas fa-user-times"></i>
                                                     </span>
-                                                    <span>Return to Pool</span>
+                                                    <span>Delete</span>
                                                 </button>
                                             </form>
-                                        {% else %}
-                                            <span class="has-text-grey is-size-7">Ready for selection</span>
-                                        {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -398,7 +389,7 @@
                 <!-- Add Member to Pool Form -->
                 <div class="mt-4">
                     <h5 class="title is-6">Add Member to Pool</h5>
-                    <form method="POST" action="{{ url_for('admin.add_member_to_pool', event_id=selected_event.id) }}">
+                    <form method="POST" action="{{ url_for('admin.add_member_to_pool', event_id=selected_event.id) }}" onsubmit="rememberActiveStage()">
                         {{ event_form.csrf_token }}
                         <div class="field has-addons">
                             <div class="control is-expanded">
@@ -947,8 +938,15 @@ function toggleStage(stageNumber) {
 function initializeStages() {
     console.log('initializeStages called');
     
-    // Always start with stage 1 for simplicity
-    toggleStage(1);
+    // Check if there's a remembered active stage
+    const rememberedStage = localStorage.getItem('activeStage');
+    const stageToActivate = rememberedStage ? parseInt(rememberedStage) : 1;
+    
+    console.log('Activating stage:', stageToActivate, 'from localStorage:', rememberedStage);
+    toggleStage(stageToActivate);
+    
+    // Clear the remembered stage after use
+    localStorage.removeItem('activeStage');
     
     // Optional: Smart stage detection (can be enabled later)
     /*
@@ -1836,6 +1834,15 @@ document.addEventListener('DOMContentLoaded', function() {
             closeModal(e.target);
         }
     });
+    
+    // Function to remember active stage before form submission
+    function rememberActiveStage() {
+        localStorage.setItem('activeStage', activeStage);
+        console.log('Remembered active stage:', activeStage);
+    }
+    
+    // Make rememberActiveStage globally available
+    window.rememberActiveStage = rememberActiveStage;
 });
 </script>
 

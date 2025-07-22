@@ -376,7 +376,7 @@ def upcoming_events():
             user_registration = event.pool.get_member_registration(current_user.id)
             if user_registration:
                 event_info['registration'] = user_registration
-                event_info['registration_status'] = user_registration.status
+                event_info['registration_status'] = 'registered'  # All pool registrations are 'registered' by existence
             
             events_data.append(event_info)
         
@@ -971,8 +971,7 @@ def register_for_event():
         # Create new registration
         registration = PoolRegistration(
             pool_id=event.pool.id,
-            member_id=current_user.id,
-            status='registered'
+            member_id=current_user.id
         )
         
         db.session.add(registration)
@@ -1034,12 +1033,14 @@ def withdraw_from_event():
             flash('Registration for this event is closed. Contact the event manager to make changes.', 'warning')
             return redirect(url_for('main.upcoming_events'))
         
-        # Withdraw the registration
-        registration.withdraw()
+        # Remove the registration entirely
+        registration_id = registration.id
+        db.session.delete(registration)
         db.session.commit()
         
         # Audit log
-        audit_log_update('PoolRegistration', registration.id, 
+        from app.audit import audit_log_delete
+        audit_log_delete('PoolRegistration', registration_id, 
                         f'User {current_user.username} withdrew from event: {event.name}')
         
         flash(f'Successfully withdrawn from {event.name}.', 'success')
