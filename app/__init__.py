@@ -121,11 +121,16 @@ def register_template_context_processors(app):
         import sqlalchemy as sa
         from app.models import PolicyPage
         
-        footer_policy_pages = db.session.scalars(
-            sa.select(PolicyPage)
-            .where(PolicyPage.is_active == True, PolicyPage.show_in_footer == True)
-            .order_by(PolicyPage.sort_order, PolicyPage.title)
-        ).all()
+        try:
+            footer_policy_pages = db.session.scalars(
+                sa.select(PolicyPage)
+                .where(PolicyPage.is_active == True, PolicyPage.show_in_footer == True)
+                .order_by(PolicyPage.sort_order, PolicyPage.title)
+            ).all()
+        except Exception as e:
+            # Handle database errors gracefully (e.g., during tests or initial setup)
+            app.logger.debug(f"Could not load footer policy pages: {e}")
+            footer_policy_pages = []
         
         return dict(footer_policy_pages=footer_policy_pages)
 

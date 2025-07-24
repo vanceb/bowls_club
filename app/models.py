@@ -70,7 +70,7 @@ class Member(UserMixin, db.Model):
     managed_events: so.Mapped[list['Event']] = so.relationship('Event', secondary=event_member_managers, back_populates='event_managers')
 
     def __repr__(self):
-        return '<User {}>'.format(self.username)
+        return '<Member {}>'.format(self.username)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -78,9 +78,16 @@ class Member(UserMixin, db.Model):
         # to ensure proper user context and transaction management
 
     def check_password(self, password):
-        if self.password_hash is None:
+        if self.password_hash is None or password is None:
             return False
         return check_password_hash(self.password_hash, password)
+    
+    def has_role(self, role_name):
+        """Check if the member has a specific role."""
+        for role in self.roles:
+            if role.name == role_name:
+                return True
+        return False
     
     @staticmethod
     def is_bootstrap_mode():

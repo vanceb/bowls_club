@@ -73,7 +73,7 @@ def auth_login():
                 audit_log_authentication('LOGIN', attempted_username, False)
                 flash('Invalid username or password', 'error')
         
-        return render_template('members/member_login.html', form=form)
+        return render_template('member_login.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in login route: {str(e)}")
