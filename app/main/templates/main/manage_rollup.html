@@ -351,7 +351,7 @@ document.getElementById('member-search').addEventListener('input', function() {
     }
     
     searchTimeout = setTimeout(() => {
-        fetch(`/api/search_members?q=${encodeURIComponent(query)}`)
+        fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(data => {
                 const resultsDiv = document.getElementById('member-search-results');

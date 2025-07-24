@@ -49,7 +49,7 @@
 
     <script>
         function loadMembers(query = '') {
-            fetch(`/api/search_members?q=${encodeURIComponent(query)}&route=members`)
+            fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}&route=members`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);

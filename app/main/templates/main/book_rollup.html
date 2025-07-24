@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let allMembers = [];
     
     // Fetch initial members data (empty query to get all active members)
-    fetch('/api/search_members?q=')
+    fetch('/members/api/v1/search?q=')
         .then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);

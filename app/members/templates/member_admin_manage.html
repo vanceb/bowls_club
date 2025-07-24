@@ -34,7 +34,7 @@
 
 <script>
     function loadMembers(query = '') {
-        fetch(`/api/search_members?q=${encodeURIComponent(query)}&route=manage_members`)
+        fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}&route=manage_members`)
             .then(response => response.json())
             .then(data => {
                 const tbody = document.getElementById('members-table-body');

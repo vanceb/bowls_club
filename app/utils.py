@@ -66,7 +66,7 @@ def send_reset_email(user, token):
         from flask import url_for
         
         # Generate the reset URL
-        reset_url = url_for('auth.reset_password', token=token, _external=True)
+        reset_url = url_for('members.auth_reset_password', token=token, _external=True)
         
         # Create the email message  
         sender = (current_app.config.get('MAIL_DEFAULT_SENDER') or 

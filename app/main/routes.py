@@ -118,42 +118,7 @@ def post(post_id):
         abort(500)
 
 
-@bp.route('/members')
-@login_required
-def members():
-    """
-    Display paginated list of active members
-    """
-    try:
-        # Get page parameter
-        page = request.args.get(get_page_parameter(), type=int, default=1)
-        per_page = 20
-        
-        # Get active members (Full, Social, Life)
-        members_query = sa.select(Member).where(
-            Member.status.in_(['Full', 'Social', 'Life'])
-        ).order_by(Member.lastname, Member.firstname)
-        
-        # Get total count for pagination
-        total = db.session.scalar(sa.select(sa.func.count()).select_from(members_query.subquery()))
-        
-        # Get paginated members
-        members = db.session.scalars(
-            members_query.offset((page - 1) * per_page).limit(per_page)
-        ).all()
-        
-        # Create pagination object
-        pagination = Pagination(page=page, per_page=per_page, total=total,
-                               css_framework='bulma')
-        
-        return render_template('main/members.html', 
-                             members=members, 
-                             pagination=pagination,
-                             total=total)
-    except Exception as e:
-        current_app.logger.error(f"Error in members route: {str(e)}")
-        flash('An error occurred while loading the members page.', 'error')
-        return render_template('main/members.html', members=[], pagination=None, total=0)
+# MOVED TO MEMBERS BLUEPRINT: /members → /members/directory
 
 
 @bp.route('/bookings')
@@ -851,78 +816,9 @@ def add_rollup_player(booking_id):
         return redirect(url_for('main.my_games'))
 
 
-@bp.route('/add_member', methods=['GET', 'POST'])
-def add_member():
-    """
-    Add a new member to the system
-    Handles both bootstrap mode (first user) and normal member creation
-    """
-    try:
-        from app.forms import MemberForm
-        from app.audit import audit_log_create
-        from werkzeug.security import generate_password_hash
-        
-        # Check if we're in bootstrap mode (no users exist)
-        is_bootstrap = Member.is_bootstrap_mode()
-        
-        # If not bootstrap mode, require login and User Manager role
-        if not is_bootstrap:
-            if not current_user.is_authenticated:
-                return redirect(url_for('auth.login'))
-            if not current_user.has_role('User Manager'):
-                abort(403)
-        
-        form = MemberForm()
-        
-        if form.validate_on_submit():
-            # Create new member
-            member = Member(
-                username=form.username.data,
-                firstname=form.firstname.data,
-                lastname=form.lastname.data,
-                email=form.email.data,
-                phone=form.phone.data,
-                share_email=form.share_email.data,
-                share_phone=form.share_phone.data,
-            )
-            
-            # Bootstrap mode: first user automatically becomes admin with all roles
-            if is_bootstrap:
-                member.is_admin = True
-                member.status = 'Active'
-                # Assign all roles to first user
-                from app.models import Role
-                member.roles = Role.query.all()
-            else:
-                # Normal mode: use form values
-                member.status = form.status.data
-                member.is_admin = form.is_admin.data
-            
-            # Set password if provided
-            if form.password.data:
-                member.set_password(form.password.data)
-            
-            db.session.add(member)
-            db.session.commit()
-            
-            # Audit log
-            audit_log_create('Member', member.id, 
-                           f'Created member: {member.firstname} {member.lastname} ({member.username})',
-                           {'status': member.status, 'is_admin': member.is_admin, 'bootstrap': is_bootstrap})
-            
-            if is_bootstrap:
-                flash(f'Welcome! Admin user {member.firstname} {member.lastname} has been created successfully. You now have full access to the system.', 'success')
-                return redirect(url_for('auth.login'))
-            else:
-                flash(f'Member {member.firstname} {member.lastname} has been added successfully.', 'success')
-                return redirect(url_for('main.members'))
-        
-        return render_template('main/add_member.html', form=form, is_bootstrap=is_bootstrap)
-        
-    except Exception as e:
-        current_app.logger.error(f"Error adding member: {str(e)}")
-        flash('An error occurred while adding the member.', 'error')
-        return render_template('main/add_member.html', form=MemberForm(), is_bootstrap=is_bootstrap)
+# MOVED TO MEMBERS BLUEPRINT: add_member functionality has been moved to the members blueprint
+# - Public member applications: /members/apply
+# - Admin member creation: handled through admin routes in members blueprint
 
 
 @bp.route('/register_for_event', methods=['POST'])

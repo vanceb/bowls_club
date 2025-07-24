@@ -121,7 +121,7 @@
         <section class="modal-card-body">
             <form method="POST" id="create-role-form">
                 {{ csrf_form.hidden_tag() }}
-                <input type="hidden" name="action" value="create">
+                <input type="hidden" name="action" value="create_role">
                 <div class="field">
                     <label class="label">Role Name</label>
                     <div class="control">
@@ -214,7 +214,7 @@
     });
 
     function loadUsersWithRoles() {
-        fetch('/api/users_with_roles')
+        fetch('/members/api/v1/users_with_roles')
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('users-with-roles-container');
@@ -302,7 +302,7 @@
             }
             
             searchTimeout = setTimeout(() => {
-                fetch(`/api/search_members?q=${encodeURIComponent(query)}`)
+                fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}`)
                     .then(response => response.json())
                     .then(data => {
                         const resultsDiv = document.getElementById('user-search-results');
@@ -339,7 +339,7 @@
             return;
         }
         
-        fetch('/admin/add_user_to_role', {
+        fetch('/members/admin/add_user_to_role', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -371,7 +371,7 @@
             return;
         }
         
-        fetch('/admin/remove_user_from_role', {
+        fetch('/members/admin/remove_user_from_role', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

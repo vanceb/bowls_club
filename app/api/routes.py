@@ -9,91 +9,7 @@ from app.models import Member, Event, Booking, EventPool, PoolRegistration
 from app.routes import role_required, admin_required
 
 
-@bp.route('/search_members', methods=['GET'])
-@login_required
-def search_members():
-    """
-    Search for members by name (AJAX endpoint)
-    Returns different data based on user permissions and route context
-    """
-    try:
-        from app.routes import _get_member_data
-        
-        search_term = request.args.get('q', '').strip()
-        route_context = request.args.get('route', 'members')  # 'members' or 'manage_members'
-        
-        # Determine if user should see admin data and if pending members should be included
-        show_admin_data = current_user.is_authenticated and current_user.is_admin
-        include_pending = route_context == 'manage_members' and show_admin_data
-        
-        if not search_term:
-            # Return all members based on route context and permissions
-            if include_pending:
-                # Manage Members route: show ALL members including pending
-                members = db.session.scalars(sa.select(Member).order_by(Member.lastname, Member.firstname)).all()
-            else:
-                # Members route: show only active members
-                members = db.session.scalars(
-                    sa.select(Member)
-                    .where(Member.status.in_(['Full', 'Social', 'Life']))
-                    .order_by(Member.lastname, Member.firstname)
-                ).all()
-        else:
-            # Search members based on route context
-            if include_pending:
-                # Manage Members route: search ALL members including pending
-                members = db.session.scalars(sa.select(Member).where(sa.or_(
-                    Member.username.ilike(f'%{search_term}%'),
-                    Member.firstname.ilike(f'%{search_term}%'),
-                    Member.lastname.ilike(f'%{search_term}%'),
-                    Member.email.ilike(f'%{search_term}%')
-                )).order_by(Member.lastname, Member.firstname)).all()
-            else:
-                # Members route: search only active members
-                members = db.session.scalars(sa.select(Member).where(sa.and_(
-                    Member.status.in_(['Full', 'Social', 'Life']),
-                    sa.or_(
-                        Member.username.ilike(f'%{search_term}%'),
-                        Member.firstname.ilike(f'%{search_term}%'),
-                        Member.lastname.ilike(f'%{search_term}%'),
-                        Member.email.ilike(f'%{search_term}%')
-                    )
-                )).order_by(Member.lastname, Member.firstname)).all()
-                
-                # Limit results for non-admin users on Members route
-                if not show_admin_data:
-                    members = members[:20]
-        
-        # Format results based on user permissions
-        results = []
-        for member in members:
-            if show_admin_data:
-                # Admin users get full data
-                member_data = _get_member_data(member, show_private_data=True)
-                
-                # Add admin-specific fields
-                member_data.update({
-                    'last_seen': member.last_seen.strftime('%Y-%m-%d') if member.last_seen else 'Never',
-                    'roles': [{'name': role.name} for role in member.roles] if member.roles else []
-                })
-            else:
-                # Regular users get privacy-filtered data
-                member_data = _get_member_data(member, show_private_data=False)
-            
-            results.append(member_data)
-        
-        return jsonify({
-            'success': True,
-            'members': results,
-            'count': len(results)
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in search_members API: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'An error occurred while searching for members'
-        }), 500
+# MOVED TO MEMBERS BLUEPRINT: /api/search_members → /members/api/v1/search
 
 
 @bp.route('/event/<int:event_id>')
@@ -332,47 +248,7 @@ def get_availability(selected_date, session_id):
         }), 500
 
 
-@bp.route('/users_with_roles', methods=['GET'])
-@login_required
-@admin_required
-def users_with_roles():
-    """
-    Get all users with their assigned roles (AJAX endpoint)
-    Admin only access
-    """
-    try:
-        # Get all users who have roles assigned
-        users_with_roles = db.session.scalars(
-            sa.select(Member)
-            .join(Member.roles)
-            .order_by(Member.lastname, Member.firstname)
-            .distinct()
-        ).all()
-        
-        # Format results
-        results = []
-        for user in users_with_roles:
-            user_data = {
-                'id': user.id,
-                'firstname': user.firstname,
-                'lastname': user.lastname,
-                'email': user.email,
-                'roles': [{'id': role.id, 'name': role.name} for role in user.roles]
-            }
-            results.append(user_data)
-        
-        return jsonify({
-            'success': True,
-            'users': results,
-            'count': len(results)
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in users_with_roles API: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'An error occurred while retrieving users with roles'
-        }), 500
+# MOVED TO MEMBERS BLUEPRINT: /api/users_with_roles → /members/api/v1/users_with_roles
 
 
 @bp.route('/events/upcoming', methods=['GET'])

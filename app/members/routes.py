@@ -562,39 +562,50 @@ def admin_manage_roles():
                     
                     flash(f'Role "{role_name}" created successfully.', 'success')
             
-            elif action == 'rename_role':
+            elif action == 'rename':
                 # Rename existing role
-                old_name = request.form.get('old_role_name', '').strip()
-                new_name = request.form.get('new_role_name', '').strip()
+                role_id = request.form.get('role_id')
+                new_name = request.form.get('role_name', '').strip()
                 
-                role = db.session.scalar(sa.select(Role).where(Role.name == old_name))
+                role = db.session.get(Role, role_id)
                 if role:
-                    role.name = new_name
-                    db.session.commit()
-                    
-                    # Audit log
-                    audit_log_update('Role', role.id, f'Renamed role from "{old_name}" to "{new_name}"')
-                    
-                    flash(f'Role renamed from "{old_name}" to "{new_name}".', 'success')
+                    # Check if role is protected
+                    core_roles = current_app.config.get('CORE_ROLES', [])
+                    if role.name in core_roles:
+                        flash(f'Cannot rename core role "{role.name}". Core roles are protected.', 'error')
+                    else:
+                        old_name = role.name
+                        role.name = new_name
+                        db.session.commit()
+                        
+                        # Audit log
+                        audit_log_update('Role', role.id, f'Renamed role from "{old_name}" to "{new_name}"')
+                        
+                        flash(f'Role renamed from "{old_name}" to "{new_name}".', 'success')
                 else:
-                    flash(f'Role "{old_name}" not found.', 'error')
+                    flash(f'Role not found.', 'error')
             
-            elif action == 'delete_role':
+            elif action == 'delete':
                 # Delete role
-                role_name = request.form.get('delete_role_name', '').strip()
+                role_id = request.form.get('role_id')
                 
-                role = db.session.scalar(sa.select(Role).where(Role.name == role_name))
+                role = db.session.get(Role, role_id)
                 if role:
-                    role_id = role.id
-                    db.session.delete(role)
-                    db.session.commit()
-                    
-                    # Audit log
-                    audit_log_delete('Role', role_id, f'Deleted role: {role_name}')
-                    
-                    flash(f'Role "{role_name}" deleted successfully.', 'success')
+                    # Check if role is protected
+                    core_roles = current_app.config.get('CORE_ROLES', [])
+                    if role.name in core_roles:
+                        flash(f'Cannot delete core role "{role.name}". Core roles are protected.', 'error')
+                    else:
+                        role_name = role.name
+                        db.session.delete(role)
+                        db.session.commit()
+                        
+                        # Audit log
+                        audit_log_delete('Role', role_id, f'Deleted role: {role_name}')
+                        
+                        flash(f'Role "{role_name}" deleted successfully.', 'success')
                 else:
-                    flash(f'Role "{role_name}" not found.', 'error')
+                    flash(f'Role not found.', 'error')
             
             return redirect(url_for('members.admin_manage_roles'))
         
@@ -604,7 +615,10 @@ def admin_manage_roles():
             sa.select(Member).order_by(Member.lastname, Member.firstname)
         ).all()
         
-        return render_template('member_admin_roles.html', form=form, roles=roles, users=users)
+        # Get core roles from config
+        core_roles = current_app.config.get('CORE_ROLES', [])
+        
+        return render_template('member_admin_roles.html', csrf_form=form, roles=roles, users=users, core_roles=core_roles)
         
     except Exception as e:
         current_app.logger.error(f"Error in manage_roles route: {str(e)}")
@@ -620,11 +634,15 @@ def admin_add_user_to_role():
     AJAX endpoint for adding a user to a role
     """
     try:
-        user_id = request.form.get('user_id')
-        role_id = request.form.get('role_id')
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No JSON data provided'}), 400
+            
+        user_id = data.get('user_id')
+        role_id = data.get('role_id')
         
         if not user_id or not role_id:
-            return jsonify({'success': False, 'message': 'Missing user_id or role_id'})
+            return jsonify({'success': False, 'message': 'Missing user_id or role_id'}), 400
         
         user = db.session.get(Member, user_id)
         role = db.session.get(Role, role_id)
@@ -659,11 +677,15 @@ def admin_remove_user_from_role():
     AJAX endpoint for removing a user from a role
     """
     try:
-        user_id = request.form.get('user_id')
-        role_id = request.form.get('role_id')
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No JSON data provided'}), 400
+            
+        user_id = data.get('user_id')
+        role_id = data.get('role_id')
         
         if not user_id or not role_id:
-            return jsonify({'success': False, 'message': 'Missing user_id or role_id'})
+            return jsonify({'success': False, 'message': 'Missing user_id or role_id'}), 400
         
         user = db.session.get(Member, user_id)
         role = db.session.get(Role, role_id)
