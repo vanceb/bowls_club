@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="title">Manage Roles</h1>
+
+<!-- Users with Roles Section -->
+<div class="box">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <h2 class="subtitle">Users with Roles</h2>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <button class="button is-success" onclick="showAddUserModal()">
+                    <span class="icon">
+                        <i class="fas fa-user-plus"></i>
+                    </span>
+                    <span>Add User</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="users-with-roles-container">
+        <!-- Users will be loaded here via AJAX -->
+        <p class="has-text-grey">Loading users...</p>
+    </div>
+</div>
+
+<div class="box">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <h2 class="subtitle">Roles</h2>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <button class="button is-primary" onclick="showCreateRoleModal()">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Create Role</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <table class="table is-striped is-hoverable is-fullwidth">
+        <thead>
+            <tr>
+                <th>Role Name</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for role in roles %}
+            <tr>
+                <td>
+                    {{ role.name }}
+                    {% if role.name in core_roles %}
+                    <span class="tag is-warning is-small" style="margin-left: 10px;">Core Role</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if role.name in core_roles %}
+                    <div class="buttons">
+                        <span class="button is-static">
+                            <span class="icon">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                            <span>Protected</span>
+                        </span>
+                    </div>
+                    {% else %}
+                    <div class="buttons">
+                        <!-- Rename Role -->
+                        <form method="POST" class="inline-form">
+                            {{ csrf_form.hidden_tag() }}
+                            <input type="hidden" name="action" value="rename">
+                            <input type="hidden" name="role_id" value="{{ role.id }}">
+                            <div class="field has-addons">
+                                <div class="control">
+                                    <input class="input" type="text" name="role_name" placeholder="New name" required>
+                                </div>
+                                <div class="control">
+                                    <button class="button is-info" type="submit">
+                                        <span class="icon">
+                                            <i class="fas fa-edit"></i>
+                                        </span>
+                                        <span>Rename</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+
+                        <!-- Delete Role -->
+                        <button class="button is-danger" onclick="showDeleteModal({{ role.id }}, '{{ role.name }}')">
+                            <span class="icon">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Create Role Modal -->
+<div id="create-role-modal" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Create New Role</p>
+            <button class="delete" aria-label="close" onclick="closeCreateRoleModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <form method="POST" id="create-role-form">
+                {{ csrf_form.hidden_tag() }}
+                <input type="hidden" name="action" value="create">
+                <div class="field">
+                    <label class="label">Role Name</label>
+                    <div class="control">
+                        <input class="input" type="text" name="role_name" placeholder="Enter role name" required>
+                    </div>
+                </div>
+            </form>
+        </section>
+        <footer class="modal-card-foot">
+            <div class="buttons">
+                <button class="button is-primary" onclick="document.getElementById('create-role-form').submit()">Create Role</button>
+                <button class="button" onclick="closeCreateRoleModal()">Cancel</button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div id="add-user-modal" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Add User to Role</p>
+            <button class="delete" aria-label="close" onclick="closeAddUserModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <div class="field">
+                <label class="label">Search for User</label>
+                <div class="control">
+                    <input class="input" type="text" id="user-search" placeholder="Type to search for users..." autocomplete="off">
+                </div>
+            </div>
+            <div id="user-search-results" class="box" style="display: none; max-height: 200px; overflow-y: auto;">
+                <!-- Search results will appear here -->
+            </div>
+            <div class="field">
+                <label class="label">Select Role</label>
+                <div class="control">
+                    <div class="select is-fullwidth">
+                        <select id="role-select">
+                            <option value="">Select a role...</option>
+                            {% for role in roles %}
+                            <option value="{{ role.id }}">{{ role.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <footer class="modal-card-foot">
+            <div class="buttons">
+                <button class="button is-success" onclick="addUserToRole()">Add to Role</button>
+                <button class="button" onclick="closeAddUserModal()">Cancel</button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Confirm Deletion</p>
+            <button class="delete" aria-label="close" onclick="closeDeleteModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <p>Are you sure you want to delete the role <strong id="delete-role-name"></strong>?</p>
+        </section>
+        <footer class="modal-card-foot">
+            <div class="buttons">
+                <form method="POST" id="delete-form">
+                    {{ csrf_form.hidden_tag() }}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="role_id" id="delete-role-id">
+                    <button class="button is-danger" type="submit">Delete</button>
+                </form>
+                <button class="button" onclick="closeDeleteModal()">Cancel</button>
+            </div>
+        </footer>
+    </div>
+</div>
+
+<script>
+    let selectedUserId = null;
+
+    // Load users with roles on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadUsersWithRoles();
+    });
+
+    function loadUsersWithRoles() {
+        fetch('/api/users_with_roles')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('users-with-roles-container');
+                if (data.success && data.users.length > 0) {
+                    let html = '<table class="table is-striped is-hoverable is-fullwidth">';
+                    html += '<thead><tr><th>User</th><th>Email</th><th>Roles</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    data.users.forEach(user => {
+                        html += `<tr>
+                            <td>${user.firstname} ${user.lastname}</td>
+                            <td>${user.email}</td>
+                            <td>`;
+                        
+                        if (user.roles.length > 0) {
+                            user.roles.forEach(role => {
+                                html += `<span class="tag is-info" style="margin-right: 5px;">
+                                    ${role.name}
+                                    <button class="delete is-small" onclick="removeUserFromRole(${user.id}, ${role.id})"></button>
+                                </span>`;
+                            });
+                        } else {
+                            html += '<span class="has-text-grey">No roles assigned</span>';
+                        }
+                        
+                        html += `</td>
+                            <td>
+                                <button class="button is-small is-primary" onclick="showAddRoleToUser(${user.id}, '${user.firstname} ${user.lastname}')">
+                                    <span class="icon"><i class="fas fa-plus"></i></span>
+                                    <span>Add Role</span>
+                                </button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p class="has-text-grey">No users with roles found.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading users with roles:', error);
+                document.getElementById('users-with-roles-container').innerHTML = '<p class="has-text-danger">Error loading users.</p>';
+            });
+    }
+
+    function showCreateRoleModal() {
+        document.getElementById('create-role-modal').classList.add('is-active');
+    }
+
+    function closeCreateRoleModal() {
+        document.getElementById('create-role-modal').classList.remove('is-active');
+    }
+
+    function showAddUserModal() {
+        document.getElementById('add-user-modal').classList.add('is-active');
+        selectedUserId = null;
+        document.getElementById('user-search').value = '';
+        document.getElementById('user-search-results').style.display = 'none';
+    }
+
+    function closeAddUserModal() {
+        document.getElementById('add-user-modal').classList.remove('is-active');
+    }
+
+    function showAddRoleToUser(userId, userName) {
+        selectedUserId = userId;
+        document.getElementById('user-search').value = userName;
+        document.getElementById('user-search-results').style.display = 'none';
+        document.getElementById('add-user-modal').classList.add('is-active');
+    }
+
+    // User search functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('user-search');
+        let searchTimeout;
+        
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                document.getElementById('user-search-results').style.display = 'none';
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                fetch(`/api/search_members?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const resultsDiv = document.getElementById('user-search-results');
+                        if (data.success && data.members.length > 0) {
+                            let html = '';
+                            data.members.forEach(member => {
+                                html += `<div class="box" style="margin-bottom: 10px; cursor: pointer;" onclick="selectUser(${member.id}, '${member.firstname} ${member.lastname}')">
+                                    <strong>${member.firstname} ${member.lastname}</strong><br>
+                                    <small>${member.email}</small>
+                                </div>`;
+                            });
+                            resultsDiv.innerHTML = html;
+                            resultsDiv.style.display = 'block';
+                        } else {
+                            resultsDiv.innerHTML = '<p class="has-text-grey">No users found.</p>';
+                            resultsDiv.style.display = 'block';
+                        }
+                    });
+            }, 300);
+        });
+    });
+
+    function selectUser(userId, userName) {
+        selectedUserId = userId;
+        document.getElementById('user-search').value = userName;
+        document.getElementById('user-search-results').style.display = 'none';
+    }
+
+    function addUserToRole() {
+        const roleId = document.getElementById('role-select').value;
+        
+        if (!selectedUserId || !roleId) {
+            alert('Please select both a user and a role.');
+            return;
+        }
+        
+        fetch('/admin/add_user_to_role', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrf_token]').value
+            },
+            body: JSON.stringify({
+                user_id: selectedUserId,
+                role_id: roleId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeAddUserModal();
+                loadUsersWithRoles();
+                alert('User added to role successfully!');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while adding the user to the role.');
+        });
+    }
+
+    function removeUserFromRole(userId, roleId) {
+        if (!confirm('Are you sure you want to remove this role from the user?')) {
+            return;
+        }
+        
+        fetch('/admin/remove_user_from_role', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrf_token]').value
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                role_id: roleId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadUsersWithRoles();
+                alert('Role removed from user successfully!');
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while removing the role from the user.');
+        });
+    }
+
+    function showDeleteModal(roleId, roleName) {
+        document.getElementById('delete-role-id').value = roleId;
+        document.getElementById('delete-role-name').textContent = roleName;
+        document.getElementById('delete-modal').classList.add('is-active');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('delete-modal').classList.remove('is-active');
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="title">Manage Members</h1>
+
+<div class="box">
+    <div class="field">
+        <label class="label is-size-5">Search Members</label>
+        <div class="control">
+            <input id="search-input" class="input" type="text" placeholder="Search by username, first name, last name, or email" autofocus>
+        </div>
+    </div>
+</div>
+
+<table class="table is-striped is-hoverable is-fullwidth">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Gender</th>
+            <th>Status</th>
+            <th>Last Seen</th>
+            <th>Lockout</th>
+            <th>Roles</th>
+        </tr>
+    </thead>
+    <tbody id="members-table-body">
+        <!-- Results will be dynamically loaded here -->
+    </tbody>
+</table>
+
+<script>
+    function loadMembers(query = '') {
+        fetch(`/api/search_members?q=${encodeURIComponent(query)}&route=manage_members`)
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('members-table-body');
+                tbody.innerHTML = ''; // Clear the table body
+                data.members.forEach(member => {
+                    const row = document.createElement('tr');
+                    const roles = member.roles.map(role => role.name).join(', '); // Combine role names
+                    
+                    // Create cells and set textContent to prevent XSS
+                    const cells = [
+                        member.username,
+                        member.firstname,
+                        member.lastname,
+                        member.email || 'N/A',  // Show N/A if email is null (shouldn't happen for admin users)
+                        member.phone || 'N/A',  // Show N/A if phone is null (shouldn't happen for admin users)
+                        member.gender,
+                        member.status,
+                        member.last_seen,
+                        member.lockout ? 'Yes' : 'No',
+                        roles
+                    ];
+                    
+                    cells.forEach(cellText => {
+                        const cell = document.createElement('td');
+                        cell.textContent = cellText; // Use textContent instead of innerHTML
+                        row.appendChild(cell);
+                    });
+                    
+                    row.dataset.memberId = member.id; // Store the member ID
+                    row.addEventListener('click', () => {
+                        window.location.href = `/admin/edit_member/${member.id}`;
+                    });
+                    tbody.appendChild(row);
+                });
+            });
+    }
+
+    // Load all members when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMembers();
+    });
+
+    // Set up search functionality
+    document.getElementById('search-input').addEventListener('input', function () {
+        loadMembers(this.value);
+    });
+</script>
+{% endblock %}

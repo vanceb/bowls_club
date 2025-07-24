@@ -48,10 +48,10 @@
 
       <!-- Add a Login / Logout item to the end of the menu -->
       {% if current_user.is_anonymous %}
-        <a class="navbar-item" href="{{ url_for('auth.login') }}">Login</a>
+        <a class="navbar-item" href="{{ url_for('members.auth_login') }}">Login</a>
       {% else %}
-        <a class="navbar-item" href="{{ url_for('auth.profile') }}">Profile</a>
-        <a class="navbar-item" href="{{ url_for('auth.logout') }}">Logout {{ current_user.firstname }}</a>
+        <a class="navbar-item" href="{{ url_for('members.auth_profile') }}">Profile</a>
+        <a class="navbar-item" href="{{ url_for('members.auth_logout') }}">Logout {{ current_user.firstname }}</a>
       {% endif %}
     </div>
 

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1 class="title">Sign In</h1>
+    <form action="" class="box" method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="field">
+            <label class="label">{{ form.username.label }}</label>
+            <div class="control">
+                {{ form.username(size=32, class_="input") }}
+            </div>
+            {% for error in form.username.errors %}
+            <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div class="field">
+            <label class="label">{{ form.password.label }}</label>
+            <div class="control">
+                {{ form.password(size=128, class_="input") }}
+            </div>
+            {% for error in form.password.errors %}
+            <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div class="field">
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.remember_me() }}
+                    {{ form.remember_me.label }}
+                </label>
+            </div>
+        </div>
+        <div class="field">
+            <div class="control">
+                {{ form.submit(class_="button is-primary") }}
+            </div>
+        </div>
+
+        <!-- Add the password reset link -->
+        <p>
+            <a href="{{ url_for('members.auth_reset_password_request') }}">Reset your password!</a>
+        </p>
+
+    </form>
+    <p>
+        Not yet a member? <a href="{{ url_for('members.apply') }}">Apply to join the Club</a>.
+    </p>
+
+{% endblock %}

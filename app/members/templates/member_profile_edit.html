@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-6 is-offset-3">
+            <h1 class="title">Edit Profile</h1>
+            <p class="subtitle">Update your personal information and privacy settings</p>
+            
+            <div class="box">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="field">
+                        {{ form.firstname.label(class="label") }}
+                        <div class="control">
+                            {{ form.firstname(class="input") }}
+                        </div>
+                        {% for error in form.firstname.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="field">
+                        {{ form.lastname.label(class="label") }}
+                        <div class="control">
+                            {{ form.lastname(class="input") }}
+                        </div>
+                        {% for error in form.lastname.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="field">
+                        {{ form.email.label(class="label") }}
+                        <div class="control">
+                            {{ form.email(class="input") }}
+                        </div>
+                        {% for error in form.email.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="field">
+                        {{ form.phone.label(class="label") }}
+                        <div class="control">
+                            {{ form.phone(class="input") }}
+                        </div>
+                        {% for error in form.phone.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div class="field">
+                        {{ form.gender.label(class="label") }}
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                {{ form.gender(class="select") }}
+                            </div>
+                        </div>
+                        {% for error in form.gender.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <hr>
+
+                    <!-- Privacy Settings Section -->
+                    <div class="field">
+                        <label class="label">Privacy Settings</label>
+                        <div class="content">
+                            <p class="is-size-7 has-text-grey">
+                                Control who can see your contact information in the member directory.
+                                <a href="{{ url_for('main.policy', slug='privacy-policy') }}" target="_blank" class="has-text-link">
+                                    Read our Privacy Policy <i class="fas fa-external-link-alt is-size-7"></i>
+                                </a>
+                            </p>
+                        </div>
+                        
+                        <div class="field">
+                            <div class="control">
+                                <label class="checkbox">
+                                    {{ form.share_email }}
+                                    {{ form.share_email.label.text }}
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="field">
+                            <div class="control">
+                                <label class="checkbox">
+                                    {{ form.share_phone }}
+                                    {{ form.share_phone.label.text }}
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="content">
+                            <p class="is-size-7 has-text-grey">
+                                <strong>Note:</strong> If you uncheck these boxes, other members will see "Private" instead of your contact details.
+                                Club administrators and event organizers may still access your information for official club business.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="field is-grouped">
+                        <div class="control">
+                            {{ form.submit(class="button is-primary") }}
+                        </div>
+                        <div class="control">
+                            <a href="{{ url_for('main.index') }}" class="button is-light">Cancel</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="box">
+                <h3 class="title is-5">Account Information</h3>
+                <div class="content">
+                    <p><strong>Username:</strong> {{ current_user.username }}</p>
+                    <p><strong>Member Status:</strong> 
+                        <span class="tag {% if current_user.status == 'Full' %}is-success{% elif current_user.status == 'Pending' %}is-warning{% else %}is-info{% endif %}">
+                            {{ current_user.status }}
+                        </span>
+                    </p>
+                    {% if current_user.roles %}
+                    <p><strong>Roles:</strong>
+                        {% for role in current_user.roles %}
+                            <span class="tag is-light">{{ role.name }}</span>
+                        {% endfor %}
+                    </p>
+                    {% endif %}
+                </div>
+                
+                <div class="content">
+                    <p class="is-size-7 has-text-grey">
+                        <strong>Need help?</strong> Contact the club secretary if you need to change your username or have other account issues.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="box">
+                <h3 class="title is-5">Security Settings</h3>
+                <div class="content">
+                    <p>Update your account password for security.</p>
+                </div>
+                <div class="field">
+                    <div class="control">
+                        <a href="{{ url_for('members.auth_change_password') }}" class="button is-warning">
+                            <span class="icon">
+                                <i class="fas fa-key"></i>
+                            </span>
+                            <span>Reset Password</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

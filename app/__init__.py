@@ -36,7 +36,7 @@ def create_app(config_name='development'):
     mail.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)
-    login.login_view = 'auth.login'
+    login.login_view = 'members.auth_login'
     moment.init_app(app)
     limiter.init_app(app)
     
@@ -213,12 +213,12 @@ def register_routes(app):
     """Register application routes via blueprints"""
     # Import and register blueprints
     from app.main import bp as main_bp
-    from app.auth import bp as auth_bp
+    from app.members import bp as members_bp
     from app.api import bp as api_bp
     from app.admin import bp as admin_bp
     
     app.register_blueprint(main_bp)
-    app.register_blueprint(auth_bp)
+    app.register_blueprint(members_bp, url_prefix='/members')
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     

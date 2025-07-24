@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% if is_bootstrap %}
+        <h1 class="title">Create First Admin User</h1>
+        <div class="notification is-info">
+            <p class="has-text-weight-semibold">Bootstrap Mode</p>
+            <p>No users exist in the system. The first user you create will automatically become an administrator with full privileges.</p>
+        </div>
+    {% else %}
+        <h1 class="title">Apply to Join</h1>
+        <div class="notification is-warning">
+            <p>Your application will be reviewed by an administrator before you can access the system.</p>
+        </div>
+    {% endif %}
+    <form action="" class="box" method="post" novalidate>
+        {{ form.hidden_tag() }}
+        <div class="field">
+            <label class="label">{{ form.username.label }}</label>
+            <div class="control">
+                {{ form.username(size=32, class_="input") }}
+            </div>
+            {% for error in form.username.errors %}
+            <p class="help is-danger is-size-6">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div class="field-body">
+            <div class="field">
+                <label class="label">{{ form.firstname.label }}</label>
+                <div class="control">
+                    {{ form.firstname(size=32, class_="input") }}
+                </div>
+                {% for error in form.firstname.errors %}
+                <p class="help is-danger is-size-6">{{ error }}</p>
+                {% endfor %}
+            </div>
+            <div class="field">
+                <label class="label">{{ form.lastname.label }}</label>
+                <div class="control">
+                    {{ form.lastname(size=32, class_="input") }}
+                </div>
+                {% for error in form.lastname.errors %}
+                <p class="help is-danger is-size-6">{{ error }}</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="field">
+            {{ form.gender.label(class="label") }}
+            <div class="control">
+                <div class="select is-fullwidth">
+                    {{ form.gender(class="input") }}
+                </div>
+            </div>
+            {% for error in form.gender.errors %}
+                <p class="help is-danger">{{ error }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="field">
+            <label class="label">{{ form.email.label }}</label>
+            <div class="control">
+                {{ form.email(size=32, class_="input") }}
+            </div>
+            {% for error in form.email.errors %}
+            <p class="help is-danger is-size-6">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div class="field">
+            <label class="label">{{ form.phone.label }}</label>
+            <div class="control">
+                {{ form.phone(size=32, class_="input") }}
+            </div>
+            {% for error in form.phone.errors %}
+            <p class="help is-danger is-size-6">{{ error }}</p>
+            {% endfor %}
+        </div>
+        <div class="field-body">
+            <div class="field">
+                <label class="label">{{ form.password.label }}</label>
+                <div class="control">
+                    {{ form.password(size=128, class_="input") }}
+                </div>
+            </div>
+            <div class="field">
+                <label class="label">{{ form.password2.label }}</label>
+                <div class="control">
+                    {{ form.password2(size=128, class_="input") }}
+                </div>
+                {% for error in form.password.errors %}
+                <p class="help is-danger is-size-6">{{ error }}</p>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Privacy Settings Section -->
+        <div class="field">
+            <label class="label">Privacy Settings</label>
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.share_email(checked=true) }}
+                    {{ form.share_email.label.text }}
+                </label>
+            </div>
+            <div class="control">
+                <label class="checkbox">
+                    {{ form.share_phone(checked=true) }}
+                    {{ form.share_phone.label.text }}
+                </label>
+            </div>
+            <p class="help">Control whether other members can see your contact information (you can change this later)</p>
+        </div>
+        
+        <div class="field">
+            <div class="control">
+                {{ form.submit(class_="button is-primary") }}
+            </div>
+        </div>
+    </form>
+{% endblock %}

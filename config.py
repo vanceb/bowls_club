@@ -29,7 +29,7 @@ class Config:
     # List holding the contents of the main menu
     MENU_ITEMS = [
         {'name': 'News', 'link': 'main.index'},
-        {'name': 'Members', 'link': 'main.members'},
+        {'name': 'Members', 'link': 'members.directory'},
         {'name': 'Bookings', 'link': 'main.bookings'},
         {
             'name': 'My Games',
@@ -45,9 +45,9 @@ class Config:
     # Organized by role sections for logical grouping
     ADMIN_MENU_ITEMS = [
         # User Management Section
-        {"name": "Manage Members", "link": "admin.manage_members", "roles": ["User Manager"]},
-        {"name": "Import Users", "link": "admin.import_users"},
-        {"name": "Manage Roles", "link": "admin.manage_roles"},
+        {"name": "Manage Members", "link": "members.admin_manage_members", "roles": ["User Manager"]},
+        {"name": "Import Users", "link": "members.admin_import_users"},
+        {"name": "Manage Roles", "link": "members.admin_manage_roles"},
         None,
         # Content Management Section
         {"name": "Write Post", "link": "admin.write_post", "roles": ["Content Manager"]},
