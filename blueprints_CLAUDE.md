@@ -56,11 +56,23 @@ app/
         └── admin_template.html
 ```
 
+**CRITICAL: Blueprint Template Configuration**
+```python
+# In blueprint_name/__init__.py
+from flask import Blueprint
+
+# MUST specify template_folder for blueprint templates to be found
+bp = Blueprint('blueprint_name', __name__, template_folder='templates')
+
+from app.blueprint_name import routes
+```
+
 ### 4. Template Organization
 
-#### Template Location:
+#### Template Location and Discovery:
 - **Templates go in**: `app/blueprint_name/templates/`
-- **Flask finds them at**: `blueprint_name/template_name.html`
+- **Blueprint definition MUST include**: `template_folder='templates'`
+- **Flask finds them when you call**: `render_template('template_name.html')`
 
 #### Template Naming Convention:
 Use descriptive names that include the blueprint context:
@@ -72,10 +84,21 @@ Use descriptive names that include the blueprint context:
 
 #### Template References:
 ```python
-# In route handlers
+# In route handlers - use simple template names
 return render_template('member_login.html', form=form)
 return render_template('event_create.html', form=form)
+
+# DO NOT use paths like 'members/member_login.html' 
+# Flask blueprint template discovery handles the path automatically
 ```
+
+#### Common Template Issues and Solutions:
+**Problem**: `TemplateNotFound` error for blueprint templates
+**Solutions**:
+1. Ensure `template_folder='templates'` is specified in Blueprint definition
+2. Verify template files exist in `app/blueprint_name/templates/`
+3. Use simple template names in `render_template()` calls (not paths)
+4. Remember: `render_template()` is for templates, `url_for()` is for URLs
 
 ### 5. Blueprint Creation Process
 
@@ -231,6 +254,38 @@ return redirect(url_for('members.auth_login'))  # Points to members blueprint au
 - Import blueprints at the end of `__init__.py`
 - Use lazy imports in utility functions when needed
 - Keep models centralized to avoid circular dependencies
+
+#### Form Import Issues:
+**Problem**: Missing form classes when moving routes between blueprints
+**Solutions**:
+1. **Check form availability**: Verify all imported forms exist in `app/forms.py`
+2. **Use FlaskForm for simple cases**: For routes that only need CSRF protection
+3. **Manual form processing**: Use `request.form.get()` instead of form fields when forms are complex
+4. **Avoid creating duplicate forms**: Reuse existing forms where possible
+
+**Example**:
+```python
+# Instead of importing non-existent UserRoleForm
+from flask_wtf import FlaskForm
+
+# In route handler
+form = FlaskForm()  # For CSRF protection only
+if form.validate_on_submit():
+    role_name = request.form.get('role_name', '').strip()  # Manual processing
+```
+
+#### Utility Function Migration:
+**Problem**: Functions moved to blueprint utils but still imported from main utils
+**Solutions**:
+1. **Update imports**: Change import paths when moving functions
+2. **Check function usage**: Ensure moved functions are only used by the blueprint
+3. **Keep shared utilities centralized**: Don't move functions used by multiple blueprints
+
+**Example**:
+```python
+# Before: from app.utils import generate_reset_token
+# After: from app.members.utils import generate_reset_token
+```
 
 #### Form Sharing Issues:  
 **Problem**: Forms used by multiple blueprints

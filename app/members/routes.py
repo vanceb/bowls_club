@@ -10,8 +10,8 @@ from app import db
 from app.models import Member, Role, Event, Booking, PoolRegistration, BookingTeamMember
 from app.forms import (LoginForm, RequestResetForm, ResetPasswordForm, 
                       PasswordChangeForm, EditProfileForm, MemberForm, 
-                      EditMemberForm, UserRoleForm, ImportUsersForm,
-                      AdminPasswordResetForm)
+                      EditMemberForm, ImportUsersForm)
+from flask_wtf import FlaskForm
 from app.members import bp
 from app.members.utils import (generate_reset_token, verify_reset_token, send_reset_email, 
                                filter_admin_menu_by_roles, get_member_data)
@@ -73,7 +73,7 @@ def auth_login():
                 audit_log_authentication('LOGIN', attempted_username, False)
                 flash('Invalid username or password', 'error')
         
-        return render_template('member_login.html', form=form)
+        return render_template('members/member_login.html', form=form)
         
     except Exception as e:
         current_app.logger.error(f"Error in login route: {str(e)}")
@@ -402,7 +402,7 @@ def admin_reset_member_password(member_id):
             flash('Member not found.', 'error')
             return redirect(url_for('members.admin_manage_members'))
         
-        form = AdminPasswordResetForm()
+        form = ResetPasswordForm()
         
         if form.validate_on_submit():
             # Update password
@@ -536,14 +536,14 @@ def admin_manage_roles():
     Admin interface for managing roles
     """
     try:
-        form = UserRoleForm()
+        form = FlaskForm()
         
         if form.validate_on_submit():
             action = request.form.get('action')
             
             if action == 'create_role':
                 # Create new role
-                role_name = form.role_name.data
+                role_name = request.form.get('role_name', '').strip()
                 
                 # Check if role already exists
                 existing_role = db.session.scalar(
@@ -564,8 +564,8 @@ def admin_manage_roles():
             
             elif action == 'rename_role':
                 # Rename existing role
-                old_name = form.old_role_name.data
-                new_name = form.new_role_name.data
+                old_name = request.form.get('old_role_name', '').strip()
+                new_name = request.form.get('new_role_name', '').strip()
                 
                 role = db.session.scalar(sa.select(Role).where(Role.name == old_name))
                 if role:
@@ -581,7 +581,7 @@ def admin_manage_roles():
             
             elif action == 'delete_role':
                 # Delete role
-                role_name = form.delete_role_name.data
+                role_name = request.form.get('delete_role_name', '').strip()
                 
                 role = db.session.scalar(sa.select(Role).where(Role.name == role_name))
                 if role:
