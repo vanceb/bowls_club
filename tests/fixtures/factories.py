@@ -3,8 +3,9 @@ Factory classes for creating test data using Factory Boy.
 """
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
+from datetime import date, timedelta
 from app import db
-from app.models import Member, Role
+from app.models import Member, Role, Booking, Event, BookingPlayer, BookingTeam, BookingTeamMember
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -66,3 +67,90 @@ class PendingMemberFactory(MemberFactory):
     """Factory for creating pending Member instances."""
     
     status = 'Pending'
+
+
+class EventFactory(SQLAlchemyModelFactory):
+    """Factory for creating Event instances."""
+    
+    class Meta:
+        model = Event
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    name = factory.Sequence(lambda n: f'Test Event {n}')
+    event_date = factory.LazyFunction(lambda: date.today() + timedelta(days=7))
+    event_type = 1  # Social
+    format = 2  # Pairs
+    gender = 3  # Mixed
+    organizer = factory.SubFactory(MemberFactory)
+
+
+class BookingFactory(SQLAlchemyModelFactory):
+    """Factory for creating Booking instances."""
+    
+    class Meta:
+        model = Booking
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    booking_date = factory.LazyFunction(lambda: date.today() + timedelta(days=5))
+    session = 1
+    rink_count = 2
+    organizer = factory.SubFactory(MemberFactory)
+    booking_type = 'event'
+    home_away = 'home'
+    priority = 'Medium'
+
+
+class RollUpBookingFactory(BookingFactory):
+    """Factory for creating roll-up Booking instances."""
+    
+    booking_type = 'rollup'
+    rink_count = 1
+    organizer_notes = factory.Faker('text', max_nb_chars=100)
+
+
+class EventBookingFactory(BookingFactory):
+    """Factory for creating event Booking instances."""
+    
+    event = factory.SubFactory(EventFactory)
+    vs = factory.Faker('company')
+
+
+class BookingPlayerFactory(SQLAlchemyModelFactory):
+    """Factory for creating BookingPlayer instances."""
+    
+    class Meta:
+        model = BookingPlayer
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    booking = factory.SubFactory(RollUpBookingFactory)
+    member = factory.SubFactory(MemberFactory)
+    status = 'pending'
+    invited_by = factory.SelfAttribute('booking.organizer.id')
+
+
+class BookingTeamFactory(SQLAlchemyModelFactory):
+    """Factory for creating BookingTeam instances."""
+    
+    class Meta:
+        model = BookingTeam
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    booking = factory.SubFactory(EventBookingFactory)
+    team_name = factory.Sequence(lambda n: f'Team {n}')
+
+
+class BookingTeamMemberFactory(SQLAlchemyModelFactory):
+    """Factory for creating BookingTeamMember instances."""
+    
+    class Meta:
+        model = BookingTeamMember
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    team = factory.SubFactory(BookingTeamFactory)
+    member = factory.SubFactory(MemberFactory)
+    position = 'Lead'
