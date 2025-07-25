@@ -25,6 +25,33 @@ flask run
 python bowls.py
 ```
 
+### Running a Test/Debug Server
+**For testing and debugging purposes, especially when port 5000 is in use:**
+
+```bash
+# ALWAYS activate virtual environment first
+source venv/bin/activate
+
+# Method 1: Use Flask CLI with custom port
+flask run --port 5001
+
+# Method 2: Use python directly with environment variables
+export SECRET_KEY=2471a028b502cffda6c49f3caf6b3ab9f2de7ce454867a99d5be3dee14de15b5 
+python bowls.py
+
+# Method 3: Run with custom port using Flask CLI
+export FLASK_RUN_PORT=5001
+flask run
+```
+
+**Important Notes:**
+- The `.flaskenv` file contains the SECRET_KEY and other environment variables
+- If you get "SECRET_KEY environment variable is required", either:
+  - Ensure `.flaskenv` exists and contains `SECRET_KEY=your-key-here`
+  - Or export the SECRET_KEY manually as shown above
+- Port 5000 may be in use; use port 5001 for testing to avoid conflicts
+- The server will show a warning about in-memory rate limiting storage - this is normal for development
+
 ### Database Operations
 ```bash
 # Create database migration

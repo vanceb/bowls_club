@@ -11,6 +11,6 @@ title: Bank Details
 
 Our bank details are:
 
-Sort Code:  01-23-45
+Sort Code:  **01-23-45**
 
-Account: 012345678
+Account: **012345678**

@@ -1,5 +1,5 @@
 <li class="mb-4">
-    <a href="{{ url_for('main.post', post_id=post.id) }}">
+    <a href="{{ url_for('content.view_post', post_id=post.id) }}">
         <h2 class="title is-5">{{ post.title }}</h2>
         <p class="subtitle is-6">Published on {{ post.publish_on }}</p>
         <p>{{ post.summary }}</p>

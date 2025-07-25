@@ -50,9 +50,9 @@ class Config:
         {"name": "Manage Roles", "link": "members.admin_manage_roles"},
         None,
         # Content Management Section
-        {"name": "Write Post", "link": "admin.write_post", "roles": ["Content Manager"]},
-        {"name": "Manage Posts", "link": "admin.manage_posts", "roles": ["Content Manager"]},
-        {"name": "Manage Policy Pages", "link": "admin.manage_policy_pages"},
+        {"name": "Write Post", "link": "content.admin_write_post", "roles": ["Content Manager"]},
+        {"name": "Manage Posts", "link": "content.admin_manage_posts", "roles": ["Content Manager"]},
+        {"name": "Manage Policy Pages", "link": "content.admin_manage_policy_pages"},
         None,
         # Event Management Section
         {"name": "Manage Events", "link": "admin.manage_events", "roles": ["Event Manager"]},

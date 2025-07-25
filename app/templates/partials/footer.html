@@ -4,7 +4,7 @@
         {% if footer_policy_pages %}
         <div class="block">
             {% for page in footer_policy_pages %}
-                <a href="{{ url_for('main.policy', slug=page.slug) }}" class="has-text-grey">{{ page.title }}</a>
+                <a href="{{ url_for('content.view_policy', slug=page.slug) }}" class="has-text-grey">{{ page.title }}</a>
                 {% if not loop.last %} | {% endif %}
             {% endfor %}
         </div>

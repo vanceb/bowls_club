@@ -8,8 +8,7 @@ import sqlalchemy as sa
 
 from app.main import bp
 from app import db
-from app.models import Member, Post, Booking, Event, PolicyPage, BookingPlayer, EventPool, PoolRegistration
-from app.utils import sanitize_html_content, get_secure_post_path
+from app.models import Member, Post, Booking, Event, BookingPlayer, EventPool, PoolRegistration
 from app.forms import RollUpResponseForm, FlaskForm
 from app.routes import role_required
 
@@ -71,51 +70,6 @@ def index():
                              non_pinned_posts=[],
                              pagination=None,
                              current_page=1)
-
-
-@bp.route("/post/<int:post_id>")
-@login_required
-def post(post_id):
-    """
-    Display a single post with full content
-    """
-    try:
-        # Get post by ID
-        post = db.session.get(Post, post_id)
-        if not post:
-            current_app.logger.error(f"Post not found with ID: {post_id}")
-            abort(404)
-        
-        current_app.logger.info(f"Found post: {post.title}, HTML file: {post.html_filename}")
-        
-        # Get the HTML content from secure storage using utility function
-        html_path = get_secure_post_path(post.html_filename)
-        
-        if not html_path:
-            current_app.logger.error(f"Could not get secure path for HTML file: {post.html_filename}")
-            abort(404)
-            
-        try:
-            with open(html_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-        except FileNotFoundError:
-            current_app.logger.error(f"Post HTML file not found: {html_path}")
-            abort(404)
-        except Exception as e:
-            current_app.logger.error(f"Error reading HTML file {html_path}: {str(e)}")
-            abort(500)
-        
-        # Sanitize HTML content
-        try:
-            sanitized_content = sanitize_html_content(html_content)
-        except Exception as e:
-            current_app.logger.error(f"Error sanitizing HTML content: {str(e)}")
-            sanitized_content = html_content  # Fallback to unsanitized content
-        
-        return render_template('main/view_post.html', post=post, content=sanitized_content)
-    except Exception as e:
-        current_app.logger.error(f"Error displaying post {post_id}: {str(e)}")
-        abort(500)
 
 
 # MOVED TO MEMBERS BLUEPRINT: /members → /members/directory
@@ -258,43 +212,6 @@ def get_bookings_range(start_date, end_date):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@bp.route('/policy/<slug>')
-@login_required
-def policy(slug):
-    """
-    Display a policy page by slug
-    """
-    try:
-        # Get policy page by slug
-        policy_page = db.session.scalar(
-            sa.select(PolicyPage)
-            .where(PolicyPage.slug == slug, PolicyPage.is_active == True)
-        )
-        
-        if not policy_page:
-            abort(404)
-        
-        # Get the HTML content from file
-        from app.utils import get_secure_policy_page_path
-        html_path = get_secure_policy_page_path(policy_page.html_filename)
-        if not html_path:
-            abort(404)
-        
-        try:
-            with open(html_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-        except FileNotFoundError:
-            abort(404)
-        
-        # Sanitize HTML content
-        sanitized_content = sanitize_html_content(html_content)
-        
-        return render_template('main/view_policy_page.html', 
-                             policy_page=policy_page, 
-                             content=sanitized_content)
-    except Exception as e:
-        current_app.logger.error(f"Error displaying policy {slug}: {str(e)}")
-        abort(500)
 
 
 @bp.route('/upcoming_events')

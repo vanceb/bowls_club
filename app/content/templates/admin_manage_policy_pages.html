@@ -16,7 +16,7 @@
             <div class="level-item">
                 <div class="buttons">
                     {% if not show_orphaned %}
-                    <a href="{{ url_for('admin.manage_policy_pages', show_orphaned='true') }}" 
+                    <a href="{{ url_for('content.admin_manage_policy_pages', show_orphaned='true') }}" 
                        class="button is-warning is-outlined">
                         <span class="icon">
                             <i class="fas fa-search"></i>
@@ -24,7 +24,7 @@
                         <span>Scan for Orphaned Files</span>
                     </a>
                     {% else %}
-                    <a href="{{ url_for('admin.manage_policy_pages') }}" 
+                    <a href="{{ url_for('content.admin_manage_policy_pages') }}" 
                        class="button is-light">
                         <span class="icon">
                             <i class="fas fa-times"></i>
@@ -32,7 +32,7 @@
                         <span>Hide Orphaned Files</span>
                     </a>
                     {% endif %}
-                    <a href="{{ url_for('admin.create_policy_page') }}" class="button is-primary">
+                    <a href="{{ url_for('content.admin_create_policy_page') }}" class="button is-primary">
                         <span class="icon">
                             <i class="fas fa-plus"></i>
                         </span>
@@ -93,7 +93,7 @@
                     <td>
                         <div class="buttons are-small">
                             {% if page.is_active %}
-                            <a href="{{ url_for('main.policy', slug=page.slug) }}" 
+                            <a href="{{ url_for('content.view_policy', slug=page.slug) }}" 
                                class="button is-info is-outlined" 
                                target="_blank"
                                title="View Page">
@@ -102,14 +102,14 @@
                                 </span>
                             </a>
                             {% endif %}
-                            <a href="{{ url_for('admin.edit_policy_page', policy_page_id=page.id) }}" 
+                            <a href="{{ url_for('content.admin_edit_policy_page', policy_page_id=page.id) }}" 
                                class="button is-warning is-outlined"
                                title="Edit Page">
                                 <span class="icon">
                                     <i class="fas fa-edit"></i>
                                 </span>
                             </a>
-                            <form method="POST" action="{{ url_for('admin.delete_policy_page', policy_page_id=page.id) }}" 
+                            <form method="POST" action="{{ url_for('content.admin_delete_policy_page', policy_page_id=page.id) }}" 
                                   style="display: inline-block;"
                                   onsubmit="return confirm('Are you sure you want to delete this policy page? This action cannot be undone.');">
                                 {{ csrf_form.hidden_tag() }}
@@ -131,7 +131,7 @@
     {% else %}
     <div class="box has-text-centered">
         <p class="subtitle has-text-grey">No policy pages have been created yet.</p>
-        <a href="{{ url_for('admin.create_policy_page') }}" class="button is-primary">
+        <a href="{{ url_for('content.admin_create_policy_page') }}" class="button is-primary">
             <span class="icon">
                 <i class="fas fa-plus"></i>
             </span>
@@ -209,7 +209,7 @@
                         </td>
                         <td>
                             {% if not orphan.get('error') %}
-                            <form method="POST" action="{{ url_for('admin.recover_policy_page', filename=orphan.markdown_filename) }}" 
+                            <form method="POST" action="{{ url_for('content.admin_recover_policy_page', filename=orphan.markdown_filename) }}" 
                                   style="display: inline-block;"
                                   onsubmit="return confirm('Are you sure you want to recover this policy page? It will be added to the database with the current user as author.');">
                                 {{ csrf_form.hidden_tag() }}

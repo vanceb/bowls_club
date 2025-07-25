@@ -7,7 +7,7 @@
 
 from functools import wraps
 import sqlalchemy as sa
-from flask import current_app, abort
+from flask import current_app, abort, request
 from flask_login import current_user
 from app import db
 from app.models import Member

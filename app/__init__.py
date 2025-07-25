@@ -219,11 +219,13 @@ def register_routes(app):
     # Import and register blueprints
     from app.main import bp as main_bp
     from app.members import bp as members_bp
+    from app.content import bp as content_bp
     from app.api import bp as api_bp
     from app.admin import bp as admin_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(members_bp, url_prefix='/members')
+    app.register_blueprint(content_bp, url_prefix='/content')
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     
