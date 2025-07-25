@@ -418,65 +418,7 @@ def create_event_pool(event_id):
 
 
 
-@bp.route('/edit_booking/<int:booking_id>', methods=['GET', 'POST'])
-@login_required
-@role_required('Event Manager')
-def edit_booking(booking_id):
-    """
-    Admin interface for editing existing bookings
-    """
-    try:
-        from app.forms import BookingForm
-        from app.utils import get_secure_post_path
-        
-        booking = db.session.get(Booking, booking_id)
-        if not booking:
-            flash('Booking not found.', 'error')
-            return redirect(url_for('admin.manage_events'))
-        
-        form = BookingForm(obj=booking)
-        
-        if form.validate_on_submit():
-            # Capture changes for audit log
-            changes = get_model_changes(booking, {
-                'booking_date': form.booking_date.data,
-                'session': form.session.data,
-                'rink_count': form.rink_count.data,
-                'priority': form.priority.data,
-                'vs': form.vs.data,
-                'home_away': form.home_away.data
-            })
-            
-            # Update the booking with form data
-            booking.booking_date = form.booking_date.data
-            booking.session = form.session.data
-            booking.rink_count = form.rink_count.data
-            booking.priority = form.priority.data
-            booking.vs = form.vs.data
-            booking.home_away = form.home_away.data
-            
-            db.session.commit()
-            
-            # Audit log the booking edit
-            audit_log_update('Booking', booking.id, f'Edited booking #{booking.id}', changes)
-            
-            flash('Booking updated successfully!', 'success')
-            
-            # Redirect back to events management if the booking has an event
-            if booking.event_id:
-                return redirect(url_for('admin.manage_events'))
-            else:
-                return redirect(url_for('main.bookings'))
-        
-        return render_template('admin/booking_form.html', 
-                             form=form, 
-                             booking=booking,
-                             title=f"Edit Booking #{booking.id}")
-        
-    except Exception as e:
-        current_app.logger.error(f"Error in edit_booking: {str(e)}")
-        flash('An error occurred while editing the booking.', 'error')
-        return redirect(url_for('admin.manage_events'))
+# MOVED TO BOOKINGS BLUEPRINT: edit_booking functionality moved to /bookings/admin/edit/<id>
 
 
 
@@ -1274,7 +1216,7 @@ def manage_teams(booking_id):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to manage teams for booking {booking_id}')
             flash('You do not have permission to manage teams for this booking.', 'error')
-            return redirect(url_for('main.bookings'))
+            return redirect(url_for('bookings.bookings'))
         
         from app.models import BookingTeam, BookingTeamMember
         
@@ -1290,7 +1232,7 @@ def manage_teams(booking_id):
             csrf_form = FlaskForm()
             if not csrf_form.validate_on_submit():
                 flash('Security validation failed.', 'error')
-                return redirect(url_for('admin.manage_teams', booking_id=booking_id))
+                return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
             
             # Handle different actions
             action = request.form.get('action')
@@ -1368,7 +1310,7 @@ def manage_teams(booking_id):
                 else:
                     flash('Missing required information for substitution.', 'error')
             
-            return redirect(url_for('admin.manage_teams', booking_id=booking_id))
+            return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
         
         # Get session name
         sessions = current_app.config.get('DAILY_SESSIONS', {})
@@ -1408,7 +1350,7 @@ def manage_teams(booking_id):
     except Exception as e:
         current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")
         flash('An error occurred while managing teams.', 'error')
-        return redirect(url_for('main.bookings'))
+        return redirect(url_for('bookings.bookings'))
 
 
 # add_user_to_role route moved to app/members/routes.py

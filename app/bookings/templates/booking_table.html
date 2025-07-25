@@ -61,7 +61,7 @@
     });
 
     function fetchBookingsRange(startDate, endDate) {
-        fetch(`/get_bookings_range/${startDate}/${endDate}`)
+        fetch(`/bookings/get_bookings_range/${startDate}/${endDate}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);

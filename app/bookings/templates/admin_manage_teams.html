@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% set active_page = "admin" %}
+
+{% block title %}Manage Teams - Booking #{{ booking.id }}{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Manage Teams</h1>
+<h2 class="subtitle">Booking #{{ booking.id }} - {{ booking.booking_date }} Session {{ booking.session }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="columns">
+    <div class="column is-full">
+        <div class="box">
+            <h3 class="title is-4">Booking Details</h3>
+            <div class="content">
+                <p><strong>Date:</strong> {{ booking.booking_date }}</p>
+                <p><strong>Session:</strong> {{ booking.session }}</p>
+                <p><strong>Rink Count:</strong> {{ booking.rink_count }}</p>
+                {% if booking.vs %}
+                <p><strong>Versus:</strong> {{ booking.vs }}</p>
+                {% endif %}
+                <p><strong>Organizer:</strong> {{ booking.organizer.firstname }} {{ booking.organizer.lastname }}</p>
+            </div>
+        </div>
+
+        {% if teams %}
+        <div class="box">
+            <h3 class="title is-4">Teams ({{ teams|length }})</h3>
+            {% for team in teams %}
+            <div class="box">
+                <h4 class="title is-5">{{ team.team_name }}</h4>
+                {% if team.members %}
+                <table class="table is-fullwidth">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Position</th>
+                            <th>Substitute</th>
+                            <th>Availability</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in team.members %}
+                        <tr>
+                            <td>{{ member.member.firstname }} {{ member.member.lastname }}</td>
+                            <td>{{ member.position }}</td>
+                            <td>
+                                {% if member.is_substitute %}
+                                <span class="tag is-warning">Yes</span>
+                                {% else %}
+                                <span class="tag">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="tag {% if member.availability_status == 'available' %}is-success{% elif member.availability_status == 'unavailable' %}is-danger{% else %}is-warning{% endif %}">
+                                    {{ member.availability_status|title }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="has-text-grey">No members assigned to this team.</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="box">
+            <p class="has-text-grey">No teams created for this booking yet.</p>
+        </div>
+        {% endif %}
+
+        <div class="box">
+            <h3 class="title is-4">Add Team</h3>
+            <form method="POST">
+                {{ csrf_form.hidden_tag() }}
+                <input type="hidden" name="action" value="add_team">
+                <div class="field has-addons">
+                    <div class="control is-expanded">
+                        <input class="input" type="text" name="team_name" placeholder="Team name" required>
+                    </div>
+                    <div class="control">
+                        <button class="button is-primary" type="submit">Add Team</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="field is-grouped">
+            <div class="control">
+                <a class="button is-light" href="{{ url_for('admin.manage_events') }}">Back to Events</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

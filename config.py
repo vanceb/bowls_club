@@ -30,13 +30,13 @@ class Config:
     MENU_ITEMS = [
         {'name': 'News', 'link': 'main.index'},
         {'name': 'Members', 'link': 'members.directory'},
-        {'name': 'Bookings', 'link': 'main.bookings'},
+        {'name': 'Bookings', 'link': 'bookings.bookings'},
         {
             'name': 'My Games',
             'submenu': [
                 {'name': 'View My Games', 'link': 'main.my_games'},
                 {'name': 'Upcoming Events', 'link': 'main.upcoming_events'},
-                {'name': 'Book Roll-Up', 'link': 'main.book_rollup'},
+                {'name': 'Book Roll-Up', 'link': 'bookings.book_rollup'},
             ]
         },
 ]
