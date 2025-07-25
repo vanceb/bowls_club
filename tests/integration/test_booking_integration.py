@@ -167,11 +167,9 @@ class TestBookingIntegration:
         # Create event
         event = Event(
             name='Integration Championship',
-            event_date=date.today() + timedelta(days=7),
             event_type=2,  # Competition
             format=2,  # Pairs
-            gender=3,  # Mixed
-            organizer_id=organizer.id
+            gender=3  # Mixed
         )
         db_session.add(event)
         db_session.commit()
@@ -259,11 +257,9 @@ class TestBookingIntegration:
         # Create event booking
         event = Event(
             name='Calendar Test Event',
-            event_date=test_date,
             event_type=1,  # Social
             format=3,  # Triples
-            gender=2,  # Ladies
-            organizer_id=event_organizer.id
+            gender=2  # Ladies
         )
         db_session.add(event)
         db_session.commit()

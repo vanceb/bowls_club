@@ -59,7 +59,8 @@ def manage_events():
     Admin interface for managing events
     """
     try:
-        from app.forms import EventForm, EventSelectionForm, BookingForm
+        from app.forms import EventForm, EventSelectionForm
+        from app.bookings.forms import BookingForm
         from app.models import EventTeam, Booking
         from app.audit import audit_log_create, audit_log_update
         

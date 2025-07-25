@@ -223,11 +223,9 @@ class TestBookingAdminRoutes:
         # Create event for booking (Pairs format)
         event = Event(
             name='Pairs Event',
-            event_date=date.today() + timedelta(days=1),
             event_type=1,  # Social
             format=2,  # Pairs
-            gender=3,  # Mixed
-            organizer_id=organizer.id
+            gender=3  # Mixed
         )
         db_session.add(event)
         db_session.commit()
@@ -296,10 +294,22 @@ class TestBookingAdminRoutes:
         db_session.add(booking)
         db_session.commit()
         
-        # Create team
+        # Create event team first (required for BookingTeam)
+        from app.models import EventTeam
+        event_team = EventTeam(
+            event_id=event.id,
+            team_name='Event Team 1',
+            team_number=1
+        )
+        db_session.add(event_team)
+        db_session.commit()
+        
+        # Create booking team
         team = BookingTeam(
             booking_id=booking.id,
-            team_name='Test Team'
+            event_team_id=event_team.id,
+            team_name='Test Team',
+            team_number=1
         )
         db_session.add(team)
         db_session.commit()

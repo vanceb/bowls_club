@@ -79,11 +79,9 @@ class TestBookingAPIRoutes:
         
         event = Event(
             name='Test Championship',
-            event_date=date.today() + timedelta(days=1),
             event_type=2,  # Competition
             format=3,  # Triples
-            gender=1,  # Gents
-            organizer_id=member.id
+            gender=1  # Gents
         )
         db_session.add(event)
         db_session.commit()

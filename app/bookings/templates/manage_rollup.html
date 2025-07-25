@@ -265,7 +265,7 @@
 
     <!-- Hidden form for cancellation -->
     {% if booking.booking_date > today %}
-    <form method="POST" action="{{ url_for('main.cancel_rollup', booking_id=booking.id) }}" id="cancel-form" style="display: none;">
+    <form method="POST" action="{{ url_for('bookings.cancel_rollup', booking_id=booking.id) }}" id="cancel-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
     </form>
     {% endif %}

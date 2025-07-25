@@ -517,7 +517,6 @@ def admin_edit_booking(booking_id):
     """
     try:
         from app.bookings.forms import BookingForm
-        from app.utils import get_secure_post_path
         
         booking = db.session.get(Booking, booking_id)
         if not booking:
@@ -944,7 +943,7 @@ def admin_manage_teams(booking_id):
         return redirect(url_for('admin.manage_events'))
 
 
-@bp.route('/api/v1/booking/<int:booking_id>')
+@bp.route('/api/v1/booking/<int:booking_id>', methods=['GET'])
 @login_required
 def api_get_booking(booking_id):
     """
@@ -965,30 +964,23 @@ def api_get_booking(booking_id):
             'session': booking.session,
             'rink_count': booking.rink_count,
             'booking_type': booking.booking_type,
-            'organizer': {
-                'id': booking.organizer.id,
-                'name': f"{booking.organizer.firstname} {booking.organizer.lastname}",
-                'email': booking.organizer.email
-            },
+            'organizer_name': f"{booking.organizer.firstname} {booking.organizer.lastname}" if booking.organizer else "Unknown",
             'organizer_notes': booking.organizer_notes,
             'vs': booking.vs,
-            'home_away': booking.home_away
+            'home_away': booking.home_away,
+            'priority': booking.priority
         }
         
         # Add event details if it's an event booking
         if booking.event:
-            booking_data['event'] = {
-                'id': booking.event.id,
-                'name': booking.event.name,
-                'event_type': booking.event.event_type,
-                'event_gender': booking.event.event_gender,
-                'event_format': booking.event.event_format
-            }
+            booking_data['event_id'] = booking.event.id
+            booking_data['event_name'] = booking.event.name
+            booking_data['event_type'] = booking.event.event_type
         
         # Add team details if they exist
-        if booking.booking_type == 'event' and booking.teams:
+        if booking.booking_type == 'event' and booking.booking_teams:
             teams = []
-            for team in booking.teams:
+            for team in booking.booking_teams:
                 team_data = {
                     'id': team.id,
                     'team_name': team.team_name,
@@ -1030,6 +1022,114 @@ def api_get_booking(booking_id):
         
     except Exception as e:
         current_app.logger.error(f"Error getting booking {booking_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/api/v1/booking/<int:booking_id>', methods=['PUT'])
+@login_required
+@role_required('Event Manager')
+def api_update_booking(booking_id):
+    """
+    Update booking details via API
+    """
+    try:
+        from app.audit import audit_log_update, get_model_changes
+        
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            return jsonify({
+                'success': False,
+                'error': 'Booking not found'
+            }), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+        
+        # Track changes for audit
+        changes = {}
+        
+        # Update allowed fields
+        if 'rink_count' in data:
+            if not isinstance(data['rink_count'], int) or data['rink_count'] < 1:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid rink count'
+                }), 400
+            changes['rink_count'] = {'old': booking.rink_count, 'new': data['rink_count']}
+            booking.rink_count = data['rink_count']
+        
+        if 'priority' in data:
+            changes['priority'] = {'old': booking.priority, 'new': data['priority']}
+            booking.priority = data['priority']
+        
+        if 'vs' in data:
+            changes['vs'] = {'old': booking.vs, 'new': data['vs']}
+            booking.vs = data['vs']
+        
+        if 'organizer_notes' in data:
+            changes['organizer_notes'] = {'old': booking.organizer_notes, 'new': data['organizer_notes']}
+            booking.organizer_notes = data['organizer_notes']
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_update('Booking', booking.id, f'Updated booking via API', changes)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Booking updated successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error updating booking {booking_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/api/v1/booking/<int:booking_id>', methods=['DELETE'])
+@login_required
+@role_required('Event Manager')
+def api_delete_booking(booking_id):
+    """
+    Delete booking via API
+    """
+    try:
+        from app.audit import audit_log_delete
+        
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            return jsonify({
+                'success': False,
+                'error': 'Booking not found'
+            }), 404
+        
+        booking_description = f"Booking #{booking.id} on {booking.booking_date}"
+        
+        # Delete booking (cascades to teams and players)
+        db.session.delete(booking)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_delete('Booking', booking_id, f'Deleted {booking_description}')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Booking deleted successfully'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting booking {booking_id}: {str(e)}")
         return jsonify({
             'success': False,
             'error': str(e)
