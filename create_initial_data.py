@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from app import create_app, db
-from app.models import Role, Member
+from app.models import Role, Member, BookingTeam, BookingTeamMember
 from app.audit import audit_log_create, audit_log_system_event
 from config import Config
 from werkzeug.security import generate_password_hash
@@ -70,8 +70,11 @@ def check_bootstrap_mode():
     print(f"  - Bootstrap mode: {'Yes' if is_bootstrap else 'No'}")
     
     if is_bootstrap:
-        print(f"  - First user registration will automatically become admin")
-        print(f"  - Visit the registration page to create the first admin user")
+        print(f"  - System is ready for first user registration")
+        print(f"  - First user will automatically become admin")
+        print(f"  - Visit /members/apply to register the first admin user")
+    else:
+        print(f"  - System has existing users - normal operation mode")
     
     return is_bootstrap
 
@@ -83,8 +86,7 @@ def verify_database_structure():
     expected_tables = [
         'roles', 'member', 'member_roles', 'events', 'event_member_managers',
         'event_pools', 'pool_members', 'posts', 'policy_pages', 'bookings', 
-        'event_teams', 'booking_teams', 'team_members', 'booking_team_members',
-        'booking_players'
+        'booking_teams', 'booking_team_members'
     ]
     
     # Get all table names from the database
@@ -137,11 +139,13 @@ def main():
         
         if is_bootstrap:
             print("\nIMPORTANT NEXT STEPS:")
-            print("1. Start the Flask application (flask run)")
-            print("2. Visit the registration page (/add_member)")
+            print("1. Start the Flask application:")
+            print("   source venv/bin/activate")
+            print("   flask run")
+            print("2. Visit the member application page: /members/apply")
             print("3. Create the first user - they will automatically become admin")
-            print("4. Create additional members through the web interface")
-            print("5. Assign appropriate roles to members")
+            print("4. Create additional members through the admin interface")
+            print("5. Assign appropriate roles to members as needed")
         else:
             print("\nSYSTEM READY:")
             print("- Users already exist in the system")

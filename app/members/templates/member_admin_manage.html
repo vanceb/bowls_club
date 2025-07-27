@@ -65,7 +65,7 @@
                     
                     row.dataset.memberId = member.id; // Store the member ID
                     row.addEventListener('click', () => {
-                        window.location.href = `/admin/edit_member/${member.id}`;
+                        window.location.href = `/members/admin/edit_member/${member.id}`;
                     });
                     tbody.appendChild(row);
                 });

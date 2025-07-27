@@ -438,8 +438,9 @@ def admin_import_users():
             import csv
             from io import StringIO
             
-            # Read CSV data
-            csv_data = form.csv_data.data
+            # Read CSV file data
+            csv_file = form.csv_file.data
+            csv_data = csv_file.read().decode('utf-8')
             csv_reader = csv.DictReader(StringIO(csv_data))
             
             imported_count = 0

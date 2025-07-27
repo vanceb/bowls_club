@@ -349,7 +349,7 @@ class Booking(db.Model):
     event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='bookings')
     
     # Many-to-one relationship with organizer (for roll-ups)
-    organizer: so.Mapped[Optional['Member']] = so.relationship('Member', back_populates='organized_rollups', foreign_keys=[organizer_id])
+    organizer: so.Mapped[Optional['Member']] = so.relationship('Member', back_populates='organized_bookings', foreign_keys=[organizer_id])
     
     # One-to-many relationship with booking teams (for events)
     booking_teams: so.Mapped[list['BookingTeam']] = so.relationship('BookingTeam', back_populates='booking', cascade='all, delete-orphan')
@@ -424,7 +424,7 @@ class BookingTeamMember(db.Model):
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 
     # Many-to-one relationships
-    booking_team: so.Mapped['BookingTeam'] = so.relationship('BookingTeam', back_populates='booking_team_members')
+    booking_team: so.Mapped['BookingTeam'] = so.relationship('BookingTeam', back_populates='members')
     member: so.Mapped['Member'] = so.relationship('Member', back_populates='booking_team_memberships')
 
     def __repr__(self):

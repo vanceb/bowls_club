@@ -214,13 +214,16 @@ def my_games():
         # Get current date
         today = date.today()
         
-        # Get team assignments for current user
+        # Get team assignments for current user (excluding rollups to avoid duplication)
         from app.models import BookingTeam, Booking
         assignments = db.session.scalars(
             sa.select(BookingTeamMember)
             .join(BookingTeamMember.booking_team)
             .join(BookingTeam.booking)
-            .where(BookingTeamMember.member_id == current_user.id)
+            .where(
+                BookingTeamMember.member_id == current_user.id,
+                Booking.booking_type != 'rollup'  # Exclude rollups from regular assignments
+            )
             .order_by(Booking.booking_date)
         ).all()
         

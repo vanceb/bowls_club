@@ -28,14 +28,14 @@
     
     <!-- Process roll-up invitations -->
     {% for invitation in roll_up_invitations %}
-        {% set game_date = invitation.booking.booking_date %}
+        {% set game_date = invitation.booking_team.booking.booking_date %}
         {% if game_date < today %}
             {% set _ = played_games.append({'type': 'rollup', 'data': invitation}) %}
-        {% elif invitation.status == 'pending' %}
+        {% elif invitation.availability_status == 'pending' %}
             {% set _ = pending_games.append({'type': 'rollup', 'data': invitation}) %}
-        {% elif invitation.status == 'confirmed' %}
+        {% elif invitation.availability_status == 'available' %}
             {% set _ = confirmed_games.append({'type': 'rollup', 'data': invitation}) %}
-        {% elif invitation.status == 'declined' %}
+        {% elif invitation.availability_status == 'unavailable' %}
             {% set _ = unavailable_games.append({'type': 'rollup', 'data': invitation}) %}
         {% endif %}
     {% endfor %}
@@ -48,38 +48,22 @@
     
     <!-- Create sorted lists with date extraction for mixed types -->
     {% for item in pending_games %}
-        {% if item.type == 'assignment' %}
-            {% set _ = pending_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
-        {% else %}
-            {% set _ = pending_sorted.append((item.data.booking.booking_date, item)) %}
-        {% endif %}
+        {% set _ = pending_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
     {% endfor %}
     {% set pending_games = (pending_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in confirmed_games %}
-        {% if item.type == 'assignment' %}
-            {% set _ = confirmed_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
-        {% else %}
-            {% set _ = confirmed_sorted.append((item.data.booking.booking_date, item)) %}
-        {% endif %}
+        {% set _ = confirmed_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
     {% endfor %}
     {% set confirmed_games = (confirmed_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in unavailable_games %}
-        {% if item.type == 'assignment' %}
-            {% set _ = unavailable_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
-        {% else %}
-            {% set _ = unavailable_sorted.append((item.data.booking.booking_date, item)) %}
-        {% endif %}
+        {% set _ = unavailable_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
     {% endfor %}
     {% set unavailable_games = (unavailable_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in played_games %}
-        {% if item.type == 'assignment' %}
-            {% set _ = played_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
-        {% else %}
-            {% set _ = played_sorted.append((item.data.booking.booking_date, item)) %}
-        {% endif %}
+        {% set _ = played_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
     {% endfor %}
     {% set played_games = (played_sorted | sort(attribute='0', reverse=true) | map(attribute='1') | list) %}
 
@@ -165,17 +149,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking.organizer_notes }}</small>
+                                {% if invitation.booking_team.booking.organizer_notes %}
+                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking.organizer.firstname }} {{ invitation.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -188,7 +172,7 @@
                         </td>
                         <td>
                             <div class="buttons are-small">
-                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking.id, action='accept') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking_team.booking.id, action='accept') }}" 
                                    class="button is-small is-success"
                                    onclick="return confirm('Accept this roll-up invitation?')">
                                     <span class="icon">
@@ -196,7 +180,7 @@
                                     </span>
                                     <span>Accept</span>
                                 </a>
-                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking.id, action='decline') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking_team.booking.id, action='decline') }}" 
                                    class="button is-small is-danger"
                                    onclick="return confirm('Decline this roll-up invitation?')">
                                     <span class="icon">
@@ -278,17 +262,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking.organizer_notes }}</small>
+                                {% if invitation.booking_team.booking.organizer_notes %}
+                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking.organizer.firstname }} {{ invitation.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -300,12 +284,12 @@
                             </span>
                             <br>
                             <small class="has-text-grey">
-                                {{ invitation.response_at.strftime('%b %d at %I:%M %p') }}
+                                {{ invitation.confirmed_at.strftime('%b %d at %I:%M %p') }}
                             </small>
                         </td>
                         <td>
-                            {% if invitation.booking.organizer_id == current_user.id %}
-                            <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.booking.id) }}" 
+                            {% if invitation.booking_team.booking.organizer_id == current_user.id %}
+                            <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.booking_team.booking.id) }}" 
                                class="button is-small is-primary">
                                 <span class="icon">
                                     <i class="fas fa-cog"></i>
@@ -386,17 +370,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking.organizer_notes }}</small>
+                                {% if invitation.booking_team.booking.organizer_notes %}
+                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking.organizer.firstname }} {{ invitation.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -408,7 +392,7 @@
                             </span>
                             <br>
                             <small class="has-text-grey">
-                                {{ invitation.response_at.strftime('%b %d at %I:%M %p') }}
+                                {{ invitation.confirmed_at.strftime('%b %d at %I:%M %p') }}
                             </small>
                         </td>
                         <td>
@@ -500,17 +484,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking.organizer_notes }}</small>
+                                {% if invitation.booking_team.booking.organizer_notes %}
+                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking.organizer.firstname }} {{ invitation.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
