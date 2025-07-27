@@ -342,15 +342,3 @@ class ImportUsersForm(FlaskForm):
 
 
 
-
-class RollUpResponseForm(FlaskForm):
-    """Form for responding to roll-up invitations"""
-    response = SelectField(
-        'Your Response',
-        choices=[
-            ('confirmed', 'Accept - I can play'),
-            ('declined', 'Decline - Cannot play')
-        ],
-        validators=[DataRequired()]
-    )
-    submit = SubmitField('Submit Response')

@@ -188,7 +188,7 @@
                         </td>
                         <td>
                             <div class="buttons are-small">
-                                <a href="{{ url_for('bookings.respond_to_rollup', booking_id=invitation.booking.id, action='accept') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking.id, action='accept') }}" 
                                    class="button is-small is-success"
                                    onclick="return confirm('Accept this roll-up invitation?')">
                                     <span class="icon">
@@ -196,7 +196,7 @@
                                     </span>
                                     <span>Accept</span>
                                 </a>
-                                <a href="{{ url_for('bookings.respond_to_rollup', booking_id=invitation.booking.id, action='decline') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking.id, action='decline') }}" 
                                    class="button is-small is-danger"
                                    onclick="return confirm('Decline this roll-up invitation?')">
                                     <span class="icon">
@@ -305,7 +305,7 @@
                         </td>
                         <td>
                             {% if invitation.booking.organizer_id == current_user.id %}
-                            <a href="{{ url_for('bookings.manage_rollup', booking_id=invitation.booking.id) }}" 
+                            <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.booking.id) }}" 
                                class="button is-small is-primary">
                                 <span class="icon">
                                     <i class="fas fa-cog"></i>

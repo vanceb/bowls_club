@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from app.main import bp
 from app import db
 from app.models import Member, Post, Booking, Event, BookingPlayer, EventPool, PoolRegistration
-from app.forms import RollUpResponseForm, FlaskForm
+from app.forms import FlaskForm
 from app.routes import role_required
 
 
@@ -149,89 +149,8 @@ def upcoming_events():
                              csrf_form=csrf_form)
 
 
-@bp.route('/my_games', methods=['GET', 'POST'])
-@login_required
-def my_games():
-    """
-    Display user's upcoming games and allow availability confirmation
-    """
-    try:
-        # Handle POST requests for availability confirmation
-        if request.method == 'POST':
-            csrf_form = FlaskForm()
-            
-            if csrf_form.validate_on_submit():
-                assignment_id = request.form.get('assignment_id')
-                action = request.form.get('action')
-                
-                if assignment_id and action:
-                    from app.models import BookingTeamMember
-                    from app.audit import audit_log_update
-                    
-                    assignment = db.session.get(BookingTeamMember, assignment_id)
-                    if assignment and assignment.member_id == current_user.id:
-                        if action == 'confirm_available':
-                            assignment.availability_status = 'available'
-                            assignment.confirmed_at = datetime.utcnow()
-                            flash('Availability confirmed successfully!', 'success')
-                        elif action == 'confirm_unavailable':
-                            assignment.availability_status = 'unavailable'
-                            assignment.confirmed_at = datetime.utcnow()
-                            flash('Unavailability confirmed.', 'info')
-                        
-                        db.session.commit()
-                        audit_log_update('BookingTeamMember', assignment.id, 
-                                       f'Updated availability status to {assignment.availability_status}')
-                    else:
-                        flash('Invalid assignment or unauthorized access.', 'error')
-                else:
-                    flash('Missing required information.', 'error')
-            else:
-                flash('Security validation failed. Please try again.', 'error')
-            
-            return redirect(url_for('main.my_games'))
-        
-        # GET request - display games
-        from app.models import BookingTeamMember
-        
-        # Get current date
-        today = date.today()
-        
-        # Get team assignments for current user
-        from app.models import BookingTeam, Booking
-        assignments = db.session.scalars(
-            sa.select(BookingTeamMember)
-            .join(BookingTeamMember.booking_team)
-            .join(BookingTeam.booking)
-            .where(BookingTeamMember.member_id == current_user.id)
-            .order_by(Booking.booking_date)
-        ).all()
-        
-        # Get roll-up invitations for current user (include organizer's own rollups)
-        roll_up_invitations = db.session.scalars(
-            sa.select(BookingPlayer)
-            .join(BookingPlayer.booking)
-            .where(BookingPlayer.member_id == current_user.id)
-            .order_by(Booking.booking_date)
-        ).all()
-        
-        # Create CSRF form for POST actions
-        csrf_form = FlaskForm()
-        
-        return render_template('main/my_games.html', 
-                             assignments=assignments,
-                             roll_up_invitations=roll_up_invitations,
-                             today=today,
-                             csrf_form=csrf_form)
-                             
-    except Exception as e:
-        current_app.logger.error(f"Error in my_games route: {str(e)}")
-        flash('An error occurred while loading your games.', 'error')
-        return render_template('main/my_games.html', 
-                             assignments=[], 
-                             roll_up_invitations=[],
-                             today=date.today(),
-                             csrf_form=FlaskForm())
+# MOVED TO BOOKINGS BLUEPRINT: my_games functionality has been moved to the bookings blueprint
+# - My games view: /bookings/my_games
 
 
 # MOVED TO BOOKINGS BLUEPRINT: rollup functionality has been moved to the bookings blueprint

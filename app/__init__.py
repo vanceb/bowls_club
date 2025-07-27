@@ -223,11 +223,13 @@ def register_routes(app):
     from app.bookings import bp as bookings_bp
     from app.api import bp as api_bp
     from app.admin import bp as admin_bp
+    from app.rollups import bp as rollups_bp
     
     app.register_blueprint(main_bp)
     app.register_blueprint(members_bp, url_prefix='/members')
     app.register_blueprint(content_bp, url_prefix='/content')
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
+    app.register_blueprint(rollups_bp, url_prefix='/rollups')
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     
