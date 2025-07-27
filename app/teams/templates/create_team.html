@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active_page = "teams" %}
+
+{% block title %}Create Team{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Create Team</h1>
+<h2 class="subtitle">Create a new independent team</h2>
+{% endblock %}
+
+{% block content %}
+<div class="columns">
+    <div class="column is-half is-offset-one-quarter">
+        <div class="box">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                
+                <div class="field">
+                    <label class="label">{{ form.team_name.label }}</label>
+                    <div class="control">
+                        {{ form.team_name(class="input") }}
+                    </div>
+                    {% if form.team_name.errors %}
+                        {% for error in form.team_name.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    <label class="label">{{ form.member_ids.label }}</label>
+                    <div class="control">
+                        {{ form.member_ids(class="textarea") }}
+                    </div>
+                    <p class="help">Optional: Add member IDs separated by commas. You can add members later.</p>
+                    {% if form.member_ids.errors %}
+                        {% for error in form.member_ids.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button class="button is-primary" type="submit">Create Team</button>
+                    </div>
+                    <div class="control">
+                        <a class="button is-light" href="{{ url_for('teams.list_teams') }}">Cancel</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

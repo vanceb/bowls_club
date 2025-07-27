@@ -136,8 +136,6 @@ class Event(db.Model):
     # One-to-many relationship with bookings
     bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
     
-    # One-to-many relationship with event teams
-    event_teams: so.Mapped[list['EventTeam']] = so.relationship('EventTeam', back_populates='event', cascade='all, delete-orphan')
     
     # One-to-one relationship with event pool
     pool: so.Mapped[Optional['EventPool']] = so.relationship('EventPool', back_populates='event', uselist=False, cascade='all, delete-orphan')
@@ -181,27 +179,10 @@ class Event(db.Model):
                 return name
         return "Unknown"
 
-    def has_teams(self):
-        """Check if the event has any teams defined"""
-        return len(self.event_teams) > 0
-    
-    def has_complete_teams(self):
-        """Check if the event has at least one team with all positions filled"""
-        if not self.has_teams():
-            return False
-        
-        from flask import current_app
-        team_positions = current_app.config.get('TEAM_POSITIONS', {})
-        required_positions = len(team_positions.get(self.format, []))
-        
-        for team in self.event_teams:
-            if len(team.team_members) == required_positions:
-                return True
-        return False
-    
     def is_ready_for_bookings(self):
         """Check if the event is ready for booking creation"""
-        return self.has_teams()  # At minimum, need teams defined
+        # Events are now ready for bookings when created
+        return True
 
     # Pool-related methods
     def has_pool_enabled(self):
@@ -246,26 +227,14 @@ class Event(db.Model):
         
         return True, f"Can create {len(registered_members) // team_size} teams"
     
-    def can_create_booking_from_teams(self):
-        """Check if a booking can be created from existing teams"""
-        if not self.event_teams:
-            return False, "No teams exist for this event"
-        
-        teams_with_members = [team for team in self.event_teams if team.team_members]
-        if not teams_with_members:
-            return False, "No teams have assigned members"
-        
-        return True, f"Can create booking with {len(teams_with_members)} teams"
     
     def get_workflow_status(self):
-        """Get the current status of the pool-to-team-to-booking workflow"""
+        """Get the current status of the pool-to-booking workflow"""
         status = {
             'pool_enabled': self.has_pool_enabled(),
             'pool_open': self.is_pool_open(),
             'pool_members': self.get_pool_member_count(),
             'registered_members': len(self.pool.get_registered_members()) if self.has_pool_enabled() else 0,
-            'teams_count': len(self.event_teams),
-            'teams_with_members': len([t for t in self.event_teams if t.team_members]),
             'bookings_count': len(self.bookings)
         }
         
@@ -274,10 +243,6 @@ class Event(db.Model):
             status['stage'] = 'no_pool'
         elif status['pool_members'] == 0:
             status['stage'] = 'awaiting_registrations'
-        elif status['registered_members'] == 0 and status['teams_count'] == 0:
-            status['stage'] = 'ready_for_selection'
-        elif status['teams_count'] == 0:
-            status['stage'] = 'ready_for_teams'
         elif status['bookings_count'] == 0:
             status['stage'] = 'ready_for_booking'
         else:
@@ -389,8 +354,6 @@ class Booking(db.Model):
     # One-to-many relationship with booking teams (for events)
     booking_teams: so.Mapped[list['BookingTeam']] = so.relationship('BookingTeam', back_populates='booking', cascade='all, delete-orphan')
     
-    # One-to-many relationship with booking players (for roll-ups)
-    booking_players: so.Mapped[list['BookingPlayer']] = so.relationship('BookingPlayer', back_populates='booking', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"
@@ -418,85 +381,33 @@ class PolicyPage(db.Model):
         return f"<PolicyPage id={self.id}, title='{self.title}', slug='{self.slug}', active={self.is_active}>"
 
 
-class EventTeam(db.Model):
-    __tablename__ = 'event_teams'
-
-    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    event_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=False)
-    team_name: so.Mapped[str] = so.mapped_column(sa.String(100), nullable=False)
-    team_number: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)  # 1, 2, 3, etc.
-    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
-
-    # Many-to-one relationship with event
-    event: so.Mapped['Event'] = so.relationship('Event', back_populates='event_teams')
-    
-    # One-to-many relationship with team members
-    team_members: so.Mapped[list['TeamMember']] = so.relationship('TeamMember', back_populates='event_team', cascade='all, delete-orphan')
-    
-    # One-to-many relationship with booking teams (when copied)
-    booking_teams: so.Mapped[list['BookingTeam']] = so.relationship('BookingTeam', back_populates='event_team')
-
-    def __repr__(self):
-        return f"<EventTeam id={self.id}, name='{self.team_name}', event_id={self.event_id}>"
-
-    def get_team_size(self):
-        """Get the expected team size based on the event format"""
-        from flask import current_app
-        team_positions = current_app.config.get('TEAM_POSITIONS', {})
-        return len(team_positions.get(self.event.format, []))
-
-    def get_available_positions(self):
-        """Get the list of positions for this team based on event format"""
-        from flask import current_app
-        team_positions = current_app.config.get('TEAM_POSITIONS', {})
-        return team_positions.get(self.event.format, [])
 
 
 class BookingTeam(db.Model):
     __tablename__ = 'booking_teams'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)
-    event_team_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('event_teams.id'), nullable=False)
+    booking_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=True)  # Now optional for independent teams
     team_name: so.Mapped[str] = so.mapped_column(sa.String(100), nullable=False)
-    team_number: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    created_by: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)  # Team creator/owner
     substitution_log: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)  # JSON log of substitutions
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 
     # Many-to-one relationships
-    booking: so.Mapped['Booking'] = so.relationship('Booking', back_populates='booking_teams')
-    event_team: so.Mapped['EventTeam'] = so.relationship('EventTeam', back_populates='booking_teams')
+    booking: so.Mapped[Optional['Booking']] = so.relationship('Booking', back_populates='booking_teams')
+    creator: so.Mapped['Member'] = so.relationship('Member', foreign_keys=[created_by])
     
     # One-to-many relationship with booking team members
-    booking_team_members: so.Mapped[list['BookingTeamMember']] = so.relationship('BookingTeamMember', back_populates='booking_team', cascade='all, delete-orphan')
+    members: so.Mapped[list['BookingTeamMember']] = so.relationship('BookingTeamMember', back_populates='booking_team', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"<BookingTeam id={self.id}, name='{self.team_name}', booking_id={self.booking_id}>"
 
-    def get_team_size(self):
-        """Get the expected team size based on the event format"""
-        return self.event_team.get_team_size()
-
     def get_available_positions(self):
-        """Get the list of positions for this team based on event format"""
-        return self.event_team.get_available_positions()
+        """Get the list of standard team positions"""
+        return ['Lead', 'Second', 'Third', 'Skip', 'Player']
 
 
-class TeamMember(db.Model):
-    __tablename__ = 'team_members'
-
-    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    event_team_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('event_teams.id'), nullable=False)
-    member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
-    position: so.Mapped[str] = so.mapped_column(sa.String(20), nullable=False)  # Lead, Second, Third, Skip, Player
-    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
-
-    # Many-to-one relationships
-    event_team: so.Mapped['EventTeam'] = so.relationship('EventTeam', back_populates='team_members')
-    member: so.Mapped['Member'] = so.relationship('Member', back_populates='team_memberships')
-
-    def __repr__(self):
-        return f"<TeamMember id={self.id}, member_id={self.member_id}, position='{self.position}'>"
 
 
 class BookingTeamMember(db.Model):
@@ -520,32 +431,11 @@ class BookingTeamMember(db.Model):
         return f"<BookingTeamMember id={self.id}, member_id={self.member_id}, position='{self.position}', status='{self.availability_status}'>"
 
 
-class BookingPlayer(db.Model):
-    __tablename__ = 'booking_players'
-
-    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)
-    member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
-    status: so.Mapped[str] = so.mapped_column(sa.String(20), default='pending', nullable=False)  # 'confirmed', 'pending', 'declined'
-    invited_by: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
-    response_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
-    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
-
-    # Many-to-one relationships
-    booking: so.Mapped['Booking'] = so.relationship('Booking', back_populates='booking_players')
-    member: so.Mapped['Member'] = so.relationship('Member', foreign_keys=[member_id], back_populates='rollup_invitations')
-    inviter: so.Mapped['Member'] = so.relationship('Member', foreign_keys=[invited_by], back_populates='sent_rollup_invitations')
-
-    def __repr__(self):
-        return f"<BookingPlayer id={self.id}, booking_id={self.booking_id}, member_id={self.member_id}, status='{self.status}'>"
 
 
 # Add team-related relationships to Member model
-Member.team_memberships = so.relationship('TeamMember', back_populates='member')
 Member.booking_team_memberships = so.relationship('BookingTeamMember', back_populates='member')
 
-# Add roll-up related relationships to Member model
-Member.organized_rollups = so.relationship('Booking', back_populates='organizer', foreign_keys='Booking.organizer_id')
-Member.rollup_invitations = so.relationship('BookingPlayer', foreign_keys='BookingPlayer.member_id', back_populates='member')
-Member.sent_rollup_invitations = so.relationship('BookingPlayer', foreign_keys='BookingPlayer.invited_by', back_populates='inviter')
+# Add booking-related relationships to Member model
+Member.organized_bookings = so.relationship('Booking', back_populates='organizer', foreign_keys='Booking.organizer_id')
 

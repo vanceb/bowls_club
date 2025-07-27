@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% set active_page = "teams" %}
+
+{% block title %}Manage Team - {{ team.team_name }}{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Manage Team</h1>
+<h2 class="subtitle">{{ team.team_name }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="columns">
+    <div class="column is-full">
+        <div class="box">
+            <h3 class="title is-4">Team Details</h3>
+            <div class="content">
+                <p><strong>Team Name:</strong> {{ team.team_name }}</p>
+                {% if team.booking %}
+                <p><strong>Associated Booking:</strong> 
+                    <a href="{{ url_for('bookings.bookings') }}">
+                        Booking #{{ team.booking.id }} - {{ team.booking.booking_date }}
+                    </a>
+                </p>
+                {% else %}
+                <p><strong>Status:</strong> <span class="tag is-info">Independent Team</span></p>
+                {% endif %}
+                <p><strong>Team Members:</strong> {{ team_members|length }}</p>
+            </div>
+        </div>
+
+        <div class="box">
+            <h3 class="title is-4">Team Members ({{ team_members|length }})</h3>
+            {% if team_members %}
+            <table class="table is-fullwidth">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Position</th>
+                        <th>Substitute</th>
+                        <th>Availability</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in team_members %}
+                    <tr>
+                        <td>{{ member.member.firstname }} {{ member.member.lastname }}</td>
+                        <td>{{ member.position }}</td>
+                        <td>
+                            {% if member.is_substitute %}
+                            <span class="tag is-warning">Yes</span>
+                            {% else %}
+                            <span class="tag">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag {% if member.availability_status == 'available' %}is-success{% elif member.availability_status == 'unavailable' %}is-danger{% else %}is-warning{% endif %}">
+                                {{ member.availability_status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <!-- Substitute Player Button -->
+                            <button class="button is-small is-warning" onclick="openSubstituteModal({{ member.id }}, '{{ member.member.firstname }} {{ member.member.lastname }}', '{{ member.position }}')">
+                                Substitute
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="has-text-grey">No members assigned to this team.</p>
+            {% endif %}
+        </div>
+
+        <div class="box">
+            <h3 class="title is-4">Add Team Member</h3>
+            <form method="POST">
+                {{ csrf_form.hidden_tag() }}
+                <input type="hidden" name="action" value="add_member">
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Member</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select name="member_id" required>
+                                        <option value="">Select a member</option>
+                                        {% for member in available_members %}
+                                        <option value="{{ member.id }}">{{ member.firstname }} {{ member.lastname }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Position</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select name="position" required>
+                                        {% for position in team_positions %}
+                                        <option value="{{ position }}">{{ position }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <div class="field">
+                            <label class="label">&nbsp;</label>
+                            <div class="control">
+                                <button class="button is-primary" type="submit">Add Member</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="field is-grouped">
+            <div class="control">
+                <a class="button is-light" href="{{ url_for('teams.list_teams') }}">Back to Teams</a>
+            </div>
+            {% if not team.booking %}
+            <div class="control">
+                <button class="button is-info" onclick="openAssignModal()">Assign to Booking</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Substitution Modal -->
+<div class="modal" id="substituteModal">
+    <div class="modal-background" onclick="closeSubstituteModal()"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Substitute Player</p>
+            <button class="delete" aria-label="close" onclick="closeSubstituteModal()"></button>
+        </header>
+        <form method="POST">
+            {{ csrf_form.hidden_tag() }}
+            <input type="hidden" name="action" value="substitute_player">
+            <input type="hidden" name="booking_team_member_id" id="substituteMemberId">
+            <section class="modal-card-body">
+                <div class="field">
+                    <label class="label">Current Player</label>
+                    <div class="control">
+                        <input class="input" type="text" id="currentPlayerName" readonly>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Position</label>
+                    <div class="control">
+                        <input class="input" type="text" id="currentPosition" readonly>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Substitute Player</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            <select name="new_member_id" required>
+                                <option value="">Select substitute player</option>
+                                {% for member in available_members %}
+                                <option value="{{ member.id }}">{{ member.firstname }} {{ member.lastname }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="label">Reason for Substitution</label>
+                    <div class="control">
+                        <textarea class="textarea" name="reason" placeholder="Optional reason for the substitution"></textarea>
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" type="submit">Substitute Player</button>
+                <button class="button" type="button" onclick="closeSubstituteModal()">Cancel</button>
+            </footer>
+        </form>
+    </div>
+</div>
+
+<script>
+function openSubstituteModal(memberId, playerName, position) {
+    document.getElementById('substituteMemberId').value = memberId;
+    document.getElementById('currentPlayerName').value = playerName;
+    document.getElementById('currentPosition').value = position;
+    document.getElementById('substituteModal').classList.add('is-active');
+}
+
+function closeSubstituteModal() {
+    document.getElementById('substituteModal').classList.remove('is-active');
+}
+</script>
+{% endblock %}
