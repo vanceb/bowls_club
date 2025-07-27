@@ -271,13 +271,13 @@
     {% endif %}
     
     <!-- Hidden form for player removal -->
-    <form method="POST" action="{{ url_for('main.remove_rollup_player', booking_id=booking.id) }}" id="remove-player-form" style="display: none;">
+    <form method="POST" action="{{ url_for('bookings.remove_rollup_player', booking_id=booking.id) }}" id="remove-player-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
         <input type="hidden" name="player_id" id="player-id-input">
     </form>
     
     <!-- Hidden form for adding players -->
-    <form method="POST" action="{{ url_for('main.add_rollup_player', booking_id=booking.id) }}" id="add-player-form" style="display: none;">
+    <form method="POST" action="{{ url_for('bookings.add_rollup_player', booking_id=booking.id) }}" id="add-player-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
         <input type="hidden" name="member_id" id="member-id-input">
     </form>
