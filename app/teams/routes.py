@@ -51,10 +51,9 @@ def create_team(booking_id):
                 
                 # Get available positions for this booking's event format
                 available_positions = ['Player']  # Default fallback
-                if booking.event and booking.event.event_format:
+                if booking.event and booking.event.format:
                     team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
-                    if booking.event.event_format in team_positions_config:
-                        available_positions = team_positions_config[booking.event.event_format]
+                    available_positions = team_positions_config.get(booking.event.format, ['Player'])
                 
                 for i, member_id in enumerate(member_ids):
                     # Assign positions in order, default to first position if more members than positions
@@ -274,13 +273,10 @@ def manage_team(team_id):
         # Get available positions based on event format
         available_positions = ['Player']  # Default fallback for rollups and events without format
         
-        if team.booking.event and team.booking.event.event_format:
+        if team.booking.event and team.booking.event.format:
             # Get positions from config based on event format
-            event_format = team.booking.event.event_format
             team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
-            
-            if event_format in team_positions_config:
-                available_positions = team_positions_config[event_format]
+            available_positions = team_positions_config.get(team.booking.event.format, ['Player'])
         
         return render_template('manage_team.html',
                              team=team,

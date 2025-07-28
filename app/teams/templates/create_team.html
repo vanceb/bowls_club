@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set active_page = "teams" %}
+
+{% block title %}Create Team{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Create Team</h1>
+<h2 class="subtitle">For booking on {{ booking.booking_date.strftime('%A %b %d, %Y') }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="box">
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            
+            <div class="field">
+                <label class="label" for="team_name">{{ form.team_name.label }}</label>
+                <div class="control">
+                    {{ form.team_name(class="input") }}
+                </div>
+                {% if form.team_name.errors %}
+                    <div class="has-text-danger">
+                        {% for error in form.team_name.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="field">
+                <label class="label" for="member_ids">{{ form.member_ids.label }}</label>
+                <div class="control">
+                    {{ form.member_ids(class="textarea", rows="3") }}
+                </div>
+                <p class="help">Enter member IDs separated by commas (e.g., 1,2,3)</p>
+                {% if form.member_ids.errors %}
+                    <div class="has-text-danger">
+                        {% for error in form.member_ids.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="field is-grouped">
+                <div class="control">
+                    <button type="submit" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-plus"></i>
+                        </span>
+                        <span>Create Team</span>
+                    </button>
+                </div>
+                <div class="control">
+                    <a href="{{ url_for('bookings.admin_edit_booking', booking_id=booking.id) }}" class="button is-light">
+                        <span class="icon">
+                            <i class="fas fa-arrow-left"></i>
+                        </span>
+                        <span>Back to Booking</span>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <div class="box">
+        <h4 class="title is-5">Booking Details</h4>
+        <div class="content">
+            <ul>
+                <li><strong>Date:</strong> {{ booking.booking_date.strftime('%A %b %d, %Y') }}</li>
+                <li><strong>Session:</strong> {{ booking.session }}</li>
+                <li><strong>Type:</strong> {{ booking.booking_type.title() }}</li>
+                {% if booking.event %}
+                <li><strong>Event:</strong> {{ booking.event.name }}</li>
+                <li><strong>Format:</strong> {{ booking.event.get_format_name() }}</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

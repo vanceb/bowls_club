@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% set active_page = "events" %}
+
+{% block title %}Create Event{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Create Event</h1>
+<h2 class="subtitle">Add a new event to the club calendar</h2>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-8 is-offset-2">
+            <div class="box">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="field">
+                        <label class="label">{{ form.name.label }}</label>
+                        <div class="control">
+                            {{ form.name(class="input") }}
+                        </div>
+                        {% for error in form.name.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.event_type.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ form.event_type }}
+                                    </div>
+                                </div>
+                                {% for error in form.event_type.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.format.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ form.format }}
+                                    </div>
+                                </div>
+                                {% for error in form.format.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.gender.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ form.gender }}
+                                    </div>
+                                </div>
+                                {% for error in form.gender.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.scoring.label }}</label>
+                                <div class="control">
+                                    {{ form.scoring(class="input", placeholder="e.g., Sets to 21, First to 25") }}
+                                </div>
+                                {% for error in form.scoring.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <div class="control">
+                            <label class="checkbox">
+                                {{ form.has_pool }} {{ form.has_pool.label }}
+                            </label>
+                        </div>
+                        <p class="help">Enable pool registration to allow members to register interest before team selection</p>
+                        {% for error in form.has_pool.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button type="submit" class="button is-primary">
+                                <span class="icon">
+                                    <i class="fas fa-plus"></i>
+                                </span>
+                                <span>Create Event</span>
+                            </button>
+                        </div>
+                        <div class="control">
+                            <a href="{{ url_for('events.list_events') }}" class="button is-light">
+                                <span class="icon">
+                                    <i class="fas fa-arrow-left"></i>
+                                </span>
+                                <span>Cancel</span>
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

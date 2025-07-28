@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% set active_page = "events" %}
+
+{% block title %}Manage Event - {{ event.name }}{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Manage Event</h1>
+<h2 class="subtitle">{{ event.name }} - {{ event.get_event_type_name() }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-8">
+            <!-- Event Details Form -->
+            <div class="box">
+                <h3 class="title is-4">Event Details</h3>
+                <form method="POST">
+                    {{ event_form.hidden_tag() }}
+                    <input type="hidden" name="action" value="update_event">
+                    
+                    <div class="field">
+                        <label class="label">{{ event_form.name.label }}</label>
+                        <div class="control">
+                            {{ event_form.name(class="input") }}
+                        </div>
+                        {% for error in event_form.name.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ event_form.event_type.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.event_type }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.event_type.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ event_form.format.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.format }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.format.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ event_form.gender.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ event_form.gender }}
+                                    </div>
+                                </div>
+                                {% for error in event_form.gender.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ event_form.scoring.label }}</label>
+                                <div class="control">
+                                    {{ event_form.scoring(class="input", placeholder="e.g., Sets to 21, First to 25") }}
+                                </div>
+                                {% for error in event_form.scoring.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="field">
+                        <div class="control">
+                            <label class="checkbox">
+                                {{ event_form.has_pool }} {{ event_form.has_pool.label }}
+                            </label>
+                        </div>
+                        <p class="help">Enable pool registration to allow members to register interest before team selection</p>
+                        {% for error in event_form.has_pool.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button type="submit" class="button is-primary">
+                                <span class="icon">
+                                    <i class="fas fa-save"></i>
+                                </span>
+                                <span>Update Event</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Event Managers Form -->
+            <div class="box">
+                <h3 class="title is-4">Event Managers</h3>
+                <form method="POST">
+                    {{ manager_form.hidden_tag() }}
+                    <input type="hidden" name="action" value="update_managers">
+                    
+                    <div class="field">
+                        <label class="label">{{ manager_form.event_managers.label }}</label>
+                        <div class="control">
+                            {{ manager_form.event_managers(class="select is-multiple", style="width: 100%; height: 150px;") }}
+                        </div>
+                        <p class="help">Hold Ctrl/Cmd to select multiple managers</p>
+                        {% for error in manager_form.event_managers.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button type="submit" class="button is-info">
+                                <span class="icon">
+                                    <i class="fas fa-users"></i>
+                                </span>
+                                <span>Update Managers</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="column is-4">
+            <!-- Event Statistics -->
+            <div class="box">
+                <h3 class="title is-4">Event Statistics</h3>
+                <div class="content">
+                    <table class="table is-narrow is-fullwidth">
+                        <tbody>
+                            <tr>
+                                <td><strong>Total Bookings:</strong></td>
+                                <td>{{ stats.total_bookings }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Total Teams:</strong></td>
+                                <td>{{ stats.total_teams }}</td>
+                            </tr>
+                            {% if event.has_pool %}
+                            <tr>
+                                <td><strong>Pool Members:</strong></td>
+                                <td>{{ stats.pool_members }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Selected:</strong></td>
+                                <td>{{ stats.pool_selected }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Available:</strong></td>
+                                <td>{{ stats.pool_available }}</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Event Actions -->
+            <div class="box">
+                <h3 class="title is-4">Event Actions</h3>
+                <div class="field is-grouped is-grouped-centered">
+                    <!-- Pool Toggle -->
+                    <div class="control">
+                        <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=event.id) }}" style="display: inline;">
+                            {{ event_form.hidden_tag() }}
+                            <button type="submit" class="button {% if event.has_pool %}is-warning{% else %}is-success{% endif %}">
+                                <span class="icon">
+                                    <i class="fas {% if event.has_pool %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
+                                </span>
+                                <span>{% if event.has_pool %}Disable{% else %}Enable{% endif %} Pool</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <!-- Danger Zone -->
+                <div class="has-text-centered">
+                    <p class="title is-6 has-text-danger">Danger Zone</p>
+                    {% if stats.total_bookings == 0 %}
+                    <form method="POST" action="{{ url_for('events.delete_event', event_id=event.id) }}" 
+                          onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.')">
+                        {{ event_form.hidden_tag() }}
+                        <button type="submit" class="button is-danger">
+                            <span class="icon">
+                                <i class="fas fa-trash"></i>
+                            </span>
+                            <span>Delete Event</span>
+                        </button>
+                    </form>
+                    {% else %}
+                    <p class="help has-text-danger">Cannot delete event with existing bookings</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="box">
+                <div class="field is-grouped is-grouped-centered">
+                    <div class="control">
+                        <a href="{{ url_for('events.list_events') }}" class="button is-light">
+                            <span class="icon">
+                                <i class="fas fa-arrow-left"></i>
+                            </span>
+                            <span>Back to Events</span>
+                        </a>
+                    </div>
+                    <div class="control">
+                        <a href="{{ url_for('bookings.bookings') }}" class="button is-info">
+                            <span class="icon">
+                                <i class="fas fa-calendar"></i>
+                            </span>
+                            <span>View Bookings</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
