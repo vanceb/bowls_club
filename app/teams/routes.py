@@ -17,23 +17,30 @@ from app.routes import role_required
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event
 
 
-@bp.route('/create', methods=['GET', 'POST'])
+@bp.route('/create/<int:booking_id>', methods=['GET', 'POST'])
 @login_required
 @role_required('Event Manager')
-def create_team():
+def create_team(booking_id):
     """
-    Create a new independent team
+    Create a new team for a specific booking
     """
     try:
         from app.teams.forms import TeamForm
         
+        # Get the booking to ensure it exists
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('main.index'))
+        
         form = TeamForm()
         
         if form.validate_on_submit():
-            # Create independent team (not associated with booking yet)
+            # Create team associated with booking
             team = Team(
                 team_name=form.team_name.data,
-                created_by=current_user.id
+                created_by=current_user.id,
+                booking_id=booking_id
             )
             db.session.add(team)
             db.session.flush()  # Get team ID
@@ -41,11 +48,22 @@ def create_team():
             # Add team members if specified
             if form.member_ids.data:
                 member_ids = [int(x.strip()) for x in form.member_ids.data.split(',') if x.strip()]
-                for member_id in member_ids:
+                
+                # Get available positions for this booking's event format
+                available_positions = ['Player']  # Default fallback
+                if booking.event and booking.event.event_format:
+                    team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
+                    if booking.event.event_format in team_positions_config:
+                        available_positions = team_positions_config[booking.event.event_format]
+                
+                for i, member_id in enumerate(member_ids):
+                    # Assign positions in order, default to first position if more members than positions
+                    position = available_positions[i] if i < len(available_positions) else available_positions[0]
+                    
                     team_member = TeamMember(
                         team_id=team.id,
                         member_id=member_id,
-                        position='Player',  # Default position
+                        position=position,
                         availability_status='pending'
                     )
                     db.session.add(team_member)
@@ -53,12 +71,12 @@ def create_team():
             db.session.commit()
             
             # Audit log
-            audit_log_create('Team', team.id, f'Created independent team: {team.team_name}')
+            audit_log_create('Team', team.id, f'Created team: {team.team_name} for booking {booking_id}')
             
-            flash(f'Team "{team.team_name}" created successfully!', 'success')
+            flash(f'Team "{team.team_name}" created successfully for {booking.booking_date}!', 'success')
             return redirect(url_for('teams.manage_team', team_id=team.id))
         
-        return render_template('create_team.html', form=form)
+        return render_template('create_team.html', form=form, booking=booking)
         
     except Exception as e:
         current_app.logger.error(f"Error creating team: {str(e)}")
@@ -93,6 +111,10 @@ def manage_team(team_id):
                 flash('Security validation failed.', 'error')
                 return redirect(url_for('teams.manage_team', team_id=team_id))
             
+            # Check if we should redirect back to rollup management
+            redirect_to = request.form.get('redirect_to')
+            booking_id = request.form.get('booking_id')
+            
             # Handle different actions
             action = request.form.get('action')
             
@@ -126,6 +148,10 @@ def manage_team(team_id):
                             audit_log_create('TeamMember', team_member.id, 
                                            f'Added {member.firstname} {member.lastname} to team {team.team_name}')
                             flash(f'{member.firstname} {member.lastname} added to team.', 'success')
+                            
+                            # Handle redirect if coming from rollup management
+                            if redirect_to == 'rollup' and booking_id:
+                                return redirect(url_for('rollups.manage_rollup', booking_id=booking_id))
                         else:
                             flash('Member not found.', 'error')
                 else:
@@ -196,6 +222,10 @@ def manage_team(team_id):
                                        f'Removed {player_name} from team {team.team_name}')
                         
                         flash(f'{player_name} removed from team successfully.', 'success')
+                        
+                        # Handle redirect if coming from rollup management
+                        if redirect_to == 'rollup' and booking_id:
+                            return redirect(url_for('rollups.manage_rollup', booking_id=booking_id))
                     else:
                         flash('Team member not found.', 'error')
                 else:
@@ -241,10 +271,10 @@ def manage_team(team_id):
         # Create CSRF form for template
         csrf_form = FlaskForm()
         
-        # Get available positions based on event format if team has a booking
-        available_positions = ['Player']  # Default fallback for rollups and independent teams
+        # Get available positions based on event format
+        available_positions = ['Player']  # Default fallback for rollups and events without format
         
-        if team.booking and team.booking.event and team.booking.event.event_format:
+        if team.booking.event and team.booking.event.event_format:
             # Get positions from config based on event format
             event_format = team.booking.event.event_format
             team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
@@ -385,11 +415,8 @@ def update_member_availability(team_member_id):
         
         flash(f'Availability updated to {new_status}.', 'success')
         
-        # Redirect back to appropriate page
-        if team and not team.booking_id:
-            return redirect(url_for('teams.manage_team', team_id=team.id))
-        else:
-            return redirect(url_for('main.index'))
+        # Redirect back to team management page
+        return redirect(url_for('teams.manage_team', team_id=team.id))
         
     except Exception as e:
         db.session.rollback()
@@ -398,48 +425,6 @@ def update_member_availability(team_member_id):
         return redirect(url_for('main.index'))
 
 
-@bp.route('/assign_to_booking/<int:team_id>/<int:booking_id>', methods=['POST'])
-@login_required
-@role_required('Event Manager')
-def assign_to_booking(team_id, booking_id):
-    """
-    Assign an independent team to a booking
-    """
-    try:
-        # Validate CSRF token
-        csrf_form = FlaskForm()
-        if not csrf_form.validate_on_submit():
-            flash('Security validation failed.', 'error')
-            return redirect(url_for('teams.manage_team', team_id=team_id))
-        
-        team = db.session.get(Team, team_id)
-        booking = db.session.get(Booking, booking_id)
-        
-        if not team or not booking:
-            flash('Team or booking not found.', 'error')
-            return redirect(url_for('teams.manage_team', team_id=team_id))
-        
-        # Check if team is already assigned to a booking
-        if team.booking_id:
-            flash('Team is already assigned to a booking.', 'error')
-            return redirect(url_for('teams.manage_team', team_id=team_id))
-        
-        # Assign team to booking
-        team.booking_id = booking_id
-        db.session.commit()
-        
-        # Audit log
-        audit_log_update('Team', team.id, 
-                        f'Assigned team {team.team_name} to booking {booking_id}')
-        
-        flash(f'Team "{team.team_name}" assigned to booking successfully.', 'success')
-        return redirect(url_for('teams.manage_team', team_id=team_id))
-        
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error assigning team to booking: {str(e)}")
-        flash('An error occurred while assigning the team.', 'error')
-        return redirect(url_for('teams.manage_team', team_id=team_id))
 
 
 @bp.route('/list')

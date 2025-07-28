@@ -19,7 +19,22 @@ def book_rollup():
     try:
         from app.rollups.forms import RollUpBookingForm
         
+        # Pre-populate form with query parameters if provided
         form = RollUpBookingForm()
+        
+        # Pre-populate date if provided in query parameters
+        if request.method == 'GET':
+            booking_date = request.args.get('date')
+            session = request.args.get('session', type=int)
+            
+            if booking_date:
+                try:
+                    form.booking_date.data = datetime.strptime(booking_date, '%Y-%m-%d').date()
+                except ValueError:
+                    pass  # Ignore invalid date format
+                    
+            if session:
+                form.session.data = session
         
         if form.validate_on_submit():
             # Create the booking
@@ -164,8 +179,28 @@ def manage_rollup(booking_id):
             flash('Roll-up team not found.', 'error')
             return redirect(url_for('bookings.my_games'))
         
-        # Redirect to team management page which handles all team functionality
-        return redirect(url_for('teams.manage_team', team_id=rollup_team.id))
+        # Get all team members (players) for this rollup
+        players = db.session.scalars(
+            sa.select(TeamMember)
+            .where(TeamMember.team_id == rollup_team.id)
+            .order_by(TeamMember.id)
+        ).all()
+        
+        # Get session name for display
+        sessions = current_app.config.get('DAILY_SESSIONS', {})
+        session_name = sessions.get(booking.session, f"Session {booking.session}")
+        
+        # Create CSRF form for actions
+        from app.forms import FlaskForm
+        csrf_form = FlaskForm()
+        
+        return render_template('manage_rollup.html', 
+                             booking=booking,
+                             players=players,
+                             session_name=session_name,
+                             today=date.today(),
+                             csrf_form=csrf_form,
+                             team_id=rollup_team.id)
         
     except Exception as e:
         current_app.logger.error(f"Error managing roll-up {booking_id}: {str(e)}")
@@ -202,7 +237,15 @@ def cancel_rollup(booking_id):
             flash('Cannot cancel past roll-up bookings.', 'error')
             return redirect(url_for('rollups.manage_rollup', booking_id=booking_id))
         
-        # Delete the booking (this will cascade to BookingPlayer records)
+        # Delete associated teams first (since booking_id is required)
+        rollup_teams = db.session.scalars(
+            sa.select(Team).where(Team.booking_id == booking_id)
+        ).all()
+        
+        for team in rollup_teams:
+            db.session.delete(team)
+        
+        # Now delete the booking
         booking_info = f"Roll-up on {booking.booking_date} at session {booking.session}"
         db.session.delete(booking)
         db.session.commit()
@@ -214,6 +257,7 @@ def cancel_rollup(booking_id):
         return redirect(url_for('bookings.my_games'))
         
     except Exception as e:
+        db.session.rollback()
         current_app.logger.error(f"Error cancelling roll-up {booking_id}: {str(e)}")
         flash('An error occurred while cancelling the roll-up.', 'error')
         return redirect(url_for('bookings.my_games'))

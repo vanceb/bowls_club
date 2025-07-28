@@ -19,129 +19,33 @@
             </div>
             <div class="level-right">
                 <div class="level-item">
-                    <a class="button is-primary" href="{{ url_for('teams.create_team') }}">
-                        <span class="icon">
-                            <i class="fas fa-plus"></i>
-                        </span>
-                        <span>Create Team</span>
-                    </a>
+                    <div class="notification is-info is-light">
+                        <p class="is-size-7">
+                            <strong>Note:</strong> Teams are now created directly from bookings. 
+                            Go to <a href="{{ url_for('bookings.bookings') }}">Bookings</a> to create teams for specific games.
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {% if teams %}
         <div class="box">
-            <table class="table is-fullwidth is-hoverable">
-                <thead>
-                    <tr>
-                        <th>Team Name</th>
-                        <th>Members</th>
-                        <th>Status</th>
-                        <th>Associated Booking</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for team in teams %}
-                    <tr>
-                        <td>
-                            <strong>{{ team.team_name }}</strong>
-                        </td>
-                        <td>
-                            <span class="tag">{{ team.members|length }} members</span>
-                        </td>
-                        <td>
-                            {% if team.booking_id %}
-                            <span class="tag is-success">Assigned to Booking</span>
-                            {% else %}
-                            <span class="tag is-info">Independent</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if team.booking %}
-                            <a href="{{ url_for('bookings.bookings') }}">
-                                Booking #{{ team.booking.id }} - {{ team.booking.booking_date }}
-                            </a>
-                            {% else %}
-                            <span class="has-text-grey">Not assigned</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="buttons">
-                                <a class="button is-small is-primary" href="{{ url_for('teams.manage_team', team_id=team.id) }}">
-                                    Manage
-                                </a>
-                                {% if not team.booking_id %}
-                                <button class="button is-small is-info" onclick="openAssignModal({{ team.id }}, '{{ team.team_name }}')">
-                                    Assign to Booking
-                                </button>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <div class="box">
-            <div class="has-text-centered">
-                <p class="title is-5 has-text-grey">No teams created yet</p>
-                <p class="subtitle is-6 has-text-grey">Create your first team to get started</p>
-                <a class="button is-primary" href="{{ url_for('teams.create_team') }}">
+            {% set show_booking_details = true %}
+            {% set show_member_preview = false %}
+            {% set show_create_suggestion = false %}
+            {% include 'partials/_team_table_partial.html' %}
+            
+            {% if not teams %}
+            <div class="has-text-centered mt-4">
+                <a class="button is-primary" href="{{ url_for('bookings.bookings') }}">
                     <span class="icon">
-                        <i class="fas fa-plus"></i>
+                        <i class="fas fa-calendar"></i>
                     </span>
-                    <span>Create Team</span>
+                    <span>Go to Bookings</span>
                 </a>
             </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
-
-<!-- Assign to Booking Modal -->
-<div class="modal" id="assignModal">
-    <div class="modal-background" onclick="closeAssignModal()"></div>
-    <div class="modal-card">
-        <header class="modal-card-head">
-            <p class="modal-card-title">Assign Team to Booking</p>
-            <button class="delete" aria-label="close" onclick="closeAssignModal()"></button>
-        </header>
-        <form id="assignForm" method="POST">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <section class="modal-card-body">
-                <div class="field">
-                    <label class="label">Team</label>
-                    <div class="control">
-                        <input class="input" type="text" id="assignTeamName" readonly>
-                    </div>
-                </div>
-                <div class="field">
-                    <label class="label">Booking ID</label>
-                    <div class="control">
-                        <input class="input" type="number" name="booking_id" placeholder="Enter booking ID" required>
-                    </div>
-                    <p class="help">Enter the ID of the booking you want to assign this team to</p>
-                </div>
-            </section>
-            <footer class="modal-card-foot">
-                <button class="button is-success" type="submit">Assign Team</button>
-                <button class="button" type="button" onclick="closeAssignModal()">Cancel</button>
-            </footer>
-        </form>
-    </div>
-</div>
-
-<script>
-function openAssignModal(teamId, teamName) {
-    document.getElementById('assignTeamName').value = teamName;
-    document.getElementById('assignForm').action = '/teams/assign_to_booking/' + teamId + '/0';
-    document.getElementById('assignModal').classList.add('is-active');
-}
-
-function closeAssignModal() {
-    document.getElementById('assignModal').classList.remove('is-active');
-}
-</script>
 {% endblock %}

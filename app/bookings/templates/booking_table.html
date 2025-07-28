@@ -2,7 +2,23 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="title">Bookings</h1>
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <h1 class="title">Bookings</h1>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <button class="button is-success" id="book-rollup-btn">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Book Rollup</span>
+                </button>
+            </div>
+        </div>
+    </div>
     <div class="columns is-vcentered">
         <div class="column">
             <div class="field">
@@ -58,6 +74,22 @@
             // Automatically refresh the table when end date changes
             fetchBookingsRange(startDateInput.value, endDateInput.value);
         });
+
+        // Book Rollup button functionality
+        window.selectedDate = null;
+        window.selectedSession = null;
+        
+        document.getElementById('book-rollup-btn').addEventListener('click', function() {
+            console.log('Button clicked. Selected date:', window.selectedDate, 'Selected session:', window.selectedSession);
+            if (window.selectedDate && window.selectedSession) {
+                // Redirect to rollup booking page with pre-populated date and session
+                const url = `/rollups/book?date=${window.selectedDate}&session=${window.selectedSession}`;
+                console.log('Redirecting to:', url);
+                window.location.href = url;
+            } else {
+                alert('Please click on a date/session cell first to select when you want to book the rollup.');
+            }
+        });
     });
 
     function fetchBookingsRange(startDate, endDate) {
@@ -72,6 +104,9 @@
                 console.log('Bookings data received:', data);
                 const tableContainer = document.getElementById('bookings-table-container');
                 tableContainer.innerHTML = buildBookingsTable(data.bookings, data.rinks, data.sessions, data.event_types, startDate, endDate);
+                
+                // Add click handlers to booking cells after table is built
+                addCellClickHandlers();
             })
             .catch(error => console.error("Error fetching bookings:", error));
     }
@@ -112,8 +147,8 @@
 
         // Build table rows - one per date
         for (const date of dates) {
-            const dayName = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
-            const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const dayName = new Date(date).toLocaleDateString('{{ locale }}', { weekday: 'short' });
+            const formattedDate = new Date(date).toLocaleDateString('{{ locale }}', { month: 'short', day: 'numeric' });
             
             table += `<tr><td><strong>${dayName}</strong><br>${formattedDate}</td>`;
             
@@ -187,13 +222,52 @@
                     }
                 }
                 
-                table += `<td class="${cellClass}">${cellContent}</td>`;
+                table += `<td class="${cellClass} booking-cell" data-date="${date}" data-session="${sessionNum}" style="cursor: pointer;">${cellContent}</td>`;
             }
             table += '</tr>';
         }
 
         table += '</tbody></table>';
         return table;
+    }
+
+    function addCellClickHandlers() {
+        const cells = document.querySelectorAll('.booking-cell');
+        
+        cells.forEach(cell => {
+            cell.addEventListener('click', function() {
+                // Remove previous selection highlighting
+                document.querySelectorAll('.booking-cell').forEach(c => {
+                    c.style.border = '';
+                    c.style.borderWidth = '';
+                });
+                
+                // Highlight selected cell
+                this.style.border = '3px solid #3273dc';
+                this.style.borderWidth = '3px';
+                
+                // Store selected date and session
+                window.selectedDate = this.getAttribute('data-date');
+                window.selectedSession = this.getAttribute('data-session');
+                console.log('Cell clicked. Date:', window.selectedDate, 'Session:', window.selectedSession);
+                
+                // Update button text to show selection
+                const bookRollupBtn = document.getElementById('book-rollup-btn');
+                const selectedDateFormatted = new Date(window.selectedDate).toLocaleDateString('{{ locale }}', { 
+                    weekday: 'short', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                bookRollupBtn.innerHTML = `
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Book Rollup for ${selectedDateFormatted}</span>
+                `;
+                bookRollupBtn.classList.remove('is-success');
+                bookRollupBtn.classList.add('is-primary');
+            });
+        });
     }
 </script>
 {% endblock %}

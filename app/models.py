@@ -391,7 +391,7 @@ class Team(db.Model):
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     team_name: so.Mapped[str] = so.mapped_column(sa.String(100), nullable=False)
     created_by: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
-    booking_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=True)  # Optional booking association
+    booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)  # Required booking association
     substitution_log: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)  # JSON log of substitutions
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 

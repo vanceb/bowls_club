@@ -15,14 +15,13 @@
             <h3 class="title is-4">Team Details</h3>
             <div class="content">
                 <p><strong>Team Name:</strong> {{ team.team_name }}</p>
-                {% if team.booking %}
                 <p><strong>Associated Booking:</strong> 
-                    <a href="{{ url_for('bookings.bookings') }}">
-                        Booking #{{ team.booking.id }} - {{ team.booking.booking_date }}
+                    <a href="{{ url_for('bookings.admin_edit_booking', booking_id=team.booking.id) }}">
+                        Booking #{{ team.booking.id }} - {{ team.booking.booking_date.strftime('%A %b %d, %Y') }}
                     </a>
                 </p>
-                {% else %}
-                <p><strong>Status:</strong> <span class="tag is-info">Independent Team</span></p>
+                {% if team.booking.event %}
+                <p><strong>Event:</strong> {{ team.booking.event.name }} ({{ team.booking.event.event_type }})</p>
                 {% endif %}
                 <p><strong>Team Members:</strong> {{ team_members|length }}</p>
             </div>
@@ -185,11 +184,6 @@
             <div class="control">
                 <a class="button is-light" href="{{ url_for('teams.list_teams') }}">Back to Teams</a>
             </div>
-            {% if not team.booking %}
-            <div class="control">
-                <button class="button is-info" onclick="openAssignModal()">Assign to Booking</button>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>

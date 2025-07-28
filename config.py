@@ -128,6 +128,9 @@ class Config:
     ROLLUP_MAX_PLAYERS = 8  # Maximum players per roll-up (including organizer)
     ROLLUP_MIN_PLAYERS = 2  # Minimum players required for a roll-up
     
+    # Localization settings
+    LOCALE = 'en-GB'  # Default to British English locale for date/time formatting
+    
     # Session cookie security configuration
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'  # Only send cookies over HTTPS (can be disabled for dev)
     SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access

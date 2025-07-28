@@ -11,7 +11,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.bookings import bp
-from app.models import Booking, Member, Event
+from app.models import Booking, Member, Event, Team
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation, audit_log_security_event, get_model_changes
@@ -30,18 +30,21 @@ def bookings():
         # Get session configuration
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         rinks = current_app.config.get('RINKS', 6)
+        locale = current_app.config.get('LOCALE', 'en-GB')
         
         return render_template('booking_table.html', 
                              today=today.isoformat(),
                              sessions=sessions,
-                             rinks=rinks)
+                             rinks=rinks,
+                             locale=locale)
     except Exception as e:
         current_app.logger.error(f"Error in bookings route: {str(e)}")
         flash('An error occurred while loading the bookings page.', 'error')
         return render_template('booking_table.html', 
                              today=date.today().isoformat(),
                              sessions={},
-                             rinks=6)
+                             rinks=6,
+                             locale=current_app.config.get('LOCALE', 'en-GB'))
 
 
 @bp.route('/get_bookings/<string:selected_date>')
@@ -308,10 +311,34 @@ def admin_edit_booking(booking_id):
             else:
                 return redirect(url_for('bookings.bookings'))
         
-        return render_template('admin_booking_form.html', 
-                             form=form, 
-                             booking=booking,
-                             title=f"Edit Booking #{booking.id}")
+        # Get teams for this booking
+        teams = db.session.scalars(
+            sa.select(Team).where(Team.booking_id == booking_id)
+        ).all()
+        
+        # Create team form for adding new teams
+        from app.teams.forms import TeamForm
+        team_form = TeamForm()
+        
+        # Debug logging
+        current_app.logger.info(f"Rendering booking edit page for booking {booking_id}, found {len(teams)} teams")
+        
+        try:
+            return render_template('admin_booking_form.html', 
+                                 form=form, 
+                                 booking=booking,
+                                 teams=teams,
+                                 team_form=team_form,
+                                 title=f"Edit Booking #{booking.id}")
+        except Exception as template_error:
+            current_app.logger.error(f"Template rendering error: {str(template_error)}")
+            # Try rendering without teams section
+            return render_template('admin_booking_form.html', 
+                                 form=form, 
+                                 booking=booking,
+                                 teams=[],
+                                 team_form=team_form,
+                                 title=f"Edit Booking #{booking.id}")
         
     except Exception as e:
         current_app.logger.error(f"Error in edit_booking: {str(e)}")

@@ -1,0 +1,74 @@
+<!-- Enhanced Team Table Partial Template -->
+{% if teams %}
+<div class="table-container">
+    <table class="table is-fullwidth is-hoverable">
+        <thead>
+            <tr>
+                <th>Team Name</th>
+                <th>Members</th>
+                {% if show_booking_details %}
+                <th>Associated Booking</th>
+                <th>Event Details</th>
+                {% endif %}
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in teams %}
+            <tr>
+                <td><strong>{{ team.team_name }}</strong></td>
+                <td>
+                    <span class="tag">{{ team.members|length }} members</span>
+                    {% if show_member_preview and team.members %}
+                        <div class="is-size-7 has-text-grey" style="margin-top: 0.25rem;">
+                            {% for member in team.members[:3] %}
+                                {{ member.member.firstname }} {{ member.member.lastname }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                            {% if team.members|length > 3 %}
+                                <span> and {{ team.members|length - 3 }} more...</span>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </td>
+                {% if show_booking_details %}
+                <td>
+                    <a href="{{ url_for('bookings.admin_edit_booking', booking_id=team.booking.id) }}">
+                        Booking #{{ team.booking.id }} - {{ team.booking.booking_date.strftime('%a %b %d') }}
+                    </a>
+                </td>
+                <td>
+                    {% if team.booking.event %}
+                    <div>
+                        <strong>{{ team.booking.event.name }}</strong><br>
+                        <small class="has-text-grey">{{ team.booking.event.event_type }}</small>
+                    </div>
+                    {% else %}
+                    <span class="has-text-grey">Roll-up</span>
+                    {% endif %}
+                </td>
+                {% endif %}
+                <td>
+                    <div class="buttons are-small">
+                        <a class="button is-small is-primary" href="{{ url_for('teams.manage_team', team_id=team.id) }}">
+                            <span class="icon">
+                                <i class="fas fa-cog"></i>
+                            </span>
+                            <span>Manage</span>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="notification is-info is-light">
+    <p><strong>No teams created yet</strong></p>
+    {% if show_create_suggestion %}
+    <p>Create a team using the form below to get started.</p>
+    {% else %}
+    <p>Teams are created automatically when you manage bookings.</p>
+    {% endif %}
+</div>
+{% endif %}

@@ -107,5 +107,22 @@
             </div>
         </form>
     </div>
+    
+    
+    <!-- Team Management Section -->
+    {% if booking %}
+    <div class="box">
+        <h3 class="title is-4">Team Management</h3>
+        
+        <!-- Display existing teams -->
+        <div class="mb-5">
+            <h4 class="title is-5">Current Teams ({{ teams|length }})</h4>
+            {% include 'partials/_team_list_partial.html' %}
+        </div>
+        
+        <!-- Create new team -->
+        {% include 'partials/_create_team_partial.html' %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

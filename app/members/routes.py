@@ -416,7 +416,11 @@ def admin_reset_member_password(member_id):
             flash(f'Password reset successfully for {member.firstname} {member.lastname}.', 'success')
             return redirect(url_for('members.admin_manage_members'))
         
-        return render_template('member_admin_password_reset.html', form=form, member=member)
+        return render_template('member_admin_password_reset.html', 
+                               form=form, 
+                               member=member,
+                               form_title="New Password",
+                               form_action="")
         
     except Exception as e:
         current_app.logger.error(f"Error in admin_reset_password route: {str(e)}")

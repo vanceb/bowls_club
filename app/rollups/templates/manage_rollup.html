@@ -117,14 +117,14 @@
                             </div>
                         </td>
                         <td>
-                            {% if player.status == 'confirmed' %}
+                            {% if player.availability_status == 'available' %}
                             <span class="tag is-success">
                                 <span class="icon">
                                     <i class="fas fa-check"></i>
                                 </span>
                                 <span>Confirmed</span>
                             </span>
-                            {% elif player.status == 'declined' %}
+                            {% elif player.availability_status == 'unavailable' %}
                             <span class="tag is-danger">
                                 <span class="icon">
                                     <i class="fas fa-times"></i>
@@ -141,9 +141,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if player.response_at %}
+                            {% if player.confirmed_at %}
                             <small class="has-text-grey">
-                                {{ player.response_at.strftime('%b %d at %I:%M %p') }}
+                                {{ player.confirmed_at.strftime('%b %d at %I:%M %p') }}
                             </small>
                             {% else %}
                             <small class="has-text-grey">No response yet</small>
@@ -189,7 +189,7 @@
                 <div class="has-text-centered">
                     <p class="heading">Confirmed</p>
                     <p class="title is-4 has-text-success">
-                        {{ players | selectattr('status', 'equalto', 'confirmed') | list | length }}
+                        {{ players | selectattr('availability_status', 'equalto', 'available') | list | length }}
                     </p>
                 </div>
             </div>
@@ -197,7 +197,7 @@
                 <div class="has-text-centered">
                     <p class="heading">Pending</p>
                     <p class="title is-4 has-text-warning">
-                        {{ players | selectattr('status', 'equalto', 'pending') | list | length }}
+                        {{ players | selectattr('availability_status', 'equalto', 'pending') | list | length }}
                     </p>
                 </div>
             </div>
@@ -205,7 +205,7 @@
                 <div class="has-text-centered">
                     <p class="heading">Declined</p>
                     <p class="title is-4 has-text-danger">
-                        {{ players | selectattr('status', 'equalto', 'declined') | list | length }}
+                        {{ players | selectattr('availability_status', 'equalto', 'unavailable') | list | length }}
                     </p>
                 </div>
             </div>
@@ -271,15 +271,22 @@
     {% endif %}
     
     <!-- Hidden form for player removal -->
-    <form method="POST" action="{{ url_for('rollups.remove_rollup_player', booking_id=booking.id) }}" id="remove-player-form" style="display: none;">
+    <form method="POST" action="{{ url_for('teams.manage_team', team_id=team_id) }}" id="remove-player-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
-        <input type="hidden" name="player_id" id="player-id-input">
+        <input type="hidden" name="action" value="delete_player">
+        <input type="hidden" name="team_member_id" id="player-id-input">
+        <input type="hidden" name="redirect_to" value="rollup">
+        <input type="hidden" name="booking_id" value="{{ booking.id }}">
     </form>
     
     <!-- Hidden form for adding players -->
-    <form method="POST" action="{{ url_for('rollups.add_rollup_player', booking_id=booking.id) }}" id="add-player-form" style="display: none;">
+    <form method="POST" action="{{ url_for('teams.manage_team', team_id=team_id) }}" id="add-player-form" style="display: none;">
         {{ csrf_form.hidden_tag() }}
+        <input type="hidden" name="action" value="add_member">
         <input type="hidden" name="member_id" id="member-id-input">
+        <input type="hidden" name="position" value="Player">
+        <input type="hidden" name="redirect_to" value="rollup">
+        <input type="hidden" name="booking_id" value="{{ booking.id }}">
     </form>
 </div>
 

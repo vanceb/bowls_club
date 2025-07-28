@@ -61,7 +61,7 @@ def manage_events():
     try:
         from app.forms import EventForm, EventSelectionForm
         from app.bookings.forms import BookingForm
-        from app.models import EventTeam, Booking
+        from app.models import Booking
         from app.audit import audit_log_create, audit_log_update
         
         # Get selected event ID from request
@@ -169,14 +169,15 @@ def manage_events():
                     db.session.add(booking)
                     db.session.flush()  # Get booking ID
                     
-                    # Copy event teams to booking teams if they exist
+                    # TODO: Copy event teams to booking teams - EventTeam functionality needs updating
                     teams_copied = 0
                     members_copied = 0
-                    event_teams = db.session.scalars(
-                        sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
-                    ).all()
+                    # event_teams = db.session.scalars(
+                    #     sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
+                    # ).all()
+                    event_teams = []  # Temporarily disabled
                     
-                    if event_teams:
+                    if False:  # Temporarily disabled
                         from app.models import BookingTeam, BookingTeamMember
                         
                         for event_team in event_teams:
@@ -222,11 +223,12 @@ def manage_events():
         if selected_event_id:
             selected_event = db.session.get(Event, selected_event_id)
             if selected_event:
-                # Get event teams
-                event_teams = db.session.scalars(
-                    sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
-                    .order_by(EventTeam.team_name)
-                ).all()
+                # TODO: Get event teams - EventTeam functionality needs updating  
+                # event_teams = db.session.scalars(
+                #     sa.select(EventTeam).where(EventTeam.event_id == selected_event_id)
+                #     .order_by(EventTeam.team_name)
+                # ).all()
+                event_teams = []  # Temporarily disabled
                 
                 # Get event bookings
                 event_bookings = db.session.scalars(
@@ -431,11 +433,13 @@ def edit_event_team(team_id):
     """
     Admin interface for editing event teams and assigning players to positions
     """
+    flash('Event team editing temporarily disabled - EventTeam functionality needs updating for new architecture.', 'warning')
+    return redirect(url_for('admin.manage_events'))
     try:
-        from app.models import EventTeam, TeamMember
+        # from app.models import EventTeam  # TODO: EventTeam functionality needs to be updated for new architecture, TeamMember
         from app.forms import create_team_member_form
         
-        team = db.session.get(EventTeam, team_id)
+        team = db.session.get(Team, team_id)
         if not team:
             flash('Team not found.', 'error')
             return redirect(url_for('admin.manage_events'))
@@ -515,9 +519,9 @@ def edit_event_team(team_id):
                     # Check for members assigned to other teams in this event (excluding current team)
                     other_team_members = db.session.scalars(
                         sa.select(TeamMember)
-                        .join(EventTeam)
-                        .where(EventTeam.event_id == team.event.id)
-                        .where(EventTeam.id != team.id)  # Exclude current team
+                        .join(Team)
+                        .where(Team.event_id == team.event.id)
+                        .where(Team.id != team.id)  # Exclude current team
                         .where(TeamMember.member_id.in_(new_member_ids))
                     ).all()
                     
@@ -581,7 +585,7 @@ def edit_event_team(team_id):
                 changes['old_members'] = old_members
                 changes['new_members'] = new_members
                 
-                audit_log_update('EventTeam', team.id, 
+                audit_log_update('Team', team.id, 
                                 f'Updated team: {team.team_name} for event "{team.event.name}"', changes)
                 
                 flash(f'Team "{team.team_name}" updated successfully!', 'success')
@@ -620,7 +624,7 @@ def edit_event_team(team_id):
         flash('An error occurred while editing the team.', 'error')
         # Try to get event_id from team if possible
         try:
-            team = db.session.get(EventTeam, team_id)
+            team = db.session.get(Team, team_id)
             if team:
                 return redirect(url_for('admin.manage_events', event_id=team.event_id, stage=3))
         except:
@@ -636,7 +640,7 @@ def add_event_team(event_id):
     Admin interface for adding a new team to an event
     """
     try:
-        from app.models import EventTeam
+        # from app.models import EventTeam  # TODO: EventTeam functionality needs to be updated for new architecture
         from app.forms import AddTeamForm
         
         event = db.session.get(Event, event_id)
@@ -654,28 +658,31 @@ def add_event_team(event_id):
         form = AddTeamForm()
         
         if form.validate_on_submit():
-            # Get the next team number
-            existing_teams = db.session.scalars(
-                sa.select(EventTeam).where(EventTeam.event_id == event_id)
-            ).all()
-            next_team_number = len(existing_teams) + 1
+            # TODO: Get the next team number - EventTeam functionality needs updating
+            # existing_teams = db.session.scalars(
+            #     sa.select(EventTeam).where(EventTeam.event_id == event_id)
+            # ).all()
+            # next_team_number = len(existing_teams) + 1
+            next_team_number = 1  # Temporarily disabled
             
-            # Create the new team
-            new_team = EventTeam(
-                event_id=event_id,
-                team_name=form.team_name.data,
-                team_number=next_team_number
-            )
-            db.session.add(new_team)
-            db.session.commit()
-            
-            # Audit log the team creation
-            audit_log_create('EventTeam', new_team.id, 
-                            f'Created team: {new_team.team_name} for event "{event.name}"',
-                            {'team_number': next_team_number})
-            
-            flash(f'Team "{new_team.team_name}" added successfully!', 'success')
+            # TODO: Create the new team - EventTeam functionality needs updating
+            # new_team = EventTeam(
+            #     event_id=event_id,
+            #     team_name=form.team_name.data,
+            #     team_number=next_team_number
+            flash('Team creation temporarily disabled - EventTeam functionality needs updating.', 'warning')
             return redirect(url_for('admin.manage_events', event_id=event_id))
+            # )
+            # db.session.add(new_team)
+            # db.session.commit()
+            
+            # TODO: Audit log the team creation - EventTeam functionality needs updating
+            # audit_log_create('EventTeam', new_team.id, 
+            #                 f'Created team: {new_team.team_name} for event "{event.name}"',
+            #                 {'team_number': next_team_number})
+            
+            # flash(f'Team "{new_team.team_name}" added successfully!', 'success')
+            # return redirect(url_for('admin.manage_events', event_id=event_id))
         
         return render_template('admin/add_event_team.html', 
                              form=form, 
@@ -695,11 +702,13 @@ def delete_event_team(team_id):
     """
     Admin interface for deleting an event team
     """
+    flash('Event team deletion temporarily disabled - EventTeam functionality needs updating for new architecture.', 'warning')
+    return redirect(url_for('admin.manage_events'))
     try:
-        from app.models import EventTeam
+        # from app.models import EventTeam  # TODO: EventTeam functionality needs to be updated for new architecture
         
         # Get team first to get event_id for redirects
-        team = db.session.get(EventTeam, team_id)
+        team = db.session.get(Team, team_id)
         if not team:
             flash('Team not found.', 'error')
             return redirect(url_for('admin.manage_events'))
@@ -739,7 +748,7 @@ def delete_event_team(team_id):
         db.session.commit()
         
         # Audit log the team deletion
-        audit_log_delete('EventTeam', team_id, 
+        audit_log_delete('Team', team_id, 
                         f'Deleted team: {team_name} from event "{event_name}"',
                         {'booking_teams_affected': booking_teams_count})
         
@@ -755,7 +764,7 @@ def delete_event_team(team_id):
         flash('An error occurred while deleting the team.', 'error')
         # Try to get event_id from team if possible, otherwise redirect without it
         try:
-            team = db.session.get(EventTeam, team_id)
+            team = db.session.get(Team, team_id)
             if team:
                 return redirect(url_for('admin.manage_events', event_id=team.event_id))
         except:
@@ -770,8 +779,10 @@ def create_teams_from_pool(event_id):
     """
     Create teams from pool members with 'available' status
     """
+    flash('Team creation from pool temporarily disabled - EventTeam functionality needs updating for new architecture.', 'warning')
+    return redirect(url_for('admin.manage_events'))
     try:
-        from app.models import EventTeam, TeamMember
+        # from app.models import EventTeam  # TODO: EventTeam functionality needs to be updated for new architecture, TeamMember
         from app.audit import audit_log_create, audit_log_bulk_operation
         
         # Validate CSRF token
@@ -813,7 +824,7 @@ def create_teams_from_pool(event_id):
         
         # Get existing team count for numbering
         existing_teams_count = db.session.scalar(
-            sa.select(sa.func.count(EventTeam.id)).where(EventTeam.event_id == event_id)
+            sa.select(sa.func.count(Team.id)).where(Team.event_id == event_id)
         ) or 0
         
         teams_created = 0
@@ -825,7 +836,7 @@ def create_teams_from_pool(event_id):
             team_name = f"Team {team_number}"
             
             # Create the team
-            new_team = EventTeam(
+            new_team = Team(
                 event_id=event_id,
                 team_name=team_name,
                 team_number=team_number
@@ -856,7 +867,7 @@ def create_teams_from_pool(event_id):
             teams_created += 1
             
             # Audit log each team creation
-            audit_log_create('EventTeam', new_team.id, 
+            audit_log_create('Team', new_team.id, 
                             f'Created team from pool: {team_name} for event "{event.name}"',
                             {'members': team_members_info, 'created_from_pool': True})
         
@@ -864,7 +875,7 @@ def create_teams_from_pool(event_id):
         db.session.commit()
         
         # Audit log bulk operation
-        audit_log_bulk_operation('TEAM_CREATION_FROM_POOL', 'EventTeam', teams_created,
+        audit_log_bulk_operation('TEAM_CREATION_FROM_POOL', 'Team', teams_created,
                                 f'Created {teams_created} teams from pool for event "{event.name}"',
                                 {'members_assigned': members_assigned, 'event_id': event_id})
         
@@ -891,8 +902,10 @@ def copy_teams_to_booking(event_id):
     """
     Create a booking from event teams (Stage 5: Booking system redesign)
     """
+    flash('Copying teams to booking temporarily disabled - EventTeam functionality needs updating for new architecture.', 'warning')
+    return redirect(url_for('admin.manage_events'))
     try:
-        from app.models import EventTeam, BookingTeam, BookingTeamMember, Booking
+        from app.models import BookingTeam, BookingTeamMember, Booking
         from app.forms import BookingForm
         from app.audit import audit_log_create, audit_log_bulk_operation
         import json
@@ -932,11 +945,12 @@ def copy_teams_to_booking(event_id):
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('admin.manage_events'))
         
-        # Get event teams
-        event_teams = db.session.scalars(
-            sa.select(EventTeam).where(EventTeam.event_id == event_id)
-            .order_by(EventTeam.team_number)
-        ).all()
+        # TODO: Get event teams - EventTeam functionality needs updating
+        # event_teams = db.session.scalars(
+        #     sa.select(EventTeam).where(EventTeam.event_id == event_id)
+        #     .order_by(EventTeam.team_number)
+        # ).all()
+        event_teams = []  # Temporarily disabled
         
         if not event_teams:
             flash('No teams found for this event.', 'warning')

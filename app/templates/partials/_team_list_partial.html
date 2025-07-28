@@ -1,0 +1,5 @@
+<!-- Team List Partial Template - Simple view for booking context -->
+{% set show_booking_details = show_booking_details if show_booking_details is defined else false %}
+{% set show_member_preview = show_member_preview if show_member_preview is defined else true %}
+{% set show_create_suggestion = show_create_suggestion if show_create_suggestion is defined else true %}
+{% include 'partials/_team_table_partial.html' %}
