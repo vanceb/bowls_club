@@ -43,9 +43,22 @@
                 </thead>
                 <tbody>
                     {% for member in team_members %}
-                    <tr>
+                    <tr data-member-id="{{ member.member.id }}">
                         <td>{{ member.member.firstname }} {{ member.member.lastname }}</td>
-                        <td>{{ member.position }}</td>
+                        <td>
+                            <form method="POST" style="display: inline;">
+                                {{ csrf_form.hidden_tag() }}
+                                <input type="hidden" name="action" value="update_position">
+                                <input type="hidden" name="team_member_id" value="{{ member.id }}">
+                                <div class="select is-small">
+                                    <select name="position" onchange="this.form.submit()">
+                                        {% for position in available_positions %}
+                                        <option value="{{ position }}" {% if member.position == position %}selected{% endif %}>{{ position }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </form>
+                        </td>
                         <td>
                             {% if member.is_substitute %}
                             <span class="tag is-warning">Yes</span>
@@ -59,10 +72,23 @@
                             </span>
                         </td>
                         <td>
-                            <!-- Substitute Player Button -->
-                            <button class="button is-small is-warning" onclick="openSubstituteModal({{ member.id }}, '{{ member.member.firstname }} {{ member.member.lastname }}', '{{ member.position }}')">
-                                Substitute
-                            </button>
+                            <div class="buttons are-small">
+                                <!-- Substitute Player Button -->
+                                <button class="button is-small is-warning" onclick="openSubstituteModal({{ member.id }}, '{{ member.member.firstname }} {{ member.member.lastname }}', '{{ member.position }}')">
+                                    <span class="icon">
+                                        <i class="fas fa-exchange-alt"></i>
+                                    </span>
+                                    <span>Substitute</span>
+                                </button>
+                                
+                                <!-- Delete Player Button -->
+                                <button class="button is-small is-danger" onclick="confirmDeletePlayer({{ member.id }}, '{{ member.member.firstname }} {{ member.member.lastname }}')">
+                                    <span class="icon">
+                                        <i class="fas fa-trash"></i>
+                                    </span>
+                                    <span>Remove</span>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -75,50 +101,85 @@
 
         <div class="box">
             <h3 class="title is-4">Add Team Member</h3>
-            <form method="POST">
-                {{ csrf_form.hidden_tag() }}
-                <input type="hidden" name="action" value="add_member">
-                <div class="columns">
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Member</label>
-                            <div class="control">
-                                <div class="select is-fullwidth">
-                                    <select name="member_id" required>
-                                        <option value="">Select a member</option>
-                                        {% for member in available_members %}
-                                        <option value="{{ member.id }}">{{ member.firstname }} {{ member.lastname }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Position</label>
-                            <div class="control">
-                                <div class="select is-fullwidth">
-                                    <select name="position" required>
-                                        {% for position in team_positions %}
-                                        <option value="{{ position }}">{{ position }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="column is-narrow">
-                        <div class="field">
-                            <label class="label">&nbsp;</label>
-                            <div class="control">
-                                <button class="button is-primary" type="submit">Add Member</button>
-                            </div>
-                        </div>
-                    </div>
+            
+            <!-- Member Search Section -->
+            <div class="field">
+                <label class="label">Search Members</label>
+                <div class="control">
+                    <input id="member-search-input" class="input" type="text" 
+                           placeholder="Search by first name, last name, or username">
                 </div>
-            </form>
+            </div>
+            
+            <!-- Search Results -->
+            <div id="member-search-results" class="box is-hidden" style="max-height: 300px; overflow-y: auto;">
+                <div class="table-container">
+                    <table class="table is-fullwidth is-hoverable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Click to Add</th>
+                            </tr>
+                        </thead>
+                        <tbody id="member-search-table-body">
+                            <!-- Search results will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
+
+        <!-- Substitution History Section -->
+        {% if team.substitution_log %}
+        <div class="box">
+            <h3 class="title is-4">Substitution History</h3>
+            {% set substitutions = team.substitution_log | from_json %}
+            {% if substitutions %}
+            <div class="table-container">
+                <table class="table is-fullwidth">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Original Player</th>
+                            <th>Substitute Player</th>
+                            <th>Position</th>
+                            <th>Made By</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for substitution in substitutions | reverse %}
+                        <tr>
+                            <td>
+                                {% set dt = substitution.timestamp | parse_datetime %}
+                                {{ dt.strftime('%d %b %Y at %I:%M %p') }}
+                            </td>
+                            <td>{{ substitution.original_player }}</td>
+                            <td>
+                                <strong>{{ substitution.substitute_player }}</strong>
+                                <span class="tag is-warning is-small">Substitute</span>
+                            </td>
+                            <td>{{ substitution.position }}</td>
+                            <td>{{ substitution.made_by }}</td>
+                            <td>
+                                {% if substitution.reason and substitution.reason != 'No reason provided' %}
+                                {{ substitution.reason }}
+                                {% else %}
+                                <span class="has-text-grey">No reason provided</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="has-text-grey">No substitutions recorded for this team.</p>
+            {% endif %}
+        </div>
+        {% endif %}
 
         <div class="field is-grouped">
             <div class="control">
@@ -144,7 +205,7 @@
         <form method="POST">
             {{ csrf_form.hidden_tag() }}
             <input type="hidden" name="action" value="substitute_player">
-            <input type="hidden" name="booking_team_member_id" id="substituteMemberId">
+            <input type="hidden" name="team_member_id" id="substituteMemberId">
             <section class="modal-card-body">
                 <div class="field">
                     <label class="label">Current Player</label>
@@ -159,43 +220,379 @@
                     </div>
                 </div>
                 <div class="field">
-                    <label class="label">Substitute Player</label>
+                    <label class="label">Search for Substitute Player</label>
                     <div class="control">
-                        <div class="select is-fullwidth">
-                            <select name="new_member_id" required>
-                                <option value="">Select substitute player</option>
-                                {% for member in available_members %}
-                                <option value="{{ member.id }}">{{ member.firstname }} {{ member.lastname }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <input id="substitute-search-input" class="input" type="text" 
+                               placeholder="Search by first name, last name, or username">
                     </div>
                 </div>
+                
+                <!-- Substitute Search Results -->
+                <div id="substitute-search-results" class="is-hidden" style="max-height: 200px; overflow-y: auto; margin-bottom: 1rem;">
+                    <div class="table-container">
+                        <table class="table is-fullwidth is-hoverable is-size-7">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="substitute-search-table-body">
+                                <!-- Search results will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Selected Substitute -->
+                <div id="selected-substitute" class="notification is-success is-hidden">
+                    <p><strong>Selected Substitute:</strong> <span id="selected-substitute-name"></span></p>
+                    <button class="button is-small is-light" type="button" onclick="clearSubstituteSelection()">Change Selection</button>
+                </div>
+                
+                <input type="hidden" name="new_member_id" id="selected-substitute-id">
                 <div class="field">
                     <label class="label">Reason for Substitution</label>
                     <div class="control">
-                        <textarea class="textarea" name="reason" placeholder="Optional reason for the substitution"></textarea>
+                        <textarea class="textarea" name="reason" placeholder="Please provide a reason for this substitution (required)" required></textarea>
                     </div>
+                    <p class="help">A reason is required to track why this substitution was made.</p>
                 </div>
             </section>
             <footer class="modal-card-foot">
-                <button class="button is-success" type="submit">Substitute Player</button>
+                <button class="button is-success" type="submit" id="confirm-substitute-btn" disabled>
+                    <span class="icon">
+                        <i class="fas fa-exchange-alt"></i>
+                    </span>
+                    <span>Confirm Substitution</span>
+                </button>
                 <button class="button" type="button" onclick="closeSubstituteModal()">Cancel</button>
             </footer>
         </form>
     </div>
 </div>
 
+
 <script>
 function openSubstituteModal(memberId, playerName, position) {
     document.getElementById('substituteMemberId').value = memberId;
     document.getElementById('currentPlayerName').value = playerName;
     document.getElementById('currentPosition').value = position;
+    
+    // Clear previous substitute search and form
+    clearSubstituteSelection();
+    document.getElementById('substitute-search-input').value = '';
+    document.getElementById('substitute-search-results').classList.add('is-hidden');
+    document.querySelector('textarea[name="reason"]').value = '';
+    
+    // Reset form validation
+    validateSubstitutionForm();
+    
     document.getElementById('substituteModal').classList.add('is-active');
+    
+    // Focus on substitute search input
+    setTimeout(() => {
+        document.getElementById('substitute-search-input').focus();
+    }, 100);
 }
 
 function closeSubstituteModal() {
     document.getElementById('substituteModal').classList.remove('is-active');
+    
+    // Clear all form data
+    clearSubstituteSelection();
+    document.querySelector('textarea[name="reason"]').value = '';
+    validateSubstitutionForm();
+}
+
+
+function confirmDeletePlayer(memberId, playerName) {
+    if (confirm('Are you sure you want to remove ' + playerName + ' from this team? This action cannot be undone.')) {
+        // Create a form to submit the delete action
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        // Add CSRF token
+        var csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = document.querySelector('input[name="csrf_token"]').value;
+        form.appendChild(csrfInput);
+        
+        // Add action
+        var actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'delete_player';
+        form.appendChild(actionInput);
+        
+        // Add team member ID
+        var memberInput = document.createElement('input');
+        memberInput.type = 'hidden';
+        memberInput.name = 'team_member_id';
+        memberInput.value = memberId;
+        form.appendChild(memberInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Member search functionality
+function loadMembersForTeam(query = '') {
+    fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}&route=members`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateMemberSearchResults(data.members);
+            } else {
+                console.error('Failed to load members:', data.error);
+                document.getElementById('member-search-table-body').innerHTML = 
+                    '<tr><td colspan="4" class="has-text-centered has-text-grey">Error loading members</td></tr>';
+                document.getElementById('member-search-results').classList.remove('is-hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading members:', error);
+            document.getElementById('member-search-table-body').innerHTML = 
+                '<tr><td colspan="4" class="has-text-centered has-text-grey">Error loading members</td></tr>';
+            document.getElementById('member-search-results').classList.remove('is-hidden');
+        });
+}
+
+function updateMemberSearchResults(members) {
+    const tableBody = document.getElementById('member-search-table-body');
+    const searchResults = document.getElementById('member-search-results');
+    
+    if (!tableBody || !searchResults) {
+        console.error('Could not find required search result elements');
+        return;
+    }
+    
+    if (members.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="has-text-centered has-text-grey">No members found</td></tr>';
+    } else {
+        // Get current team member IDs to exclude from results
+        const currentTeamMemberIds = Array.from(document.querySelectorAll('tr[data-member-id]'))
+            .map(row => parseInt(row.getAttribute('data-member-id')));
+        
+        // Filter out members already in the team
+        const availableMembers = members.filter(member => !currentTeamMemberIds.includes(member.id));
+        
+        if (availableMembers.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" class="has-text-centered has-text-grey">All matching members are already in this team</td></tr>';
+        } else {
+            tableBody.innerHTML = availableMembers.map(member => `
+                <tr class="is-clickable" onclick="addMemberDirectly(${member.id}, '${member.firstname} ${member.lastname}')" style="cursor: pointer;">
+                    <td>${member.firstname} ${member.lastname}</td>
+                    <td>${member.username}</td>
+                    <td><span class="tag is-success">${member.status}</span></td>
+                    <td>
+                        <span class="icon has-text-primary">
+                            <i class="fas fa-plus-circle"></i>
+                        </span>
+                        Click to add
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+    
+    // Show results
+    searchResults.classList.remove('is-hidden');
+}
+
+function addMemberDirectly(memberId, memberName) {
+    
+    // Hide search results and clear input
+    document.getElementById('member-search-results').classList.add('is-hidden');
+    document.getElementById('member-search-input').value = '';
+    
+    // Create a form to submit the add member action with default position
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.style.display = 'none';
+    
+    // Add CSRF token
+    var csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = document.querySelector('input[name="csrf_token"]').value;
+    form.appendChild(csrfInput);
+    
+    // Add action
+    var actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'add_member';
+    form.appendChild(actionInput);
+    
+    // Add member ID
+    var memberInput = document.createElement('input');
+    memberInput.type = 'hidden';
+    memberInput.name = 'member_id';
+    memberInput.value = memberId;
+    form.appendChild(memberInput);
+    
+    // Add default position - use first available position
+    var positionInput = document.createElement('input');
+    positionInput.type = 'hidden';
+    positionInput.name = 'position';
+    
+    // Get first available position from the template data
+    var availablePositions = {{ available_positions | tojson }};
+    positionInput.value = availablePositions[0] || 'Player';
+    form.appendChild(positionInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Set up search functionality when document loads
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('member-search-input');
+    
+    if (!searchInput) {
+        console.error('Could not find member-search-input element');
+        return;
+    }
+    
+    // Search on input
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        if (query.length >= 1) {
+            loadMembersForTeam(query);
+        } else {
+            // Hide results when search is cleared
+            document.getElementById('member-search-results').classList.add('is-hidden');
+        }
+    });
+    
+    // Focus search input when page loads
+    searchInput.focus();
+    
+    // Set up substitute search functionality
+    const substituteSearchInput = document.getElementById('substitute-search-input');
+    substituteSearchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        if (query.length >= 1) {
+            loadMembersForSubstitute(query);
+        } else {
+            document.getElementById('substitute-search-results').classList.add('is-hidden');
+        }
+    });
+    
+    // Set up reason textarea validation
+    const reasonTextarea = document.querySelector('textarea[name="reason"]');
+    if (reasonTextarea) {
+        reasonTextarea.addEventListener('input', validateSubstitutionForm);
+    }
+});
+
+// Substitute search functionality
+function loadMembersForSubstitute(query = '') {
+    fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}&route=members`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateSubstituteSearchResults(data.members);
+            } else {
+                console.error('Failed to load members:', data.error);
+                document.getElementById('substitute-search-table-body').innerHTML = 
+                    '<tr><td colspan="3" class="has-text-centered has-text-grey">Error loading members</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('substitute-search-table-body').innerHTML = 
+                '<tr><td colspan="3" class="has-text-centered has-text-grey">Error loading members</td></tr>';
+        });
+}
+
+function updateSubstituteSearchResults(members) {
+    const tableBody = document.getElementById('substitute-search-table-body');
+    const searchResults = document.getElementById('substitute-search-results');
+    
+    if (members.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="3" class="has-text-centered has-text-grey">No members found</td></tr>';
+    } else {
+        // Get current team member IDs to exclude from results
+        const currentTeamMemberIds = Array.from(document.querySelectorAll('tr[data-member-id]'))
+            .map(row => parseInt(row.getAttribute('data-member-id')));
+        
+        // Filter out members already in the team
+        const availableMembers = members.filter(member => !currentTeamMemberIds.includes(member.id));
+        
+        if (availableMembers.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3" class="has-text-centered has-text-grey">All matching members are already in this team</td></tr>';
+        } else {
+            tableBody.innerHTML = availableMembers.map(member => `
+                <tr>
+                    <td>${member.firstname} ${member.lastname}</td>
+                    <td><span class="tag is-success is-small">${member.status}</span></td>
+                    <td>
+                        <button class="button is-small is-primary" 
+                                onclick="selectSubstitute(${member.id}, '${member.firstname} ${member.lastname}')">
+                            Select
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+    }
+    
+    // Show results
+    searchResults.classList.remove('is-hidden');
+}
+
+function selectSubstitute(memberId, memberName) {
+    // Hide search results
+    document.getElementById('substitute-search-results').classList.add('is-hidden');
+    
+    // Clear search input
+    document.getElementById('substitute-search-input').value = '';
+    
+    // Set selected substitute
+    document.getElementById('selected-substitute-id').value = memberId;
+    document.getElementById('selected-substitute-name').textContent = memberName;
+    
+    // Show selected substitute notification
+    document.getElementById('selected-substitute').classList.remove('is-hidden');
+    
+    // Check if we can enable the submit button
+    validateSubstitutionForm();
+}
+
+function clearSubstituteSelection() {
+    // Clear selections
+    document.getElementById('selected-substitute-id').value = '';
+    document.getElementById('selected-substitute-name').textContent = '';
+    
+    // Hide selected substitute notification
+    document.getElementById('selected-substitute').classList.add('is-hidden');
+    
+    // Disable submit button
+    validateSubstitutionForm();
+    
+    // Focus back on search
+    document.getElementById('substitute-search-input').focus();
+}
+
+function validateSubstitutionForm() {
+    const substituteId = document.getElementById('selected-substitute-id').value;
+    const reason = document.querySelector('textarea[name="reason"]').value.trim();
+    const submitBtn = document.getElementById('confirm-substitute-btn');
+    
+    // Enable submit button only if both substitute is selected and reason is provided
+    if (substituteId && reason.length > 0) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('is-disabled');
+    } else {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('is-disabled');
+    }
 }
 </script>
 {% endblock %}

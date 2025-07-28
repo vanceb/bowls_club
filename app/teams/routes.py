@@ -12,7 +12,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.teams import bp
-from app.models import Booking, BookingTeam, BookingTeamMember, Member
+from app.models import Booking, Team, TeamMember, Member
 from app.routes import role_required
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event
 
@@ -31,7 +31,7 @@ def create_team():
         
         if form.validate_on_submit():
             # Create independent team (not associated with booking yet)
-            team = BookingTeam(
+            team = Team(
                 team_name=form.team_name.data,
                 created_by=current_user.id
             )
@@ -42,8 +42,8 @@ def create_team():
             if form.member_ids.data:
                 member_ids = [int(x.strip()) for x in form.member_ids.data.split(',') if x.strip()]
                 for member_id in member_ids:
-                    team_member = BookingTeamMember(
-                        booking_team_id=team.id,
+                    team_member = TeamMember(
+                        team_id=team.id,
                         member_id=member_id,
                         position='Player',  # Default position
                         availability_status='pending'
@@ -53,7 +53,7 @@ def create_team():
             db.session.commit()
             
             # Audit log
-            audit_log_create('BookingTeam', team.id, f'Created independent team: {team.team_name}')
+            audit_log_create('Team', team.id, f'Created independent team: {team.team_name}')
             
             flash(f'Team "{team.team_name}" created successfully!', 'success')
             return redirect(url_for('teams.manage_team', team_id=team.id))
@@ -74,7 +74,7 @@ def manage_team(team_id):
     """
     try:
         # Get the team
-        team = db.session.get(BookingTeam, team_id)
+        team = db.session.get(Team, team_id)
         if not team:
             flash('Team not found.', 'error')
             return redirect(url_for('main.index'))
@@ -103,9 +103,9 @@ def manage_team(team_id):
                 if member_id:
                     # Check if member is already in the team
                     existing = db.session.scalar(
-                        sa.select(BookingTeamMember).where(
-                            BookingTeamMember.booking_team_id == team_id,
-                            BookingTeamMember.member_id == member_id
+                        sa.select(TeamMember).where(
+                            TeamMember.team_id == team_id,
+                            TeamMember.member_id == member_id
                         )
                     )
                     
@@ -114,8 +114,8 @@ def manage_team(team_id):
                     else:
                         member = db.session.get(Member, int(member_id))
                         if member:
-                            team_member = BookingTeamMember(
-                                booking_team_id=team_id,
+                            team_member = TeamMember(
+                                team_id=team_id,
                                 member_id=member_id,
                                 position=position,
                                 availability_status='pending'
@@ -123,7 +123,7 @@ def manage_team(team_id):
                             db.session.add(team_member)
                             db.session.commit()
                             
-                            audit_log_create('BookingTeamMember', team_member.id, 
+                            audit_log_create('TeamMember', team_member.id, 
                                            f'Added {member.firstname} {member.lastname} to team {team.team_name}')
                             flash(f'{member.firstname} {member.lastname} added to team.', 'success')
                         else:
@@ -132,19 +132,19 @@ def manage_team(team_id):
                     flash('Member selection required.', 'error')
             
             elif action == 'substitute_player':
-                booking_team_member_id = request.form.get('booking_team_member_id')
+                team_member_id = request.form.get('team_member_id')
                 new_member_id = request.form.get('new_member_id')
                 reason = request.form.get('reason', 'No reason provided')
                 
-                if booking_team_member_id and new_member_id:
-                    booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                if team_member_id and new_member_id:
+                    team_member = db.session.get(TeamMember, int(team_member_id))
                     new_member = db.session.get(Member, int(new_member_id))
                     
-                    if booking_team_member and new_member:
+                    if team_member and new_member:
                         # Get original player info before substitution
-                        original_player_name = f"{booking_team_member.member.firstname} {booking_team_member.member.lastname}"
+                        original_player_name = f"{team_member.member.firstname} {team_member.member.lastname}"
                         substitute_player_name = f"{new_member.firstname} {new_member.lastname}"
-                        position = booking_team_member.position
+                        position = team_member.position
                         
                         # Log the substitution
                         substitution_log_entry = {
@@ -158,10 +158,10 @@ def manage_team(team_id):
                         }
                         
                         # Update the booking team member
-                        booking_team_member.member_id = new_member.id
-                        booking_team_member.is_substitute = True
-                        booking_team_member.substituted_at = datetime.utcnow()
-                        booking_team_member.availability_status = 'pending'  # New player needs to confirm
+                        team_member.member_id = new_member.id
+                        team_member.is_substitute = True
+                        team_member.substituted_at = datetime.utcnow()
+                        team_member.availability_status = 'pending'  # New player needs to confirm
                         
                         # Update substitution log on the team
                         current_log = json.loads(team.substitution_log or '[]')
@@ -171,7 +171,7 @@ def manage_team(team_id):
                         db.session.commit()
                         
                         # Audit log the substitution
-                        audit_log_update('BookingTeamMember', booking_team_member.id,
+                        audit_log_update('TeamMember', team_member.id,
                                        f'Substituted {original_player_name} with {substitute_player_name} for position {position}',
                                        substitution_log_entry)
                         
@@ -180,12 +180,54 @@ def manage_team(team_id):
                         flash('Invalid player selection.', 'error')
                 else:
                     flash('Player and substitute information required.', 'error')
+            
+            elif action == 'delete_player':
+                team_member_id = request.form.get('team_member_id')
+                
+                if team_member_id:
+                    team_member = db.session.get(TeamMember, int(team_member_id))
+                    if team_member and team_member.team_id == team_id:
+                        player_name = f"{team_member.member.firstname} {team_member.member.lastname}"
+                        
+                        db.session.delete(team_member)
+                        db.session.commit()
+                        
+                        audit_log_delete('TeamMember', int(team_member_id),
+                                       f'Removed {player_name} from team {team.team_name}')
+                        
+                        flash(f'{player_name} removed from team successfully.', 'success')
+                    else:
+                        flash('Team member not found.', 'error')
+                else:
+                    flash('Team member ID required.', 'error')
+            
+            elif action == 'update_position':
+                team_member_id = request.form.get('team_member_id')
+                new_position = request.form.get('position')
+                
+                if team_member_id and new_position:
+                    team_member = db.session.get(TeamMember, int(team_member_id))
+                    if team_member and team_member.team_id == team_id:
+                        old_position = team_member.position
+                        team_member.position = new_position
+                        db.session.commit()
+                        
+                        player_name = f"{team_member.member.firstname} {team_member.member.lastname}"
+                        audit_log_update('TeamMember', team_member.id,
+                                       f'Updated {player_name} position from {old_position} to {new_position}',
+                                       {'old_position': old_position, 'new_position': new_position})
+                        
+                        flash(f'{player_name} position updated to {new_position}.', 'success')
+                    else:
+                        flash('Team member not found.', 'error')
+                else:
+                    flash('Team member ID and position required.', 'error')
         
         # Get team members
         team_members = db.session.scalars(
-            sa.select(BookingTeamMember)
-            .join(BookingTeamMember.member)
-            .where(BookingTeamMember.booking_team_id == team_id)
+            sa.select(TeamMember)
+            .join(TeamMember.member)
+            .where(TeamMember.team_id == team_id)
             .order_by(Member.firstname, Member.lastname)
         ).all()
         
@@ -199,14 +241,22 @@ def manage_team(team_id):
         # Create CSRF form for template
         csrf_form = FlaskForm()
         
-        # Get team positions from config
-        team_positions = ['Lead', 'Second', 'Third', 'Skip', 'Player']
+        # Get available positions based on event format if team has a booking
+        available_positions = ['Player']  # Default fallback for rollups and independent teams
+        
+        if team.booking and team.booking.event and team.booking.event.event_format:
+            # Get positions from config based on event format
+            event_format = team.booking.event.event_format
+            team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
+            
+            if event_format in team_positions_config:
+                available_positions = team_positions_config[event_format]
         
         return render_template('manage_team.html',
                              team=team,
                              team_members=team_members,
                              available_members=available_members,
-                             team_positions=team_positions,
+                             available_positions=available_positions,
                              csrf_form=csrf_form,
                              today=date.today())
         
@@ -229,7 +279,7 @@ def add_substitute(team_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('teams.manage_team', team_id=team_id))
         
-        team = db.session.get(BookingTeam, team_id)
+        team = db.session.get(Team, team_id)
         if not team:
             flash('Team not found.', 'error')
             return redirect(url_for('main.index'))
@@ -248,9 +298,9 @@ def add_substitute(team_id):
         
         # Check if member is already in the team
         existing = db.session.scalar(
-            sa.select(BookingTeamMember).where(
-                BookingTeamMember.booking_team_id == team_id,
-                BookingTeamMember.member_id == member_id
+            sa.select(TeamMember).where(
+                TeamMember.team_id == team_id,
+                TeamMember.member_id == member_id
             )
         )
         
@@ -259,8 +309,8 @@ def add_substitute(team_id):
             return redirect(url_for('teams.manage_team', team_id=team_id))
         
         # Add substitute
-        substitute = BookingTeamMember(
-            booking_team_id=team_id,
+        substitute = TeamMember(
+            team_id=team_id,
             member_id=member_id,
             position=position,
             is_substitute=True,
@@ -271,7 +321,7 @@ def add_substitute(team_id):
         
         # Get member for audit log
         member = db.session.get(Member, member_id)
-        audit_log_create('BookingTeamMember', substitute.id, 
+        audit_log_create('TeamMember', substitute.id, 
                         f'Added substitute {member.firstname} {member.lastname} to team {team.team_name}')
         
         flash(f'Substitute {member.firstname} {member.lastname} added successfully.', 'success')
@@ -284,9 +334,9 @@ def add_substitute(team_id):
         return redirect(url_for('teams.manage_team', team_id=team_id))
 
 
-@bp.route('/update_member_availability/<int:booking_team_member_id>', methods=['POST'])
+@bp.route('/update_member_availability/<int:team_member_id>', methods=['POST'])
 @login_required
-def update_member_availability(booking_team_member_id):
+def update_member_availability(team_member_id):
     """
     Update a team member's availability status (accessible to team members and managers)
     """
@@ -297,15 +347,15 @@ def update_member_availability(booking_team_member_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('main.index'))
         
-        booking_team_member = db.session.get(BookingTeamMember, booking_team_member_id)
-        if not booking_team_member:
+        team_member = db.session.get(TeamMember, team_member_id)
+        if not team_member:
             flash('Team member not found.', 'error')
             return redirect(url_for('main.index'))
         
         # Check permission - member can update their own availability, or team managers
-        team = booking_team_member.booking_team
+        team = team_member.team
         can_update = (
-            current_user.id == booking_team_member.member_id or
+            current_user.id == team_member.member_id or
             current_user.is_admin or
             current_user.has_role('Event Manager') or
             (team and team.created_by == current_user.id)
@@ -320,16 +370,16 @@ def update_member_availability(booking_team_member_id):
             flash('Invalid status.', 'error')
             return redirect(url_for('main.index'))
         
-        old_status = booking_team_member.availability_status
-        booking_team_member.availability_status = new_status
+        old_status = team_member.availability_status
+        team_member.availability_status = new_status
         
         if new_status != 'pending':
-            booking_team_member.confirmed_at = datetime.utcnow()
+            team_member.confirmed_at = datetime.utcnow()
         
         db.session.commit()
         
         # Audit log
-        audit_log_update('BookingTeamMember', booking_team_member.id,
+        audit_log_update('TeamMember', team_member.id,
                         f'Availability updated from {old_status} to {new_status}',
                         {'old_status': old_status, 'new_status': new_status})
         
@@ -362,7 +412,7 @@ def assign_to_booking(team_id, booking_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('teams.manage_team', team_id=team_id))
         
-        team = db.session.get(BookingTeam, team_id)
+        team = db.session.get(Team, team_id)
         booking = db.session.get(Booking, booking_id)
         
         if not team or not booking:
@@ -379,7 +429,7 @@ def assign_to_booking(team_id, booking_id):
         db.session.commit()
         
         # Audit log
-        audit_log_update('BookingTeam', team.id, 
+        audit_log_update('Team', team.id, 
                         f'Assigned team {team.team_name} to booking {booking_id}')
         
         flash(f'Team "{team.team_name}" assigned to booking successfully.', 'success')
@@ -402,8 +452,8 @@ def list_teams():
     try:
         # Get all teams
         teams = db.session.scalars(
-            sa.select(BookingTeam)
-            .order_by(BookingTeam.team_name)
+            sa.select(Team)
+            .order_by(Team.team_name)
         ).all()
         
         return render_template('list_teams.html', teams=teams)
@@ -423,7 +473,7 @@ def api_get_team(team_id):
     Get team details (AJAX endpoint)
     """
     try:
-        team = db.session.get(BookingTeam, team_id)
+        team = db.session.get(Team, team_id)
         if not team:
             return jsonify({
                 'success': False,

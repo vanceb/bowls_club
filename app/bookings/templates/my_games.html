@@ -14,7 +14,7 @@
     
     <!-- Process regular team assignments -->
     {% for assignment in assignments %}
-        {% set game_date = assignment.booking_team.booking.booking_date %}
+        {% set game_date = assignment.team.booking.booking_date %}
         {% if game_date < today %}
             {% set _ = played_games.append({'type': 'assignment', 'data': assignment}) %}
         {% elif assignment.availability_status == 'pending' %}
@@ -28,7 +28,7 @@
     
     <!-- Process roll-up invitations -->
     {% for invitation in roll_up_invitations %}
-        {% set game_date = invitation.booking_team.booking.booking_date %}
+        {% set game_date = invitation.team.booking.booking_date %}
         {% if game_date < today %}
             {% set _ = played_games.append({'type': 'rollup', 'data': invitation}) %}
         {% elif invitation.availability_status == 'pending' %}
@@ -48,22 +48,22 @@
     
     <!-- Create sorted lists with date extraction for mixed types -->
     {% for item in pending_games %}
-        {% set _ = pending_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
+        {% set _ = pending_sorted.append((item.data.team.booking.booking_date, item)) %}
     {% endfor %}
     {% set pending_games = (pending_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in confirmed_games %}
-        {% set _ = confirmed_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
+        {% set _ = confirmed_sorted.append((item.data.team.booking.booking_date, item)) %}
     {% endfor %}
     {% set confirmed_games = (confirmed_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in unavailable_games %}
-        {% set _ = unavailable_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
+        {% set _ = unavailable_sorted.append((item.data.team.booking.booking_date, item)) %}
     {% endfor %}
     {% set unavailable_games = (unavailable_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in played_games %}
-        {% set _ = played_sorted.append((item.data.booking_team.booking.booking_date, item)) %}
+        {% set _ = played_sorted.append((item.data.team.booking.booking_date, item)) %}
     {% endfor %}
     {% set played_games = (played_sorted | sort(attribute='0', reverse=true) | map(attribute='1') | list) %}
 
@@ -96,17 +96,17 @@
                         {% set assignment = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
-                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
-                            {%- if assignment.booking_team.booking.home_away -%}
+                            <strong>{{ assignment.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.team.team_name }} vs {% if assignment.team.booking.vs %}{{ assignment.team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.team.booking.home_away -%}
                                 {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
-                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                    {%- if value == assignment.team.booking.home_away %} ({{ key }}){%- endif -%}
                                 {%- endfor -%}
                             {%- endif -%}</span>
                         </td>
                         <td><span class="tag is-primary">Team Game</span></td>
                         <td>
-                            <strong>{{ assignment.booking_team.team_name }}</strong><br>
+                            <strong>{{ assignment.team.team_name }}</strong><br>
                             <small>{{ assignment.position }}</small>
                         </td>
                         <td>
@@ -149,17 +149,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking_team.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
+                                {% if invitation.team.booking.organizer_notes %}
+                                <br><small>{{ invitation.team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.team.booking.organizer.firstname }} {{ invitation.team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -172,7 +172,7 @@
                         </td>
                         <td>
                             <div class="buttons are-small">
-                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking_team.booking.id, action='accept') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='accept') }}" 
                                    class="button is-small is-success"
                                    onclick="return confirm('Accept this roll-up invitation?')">
                                     <span class="icon">
@@ -180,7 +180,7 @@
                                     </span>
                                     <span>Accept</span>
                                 </a>
-                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.booking_team.booking.id, action='decline') }}" 
+                                <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='decline') }}" 
                                    class="button is-small is-danger"
                                    onclick="return confirm('Decline this roll-up invitation?')">
                                     <span class="icon">
@@ -228,17 +228,17 @@
                         {% set assignment = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
-                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
-                            {%- if assignment.booking_team.booking.home_away -%}
+                            <strong>{{ assignment.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.team.team_name }} vs {% if assignment.team.booking.vs %}{{ assignment.team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.team.booking.home_away -%}
                                 {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
-                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                    {%- if value == assignment.team.booking.home_away %} ({{ key }}){%- endif -%}
                                 {%- endfor -%}
                             {%- endif -%}</span>
                         </td>
                         <td><span class="tag is-primary">Team Game</span></td>
                         <td>
-                            <strong>{{ assignment.booking_team.team_name }}</strong><br>
+                            <strong>{{ assignment.team.team_name }}</strong><br>
                             <small>{{ assignment.position }}</small>
                         </td>
                         <td>
@@ -262,17 +262,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking_team.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
+                                {% if invitation.team.booking.organizer_notes %}
+                                <br><small>{{ invitation.team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.team.booking.organizer.firstname }} {{ invitation.team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -288,8 +288,8 @@
                             </small>
                         </td>
                         <td>
-                            {% if invitation.booking_team.booking.organizer_id == current_user.id %}
-                            <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.booking_team.booking.id) }}" 
+                            {% if invitation.team.booking.organizer_id == current_user.id %}
+                            <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.team.booking.id) }}" 
                                class="button is-small is-primary">
                                 <span class="icon">
                                     <i class="fas fa-cog"></i>
@@ -336,17 +336,17 @@
                         {% set assignment = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
-                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
-                            {%- if assignment.booking_team.booking.home_away -%}
+                            <strong>{{ assignment.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.team.team_name }} vs {% if assignment.team.booking.vs %}{{ assignment.team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.team.booking.home_away -%}
                                 {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
-                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                    {%- if value == assignment.team.booking.home_away %} ({{ key }}){%- endif -%}
                                 {%- endfor -%}
                             {%- endif -%}</span>
                         </td>
                         <td><span class="tag is-primary">Team Game</span></td>
                         <td>
-                            <strong>{{ assignment.booking_team.team_name }}</strong><br>
+                            <strong>{{ assignment.team.team_name }}</strong><br>
                             <small>{{ assignment.position }}</small>
                         </td>
                         <td>
@@ -370,17 +370,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking_team.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
+                                {% if invitation.team.booking.organizer_notes %}
+                                <br><small>{{ invitation.team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.team.booking.organizer.firstname }} {{ invitation.team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>
@@ -438,17 +438,17 @@
                         {% set assignment = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ assignment.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.booking_team.booking.session, 'Unknown') }}</strong><br>
-                            <span class="has-text-grey">{{ assignment.booking_team.team_name }} vs {% if assignment.booking_team.booking.vs %}{{ assignment.booking_team.booking.vs }}{% else %}TBD{% endif %}
-                            {%- if assignment.booking_team.booking.home_away -%}
+                            <strong>{{ assignment.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(assignment.team.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ assignment.team.team_name }} vs {% if assignment.team.booking.vs %}{{ assignment.team.booking.vs }}{% else %}TBD{% endif %}
+                            {%- if assignment.team.booking.home_away -%}
                                 {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
-                                    {%- if value == assignment.booking_team.booking.home_away %} ({{ key }}){%- endif -%}
+                                    {%- if value == assignment.team.booking.home_away %} ({{ key }}){%- endif -%}
                                 {%- endfor -%}
                             {%- endif -%}</span>
                         </td>
                         <td><span class="tag is-primary">Team Game</span></td>
                         <td>
-                            <strong>{{ assignment.booking_team.team_name }}</strong><br>
+                            <strong>{{ assignment.team.team_name }}</strong><br>
                             <small>{{ assignment.position }}</small>
                         </td>
                         <td>
@@ -484,17 +484,17 @@
                         {% set invitation = item.data %}
                         <td>
                             {% set sessions = config['DAILY_SESSIONS'] %}
-                            <strong>{{ invitation.booking_team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.booking_team.booking.session, 'Unknown') }}</strong><br>
+                            <strong>{{ invitation.team.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(invitation.team.booking.session, 'Unknown') }}</strong><br>
                             <span class="has-text-grey">
                                 Roll-Up Game
-                                {% if invitation.booking_team.booking.organizer_notes %}
-                                <br><small>{{ invitation.booking_team.booking.organizer_notes }}</small>
+                                {% if invitation.team.booking.organizer_notes %}
+                                <br><small>{{ invitation.team.booking.organizer_notes }}</small>
                                 {% endif %}
                             </span>
                         </td>
                         <td><span class="tag is-info">Roll-Up</span></td>
                         <td>
-                            <strong>{{ invitation.booking_team.booking.organizer.firstname }} {{ invitation.booking_team.booking.organizer.lastname }}</strong><br>
+                            <strong>{{ invitation.team.booking.organizer.firstname }} {{ invitation.team.booking.organizer.lastname }}</strong><br>
                             <small>Organizer</small>
                         </td>
                         <td>

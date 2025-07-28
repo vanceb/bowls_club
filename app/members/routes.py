@@ -7,7 +7,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from app import db
-from app.models import Member, Role, Event, Booking, PoolRegistration, BookingTeamMember
+from app.models import Member, Role, Event, Booking, PoolRegistration
 from app.forms import (LoginForm, RequestResetForm, ResetPasswordForm, 
                       PasswordChangeForm, EditProfileForm, MemberForm, 
                       EditMemberForm, ImportUsersForm)

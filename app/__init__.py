@@ -156,6 +156,20 @@ def register_template_filters(app):
             return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M')
         except (ValueError, TypeError, OSError):
             return 'Unknown'
+    
+    @app.template_filter('parse_datetime')
+    def parse_datetime_filter(datetime_str):
+        """Parse ISO datetime string to datetime object"""
+        try:
+            from datetime import datetime
+            return datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+        except (ValueError, TypeError, AttributeError):
+            try:
+                # Fallback for older datetime strings
+                return datetime.strptime(datetime_str, '%Y-%m-%dT%H:%M:%S.%f')
+            except (ValueError, TypeError):
+                from datetime import datetime
+                return datetime.now()
 
 def register_middleware(app):
     """Register middleware functions"""

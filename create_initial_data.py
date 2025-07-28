@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from app import create_app, db
-from app.models import Role, Member, BookingTeam, BookingTeamMember
+from app.models import Role, Member
 from app.audit import audit_log_create, audit_log_system_event
 from config import Config
 from werkzeug.security import generate_password_hash
@@ -85,8 +85,8 @@ def verify_database_structure():
     
     expected_tables = [
         'roles', 'member', 'member_roles', 'events', 'event_member_managers',
-        'event_pools', 'pool_members', 'posts', 'policy_pages', 'bookings', 
-        'booking_teams', 'booking_team_members'
+        'event_pools', 'pool_members', 'posts', 'policy_pages', 'bookings',
+        'teams', 'team_members'
     ]
     
     # Get all table names from the database

@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 from app.rollups import bp
 from app import db
-from app.models import Booking, BookingTeam, BookingTeamMember, Member
+from app.models import Booking, Team, TeamMember, Member
 from app.forms import FlaskForm
 from app.audit import audit_log_create, audit_log_update, audit_log_delete
 
@@ -36,7 +36,7 @@ def book_rollup():
             db.session.flush()  # Get the booking ID
             
             # Create a team for this rollup
-            rollup_team = BookingTeam(
+            rollup_team = Team(
                 booking_id=booking.id,
                 team_name=f"Roll-up {booking.booking_date}",
                 created_by=current_user.id
@@ -45,8 +45,8 @@ def book_rollup():
             db.session.flush()  # Get the team ID
             
             # Add organizer as confirmed team member
-            organizer_member = BookingTeamMember(
-                booking_team_id=rollup_team.id,
+            organizer_member = TeamMember(
+                team_id=rollup_team.id,
                 member_id=current_user.id,
                 position='Player',
                 availability_status='available',  # Organizer is automatically available
@@ -59,8 +59,8 @@ def book_rollup():
                 invited_player_ids = [int(x.strip()) for x in form.invited_players.data.split(',') if x.strip()]
                 for player_id in invited_player_ids:
                     if player_id != current_user.id:  # Don't invite organizer again
-                        invited_member = BookingTeamMember(
-                            booking_team_id=rollup_team.id,
+                        invited_member = TeamMember(
+                            team_id=rollup_team.id,
                             member_id=player_id,
                             position='Player',
                             availability_status='pending'
@@ -99,11 +99,11 @@ def respond_to_rollup(booking_id, action):
         
         # Get the team member invitation
         invitation = db.session.scalar(
-            sa.select(BookingTeamMember)
-            .join(BookingTeam)
+            sa.select(TeamMember)
+            .join(Team)
             .where(
-                BookingTeam.booking_id == booking_id,
-                BookingTeamMember.member_id == current_user.id
+                Team.booking_id == booking_id,
+                TeamMember.member_id == current_user.id
             )
         )
         
@@ -127,7 +127,7 @@ def respond_to_rollup(booking_id, action):
         db.session.commit()
         
         # Audit log
-        audit_log_update('BookingTeamMember', invitation.id, 
+        audit_log_update('TeamMember', invitation.id, 
                        f'Updated roll-up response to {invitation.availability_status}')
         
         return redirect(url_for('bookings.my_games'))
@@ -156,8 +156,8 @@ def manage_rollup(booking_id):
         
         # Get the rollup team for this booking
         rollup_team = db.session.scalar(
-            sa.select(BookingTeam)
-            .where(BookingTeam.booking_id == booking_id)
+            sa.select(Team)
+            .where(Team.booking_id == booking_id)
         )
         
         if not rollup_team:

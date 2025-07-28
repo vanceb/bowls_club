@@ -11,7 +11,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.bookings import bp
-from app.models import Booking, Member, BookingTeam, BookingTeamMember, Event
+from app.models import Booking, Member, Event
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation, audit_log_security_event, get_model_changes
@@ -134,8 +134,8 @@ def get_bookings_range(start_date, end_date):
             if booking.booking_type == 'rollup':
                 # For roll-ups, include player count from team members
                 team_member_count = 0
-                if booking.booking_teams:
-                    for team in booking.booking_teams:
+                if booking.teams:
+                    for team in booking.teams:
                         team_member_count += len(team.members)
                 booking_info['player_count'] = team_member_count
             elif booking.event:
@@ -182,10 +182,10 @@ def my_games():
                 action = request.form.get('action')
                 
                 if assignment_id and action:
-                    from app.models import BookingTeamMember
+                    from app.models import TeamMember
                     from app.audit import audit_log_update
                     
-                    assignment = db.session.get(BookingTeamMember, assignment_id)
+                    assignment = db.session.get(TeamMember, assignment_id)
                     if assignment and assignment.member_id == current_user.id:
                         if action == 'confirm_available':
                             assignment.availability_status = 'available'
@@ -197,7 +197,7 @@ def my_games():
                             flash('Unavailability confirmed.', 'info')
                         
                         db.session.commit()
-                        audit_log_update('BookingTeamMember', assignment.id, 
+                        audit_log_update('TeamMember', assignment.id, 
                                        f'Updated availability status to {assignment.availability_status}')
                     else:
                         flash('Invalid assignment or unauthorized access.', 'error')
@@ -209,19 +209,19 @@ def my_games():
             return redirect(url_for('bookings.my_games'))
         
         # GET request - display games
-        from app.models import BookingTeamMember
+        from app.models import TeamMember, Team
         
         # Get current date
         today = date.today()
         
         # Get team assignments for current user (excluding rollups to avoid duplication)
-        from app.models import BookingTeam, Booking
         assignments = db.session.scalars(
-            sa.select(BookingTeamMember)
-            .join(BookingTeamMember.booking_team)
-            .join(BookingTeam.booking)
+            sa.select(TeamMember)
+            .join(TeamMember.team)
+            .join(Team.booking)
             .where(
-                BookingTeamMember.member_id == current_user.id,
+                TeamMember.member_id == current_user.id,
+                Team.booking_id.isnot(None),  # Only teams with bookings
                 Booking.booking_type != 'rollup'  # Exclude rollups from regular assignments
             )
             .order_by(Booking.booking_date)
@@ -229,11 +229,12 @@ def my_games():
         
         # Get roll-up invitations for current user via team memberships
         roll_up_invitations = db.session.scalars(
-            sa.select(BookingTeamMember)
-            .join(BookingTeam)
-            .join(Booking)
+            sa.select(TeamMember)
+            .join(TeamMember.team)
+            .join(Team.booking)
             .where(
-                BookingTeamMember.member_id == current_user.id,
+                TeamMember.member_id == current_user.id,
+                Team.booking_id.isnot(None),  # Only teams with bookings
                 Booking.booking_type == 'rollup'
             )
             .order_by(Booking.booking_date)
@@ -363,9 +364,9 @@ def api_get_booking(booking_id):
             booking_data['event_type'] = booking.event.event_type
         
         # Add team details if they exist
-        if booking.booking_type == 'event' and booking.booking_teams:
+        if booking.booking_type == 'event' and booking.teams:
             teams = []
-            for team in booking.booking_teams:
+            for team in booking.teams:
                 team_data = {
                     'id': team.id,
                     'team_name': team.team_name,
@@ -387,9 +388,9 @@ def api_get_booking(booking_id):
             booking_data['teams'] = teams
         
         # Add roll-up player details if it's a roll-up
-        elif booking.booking_type == 'rollup' and booking.booking_teams:
+        elif booking.booking_type == 'rollup' and booking.teams:
             players = []
-            for team in booking.booking_teams:
+            for team in booking.teams:
                 for member in team.members:
                     player_data = {
                         'id': member.id,

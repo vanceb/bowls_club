@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from app.main import bp
 from app import db
-from app.models import Member, Post, Booking, Event, BookingTeamMember, EventPool, PoolRegistration
+from app.models import Member, Post, Booking, Event, EventPool, PoolRegistration
 from app.forms import FlaskForm
 from app.routes import role_required
 
