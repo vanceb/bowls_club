@@ -84,9 +84,14 @@
                             <br><small class="has-text-grey">via bookings</small>
                         </td>
                         <td>
-                            {% if stats.has_pool %}
-                            <span class="tag is-primary">
+                            {% if stats.pool_members > 0 %}
+                            <span class="tag {% if stats.has_pool %}is-primary{% else %}is-warning{% endif %}">
                                 <i class="fas fa-users"></i>&nbsp;{{ stats.pool_members }}
+                                {% if not stats.has_pool %}<i class="fas fa-lock ml-1"></i>{% endif %}
+                            </span>
+                            {% elif stats.has_pool %}
+                            <span class="tag is-light">
+                                <i class="fas fa-users"></i>&nbsp;0
                             </span>
                             {% else %}
                             <span class="tag is-light">None</span>

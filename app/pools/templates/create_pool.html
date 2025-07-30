@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set active_page = "pools" %}
+
+{% block title %}Create Pool{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Create Pool</h1>
+{% if pool_type == 'event' %}
+<h2 class="subtitle">Create a member registration pool for "{{ event.name }}"</h2>
+{% else %}
+<h2 class="subtitle">Create a member registration pool for booking on {{ booking.booking_date }}</h2>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-8 is-offset-2">
+            <div class="box">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="field">
+                        <div class="control">
+                            <label class="checkbox">
+                                {{ form.is_open }} {{ form.is_open.label }}
+                            </label>
+                        </div>
+                        <p class="help">Whether members can register immediately upon pool creation</p>
+                        {% for error in form.is_open.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.max_players.label }}</label>
+                                <div class="control">
+                                    {{ form.max_players(class="input", placeholder="Leave empty for unlimited") }}
+                                </div>
+                                <p class="help">Maximum number of members who can register (optional)</p>
+                                {% for error in form.max_players.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.auto_close_date.label }}</label>
+                                <div class="control">
+                                    {{ form.auto_close_date(class="input", placeholder="YYYY-MM-DD HH:MM") }}
+                                </div>
+                                <p class="help">Automatically close registration at this date/time (optional)</p>
+                                {% for error in form.auto_close_date.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Context Information -->
+                    <div class="notification is-info is-light">
+                        <h4 class="title is-6">Pool Details</h4>
+                        {% if pool_type == 'event' %}
+                        <p><strong>Event:</strong> {{ event.name }}</p>
+                        <p><strong>Type:</strong> {{ event.get_event_type_name() }}</p>
+                        <p><strong>Format:</strong> {{ event.get_format_name() }}</p>
+                        <p><strong>Gender:</strong> {{ event.get_gender_name() }}</p>
+                        {% if event.scoring %}
+                        <p><strong>Scoring:</strong> {{ event.scoring }}</p>
+                        {% endif %}
+                        {% else %}
+                        <p><strong>Booking Date:</strong> {{ booking.booking_date }}</p>
+                        <p><strong>Session:</strong> {{ booking.session }}</p>
+                        <p><strong>Type:</strong> {{ booking.booking_type.title() }}</p>
+                        {% if booking.vs %}
+                        <p><strong>Opponent:</strong> {{ booking.vs }}</p>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button type="submit" class="button is-primary">
+                                <span class="icon">
+                                    <i class="fas fa-plus"></i>
+                                </span>
+                                <span>Create Pool</span>
+                            </button>
+                        </div>
+                        <div class="control">
+                            {% if pool_type == 'event' %}
+                            <a href="{{ url_for('events.manage_event', event_id=event.id) }}" class="button is-light">
+                            {% else %}
+                            <a href="{{ url_for('bookings.bookings') }}" class="button is-light">
+                            {% endif %}
+                                <span class="icon">
+                                    <i class="fas fa-arrow-left"></i>
+                                </span>
+                                <span>Cancel</span>
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

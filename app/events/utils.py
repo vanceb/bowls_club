@@ -93,18 +93,18 @@ def get_event_statistics(event: Event) -> Dict[str, Any]:
         'pool_available': 0,
     }
     
-    # Calculate pool statistics if pool exists
-    if event.has_pool and hasattr(event, 'pool') and event.pool:
+    # Calculate pool statistics if pool exists (regardless of enabled status)
+    if hasattr(event, 'pool') and event.pool:
         try:
             # Use PoolRegistration model instead of generic "members"
             from app.models import PoolRegistration
             pool_registrations = db.session.scalars(
-                sa.select(PoolRegistration).where(PoolRegistration.event_pool_id == event.pool.id)
+                sa.select(PoolRegistration).where(PoolRegistration.pool_id == event.pool.id)
             ).all()
             
             stats['pool_members'] = len(pool_registrations)
             stats['pool_selected'] = sum(1 for pr in pool_registrations if pr.status == 'selected')
-            stats['pool_available'] = sum(1 for pr in pool_registrations if pr.status == 'available')
+            stats['pool_available'] = sum(1 for pr in pool_registrations if pr.status in ['registered'])
         except Exception:
             # Fallback to basic pool info
             stats['pool_members'] = 0

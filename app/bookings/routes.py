@@ -14,6 +14,7 @@ from app.bookings import bp
 from app.models import Booking, Member, Event, Team
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
+from app.events.utils import can_user_manage_event
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation, audit_log_security_event, get_model_changes
 
 
@@ -277,6 +278,13 @@ def admin_edit_booking(booking_id):
             flash('Booking not found.', 'error')
             return redirect(url_for('admin.manage_events'))
         
+        # Check permissions - must be able to manage the associated event
+        if booking.event and not can_user_manage_event(current_user, booking.event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to edit booking {booking_id} for event {booking.event.id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
         form = BookingForm(obj=booking)
         
         if form.validate_on_submit():
@@ -459,6 +467,15 @@ def api_update_booking(booking_id):
                 'error': 'Booking not found'
             }), 404
         
+        # Check permissions - must be able to manage the associated event
+        if booking.event and not can_user_manage_event(current_user, booking.event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized API attempt to update booking {booking_id} for event {booking.event.id}')
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied'
+            }), 403
+        
         data = request.get_json()
         if not data:
             return jsonify({
@@ -526,6 +543,15 @@ def api_delete_booking(booking_id):
                 'success': False,
                 'error': 'Booking not found'
             }), 404
+        
+        # Check permissions - must be able to manage the associated event
+        if booking.event and not can_user_manage_event(current_user, booking.event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized API attempt to delete booking {booking_id} for event {booking.event.id}')
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied'
+            }), 403
         
         booking_description = f"Booking #{booking.id} on {booking.booking_date}"
         

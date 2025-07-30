@@ -110,35 +110,54 @@
                 </form>
             </div>
 
-            <!-- Event Managers Form -->
+            <!-- Event Managers -->
             <div class="box">
-                <h3 class="title is-4">Event Managers</h3>
-                <form method="POST">
-                    {{ manager_form.hidden_tag() }}
-                    <input type="hidden" name="action" value="update_managers">
-                    
-                    <div class="field">
-                        <label class="label">{{ manager_form.event_managers.label }}</label>
-                        <div class="control">
-                            {{ manager_form.event_managers(class="select is-multiple", style="width: 100%; height: 150px;") }}
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <h3 class="title is-4">Event Managers</h3>
                         </div>
-                        <p class="help">Hold Ctrl/Cmd to select multiple managers</p>
-                        {% for error in manager_form.event_managers.errors %}
-                            <p class="help is-danger">{{ error }}</p>
-                        {% endfor %}
                     </div>
-                    
-                    <div class="field is-grouped">
-                        <div class="control">
-                            <button type="submit" class="button is-info">
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button type="button" class="button is-success" onclick="openAddManagerModal()">
                                 <span class="icon">
-                                    <i class="fas fa-users"></i>
+                                    <i class="fas fa-user-plus"></i>
                                 </span>
-                                <span>Update Managers</span>
+                                <span>Add Manager</span>
                             </button>
                         </div>
                     </div>
-                </form>
+                </div>
+                
+                <!-- Current Event Managers Display -->
+                <div class="field">
+                    <div class="content">
+                        {% if event.event_managers %}
+                            <div class="tags">
+                                {% for manager in event.event_managers %}
+                                <span class="tag is-info is-medium">
+                                    <span class="icon">
+                                        <i class="fas fa-user-tie"></i>
+                                    </span>
+                                    <span>{{ manager.firstname }} {{ manager.lastname }}</span>
+                                    <button type="button" class="delete is-small ml-2" 
+                                            onclick="confirmRemoveManager({{ manager.id }}, '{{ manager.firstname }} {{ manager.lastname }}')"
+                                            title="Remove manager"></button>
+                                </span>
+                                {% endfor %}
+                            </div>
+                            <p class="help">Click the X on any manager to remove them from this event.</p>
+                        {% else %}
+                            <div class="notification is-info is-light">
+                                <span class="icon">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                                <span>No event managers assigned. Add managers to delegate event management permissions.</span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -165,10 +184,6 @@
                             <tr>
                                 <td><strong>Selected:</strong></td>
                                 <td>{{ stats.pool_selected }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Available:</strong></td>
-                                <td>{{ stats.pool_available }}</td>
                             </tr>
                             {% endif %}
                         </tbody>
@@ -240,4 +255,138 @@
         </div>
     </div>
 </div>
+
+<!-- Hidden forms for manager management -->
+<form method="POST" id="add-manager-form" style="display: none;">
+    {{ manager_form.hidden_tag() }}
+    <input type="hidden" name="action" value="add_manager">
+    <input type="hidden" name="member_id" id="manager-id-input">
+</form>
+
+<form method="POST" id="remove-manager-form" style="display: none;">
+    {{ manager_form.hidden_tag() }}
+    <input type="hidden" name="action" value="remove_manager">
+    <input type="hidden" name="member_id" id="remove-manager-id-input">
+</form>
+
+<!-- Modal for adding managers -->
+<div class="modal" id="add-manager-modal">
+    <div class="modal-background" onclick="closeAddManagerModal()"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Add Event Manager</p>
+            <button class="delete" onclick="closeAddManagerModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <div class="field">
+                <label class="label">Search Members</label>
+                <div class="control">
+                    <input class="input" type="text" id="manager-search" placeholder="Type member name to search...">
+                </div>
+            </div>
+            
+            <div id="manager-search-results" class="content">
+                <p class="has-text-grey">Start typing to search for members...</p>
+            </div>
+        </section>
+        <footer class="modal-card-foot">
+            <button class="button" onclick="closeAddManagerModal()">Cancel</button>
+        </footer>
+    </div>
+</div>
+
+<script>
+function confirmRemoveManager(managerId, managerName) {
+    if (confirm(`Are you sure you want to remove ${managerName} as an event manager? They will lose management permissions for this event.`)) {
+        document.getElementById('remove-manager-id-input').value = managerId;
+        document.getElementById('remove-manager-form').submit();
+    }
+}
+
+function openAddManagerModal() {
+    document.getElementById('add-manager-modal').classList.add('is-active');
+    document.getElementById('manager-search').focus();
+}
+
+function closeAddManagerModal() {
+    document.getElementById('add-manager-modal').classList.remove('is-active');
+    document.getElementById('manager-search').value = '';
+    document.getElementById('manager-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+}
+
+function addManagerToEvent(memberId) {
+    document.getElementById('manager-id-input').value = memberId;
+    document.getElementById('add-manager-form').submit();
+}
+
+// Manager search functionality
+let searchTimeout;
+document.getElementById('manager-search').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        document.getElementById('manager-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('manager-search-results');
+                
+                if (data.success && data.members.length > 0) {
+                    // Get list of current manager IDs to exclude them
+                    const currentManagerIds = {{ event.event_managers | map(attribute='id') | list | tojson }};
+                    
+                    // Filter out members who are already managers and only show Full members
+                    const availableMembers = data.members.filter(member => 
+                        !currentManagerIds.includes(member.id) && member.status === 'Full'
+                    );
+                    
+                    if (availableMembers.length > 0) {
+                        let html = '<div class="columns is-multiline">';
+                        availableMembers.forEach(member => {
+                            html += `
+                                <div class="column is-half">
+                                    <div class="box is-clickable" onclick="addManagerToEvent(${member.id})" style="cursor: pointer;">
+                                        <div class="media">
+                                            <div class="media-content">
+                                                <p class="has-text-weight-semibold">${member.firstname} ${member.lastname}</p>
+                                                <p class="is-size-7 has-text-grey">${member.status} Member</p>
+                                            </div>
+                                            <div class="media-right">
+                                                <span class="icon has-text-success">
+                                                    <i class="fas fa-plus-circle"></i>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        html += '</div>';
+                        resultsDiv.innerHTML = html;
+                    } else {
+                        resultsDiv.innerHTML = '<p class="has-text-grey">All matching Full members are already event managers.</p>';
+                    }
+                } else {
+                    resultsDiv.innerHTML = '<p class="has-text-grey">No Full members found matching your search.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error searching members:', error);
+                document.getElementById('manager-search-results').innerHTML = '<p class="has-text-danger">Error searching members. Please try again.</p>';
+            });
+    }, 300);
+});
+
+// Handle ESC key to close modal
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeAddManagerModal();
+    }
+});
+</script>
 {% endblock %}

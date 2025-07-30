@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% set active_page = "pools" %}
+
+{% block title %}Pools{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Pools</h1>
+<h2 class="subtitle">Manage member registration pools</h2>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <div class="field has-addons">
+                    <div class="control">
+                        <div class="select">
+                            <select id="type-filter" onchange="filterPools()">
+                                <option value="">All Pool Types</option>
+                                <option value="event" {% if current_filter == 'event' %}selected{% endif %}>
+                                    Event Pools
+                                </option>
+                                <option value="booking" {% if current_filter == 'booking' %}selected{% endif %}>
+                                    Booking Pools
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <div class="dropdown is-hoverable">
+                    <div class="dropdown-trigger">
+                        <button class="button is-primary" aria-haspopup="true" aria-controls="dropdown-menu">
+                            <span class="icon">
+                                <i class="fas fa-plus"></i>
+                            </span>
+                            <span>Create Pool</span>
+                            <span class="icon is-small">
+                                <i class="fas fa-angle-down" aria-hidden="true"></i>
+                            </span>
+                        </button>
+                    </div>
+                    <div class="dropdown-menu" id="dropdown-menu" role="menu">
+                        <div class="dropdown-content">
+                            <a href="{{ url_for('events.list_events') }}" class="dropdown-item">
+                                <span class="icon">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </span>
+                                <span>Create Event Pool</span>
+                            </a>
+                            <a href="{{ url_for('bookings.bookings') }}" class="dropdown-item">
+                                <span class="icon">
+                                    <i class="fas fa-clock"></i>
+                                </span>
+                                <span>Create Booking Pool</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box">
+        {% if pools %}
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Pool Name</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Registered</th>
+                        <th>Selected</th>
+                        <th>Capacity</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pool in pools %}
+                    {% set stats = pool_stats[pool.id] %}
+                    <tr>
+                        <td>
+                            <strong>{{ pool.pool_name }}</strong>
+                            {% if pool.event and pool.event.scoring %}
+                            <br><small class="has-text-grey">{{ pool.event.scoring }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag {% if pool.pool_type == 'event' %}is-info{% else %}is-warning{% endif %}">
+                                {% if pool.pool_type == 'event' %}
+                                    <i class="fas fa-calendar-alt"></i>&nbsp;Event
+                                {% else %}
+                                    <i class="fas fa-clock"></i>&nbsp;Booking
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if pool.is_open %}
+                            <span class="tag is-success">
+                                <i class="fas fa-unlock"></i>&nbsp;Open
+                            </span>
+                            {% else %}
+                            <span class="tag is-danger">
+                                <i class="fas fa-lock"></i>&nbsp;Closed
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag {% if stats.registered_count > 0 %}is-success{% else %}is-light{% endif %}">
+                                {{ stats.registered_count }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="tag {% if stats.selected_count > 0 %}is-primary{% else %}is-light{% endif %}">
+                                {{ stats.selected_count }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if stats.capacity %}
+                            <span class="tag {% if stats.is_full %}is-warning{% else %}is-light{% endif %}">
+                                {{ stats.total_registered }}/{{ stats.capacity }}
+                            </span>
+                            {% else %}
+                            <span class="tag is-light">Unlimited</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="has-text-grey">
+                                {{ pool.created_at.strftime('%Y-%m-%d') }}
+                            </small>
+                        </td>
+                        <td>
+                            <div class="buttons are-small">
+                                <a href="{{ url_for('pools.manage_pool', pool_id=pool.id) }}" 
+                                   class="button is-primary is-small">
+                                    <span class="icon">
+                                        <i class="fas fa-cog"></i>
+                                    </span>
+                                    <span>Manage</span>
+                                </a>
+                                {% if not pool.is_member_registered(current_user.id) and pool.can_register() %}
+                                <form method="POST" action="{{ url_for('pools.register_member', pool_id=pool.id) }}" style="display: inline;">
+                                    {{ csrf_token() }}
+                                    <button type="submit" class="button is-success is-small">
+                                        <span class="icon">
+                                            <i class="fas fa-user-plus"></i>
+                                        </span>
+                                        <span>Join</span>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="has-text-centered">
+            <p class="is-size-5 has-text-grey">No pools found.</p>
+            <p class="has-text-grey">
+                Pools can be created from events or bookings.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function filterPools() {
+    const filter = document.getElementById('type-filter').value;
+    const url = new URL(window.location);
+    
+    if (filter) {
+        url.searchParams.set('type', filter);
+    } else {
+        url.searchParams.delete('type');
+    }
+    
+    window.location = url.toString();
+}
+</script>
+{% endblock %}

@@ -74,11 +74,10 @@ class EventManagerAssignmentForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(EventManagerAssignmentForm, self).__init__(*args, **kwargs)
         
-        # Populate with members who have Event Manager role
+        # Populate with ALL active members - any member can be assigned as event manager
         event_managers = db.session.scalars(
             sa.select(Member)
-            .join(Member.roles)
-            .where(sa.text("roles.name = 'Event Manager'"))
+            .where(Member.status == 'Full')  # Only active/full members
             .order_by(Member.firstname, Member.lastname)
         ).all()
         

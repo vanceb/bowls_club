@@ -84,6 +84,10 @@ class Member(UserMixin, db.Model):
     
     def has_role(self, role_name):
         """Check if the member has a specific role."""
+        # Admin users have all roles
+        if self.is_admin:
+            return True
+        
         for role in self.roles:
             if role.name == role_name:
                 return True
@@ -137,8 +141,8 @@ class Event(db.Model):
     bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
     
     
-    # One-to-one relationship with event pool
-    pool: so.Mapped[Optional['EventPool']] = so.relationship('EventPool', back_populates='event', uselist=False, cascade='all, delete-orphan')
+    # One-to-one relationship with pool
+    pool: so.Mapped[Optional['Pool']] = so.relationship('Pool', back_populates='event', uselist=False, cascade='all, delete-orphan')
     
     # Many-to-many relationship with event managers (Members with Event Manager role)
     event_managers: so.Mapped[list['Member']] = so.relationship('Member', secondary=event_member_managers, back_populates='managed_events')
@@ -195,14 +199,16 @@ class Event(db.Model):
     
     def get_pool_member_count(self):
         """Get the number of members registered in the pool"""
-        if not self.has_pool_enabled():
+        if not self.pool:
             return 0
         return len(self.pool.registrations)
     
     def get_registration_status(self):
         """Get event registration status: 'open', 'closed', 'no_pool'"""
-        if not self.has_pool_enabled():
+        if not self.pool:
             return 'no_pool'
+        if not self.has_pool:
+            return 'closed'  # Pool disabled
         return 'open' if self.pool.is_open else 'closed'
     
     def can_create_teams_from_pool(self):
@@ -251,27 +257,64 @@ class Event(db.Model):
         return status
 
 
-class EventPool(db.Model):
+class Pool(db.Model):
     """
-    Event Pool model - manages member registration for events
-    Based on existing event_pools table structure
+    Pool model - manages member registration for events or bookings
+    Can be associated with either an event (event-wide pool) or a booking (booking-specific pool)
     """
-    __tablename__ = 'event_pools'
+    __tablename__ = 'pools'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    event_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=False)
+    
+    # Association with either event OR booking (one must be set, other must be null)
+    event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
+    booking_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=True)
+    
     is_open: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=True)
+    max_players: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
     auto_close_date: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
     closed_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
 
     # Relationships
-    event: so.Mapped['Event'] = so.relationship('Event', back_populates='pool')
+    event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='pool')
+    booking: so.Mapped[Optional['Booking']] = so.relationship('Booking', back_populates='pool')
     registrations: so.Mapped[list['PoolRegistration']] = so.relationship('PoolRegistration', back_populates='pool', cascade='all, delete-orphan')
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Ensure exactly one of event_id or booking_id is set
+        if not ((self.event_id is None) ^ (self.booking_id is None)):
+            raise ValueError("Pool must be associated with exactly one of event_id or booking_id")
 
     def __repr__(self):
         status = "Open" if self.is_open else "Closed"
-        return f"<EventPool id={self.id}, event='{self.event.name if self.event else 'Unknown'}', status={status}>"
+        if self.event:
+            association = f"event='{self.event.name}'"
+        elif self.booking:
+            association = f"booking={self.booking.id} ({self.booking.booking_date})"
+        else:
+            association = "no_association"
+        return f"<Pool id={self.id}, {association}, status={status}>"
+
+    @property
+    def pool_type(self):
+        """Get the type of pool (event or booking)"""
+        return 'event' if self.event_id else 'booking'
+
+    @property
+    def associated_object(self):
+        """Get the associated event or booking object"""
+        return self.event if self.event_id else self.booking
+
+    @property
+    def pool_name(self):
+        """Get a descriptive name for the pool"""
+        if self.event:
+            return f"{self.event.name} Pool"
+        elif self.booking:
+            return f"Booking {self.booking.id} Pool ({self.booking.booking_date})"
+        return "Unknown Pool"
 
     def close_pool(self):
         """Close the pool for new registrations"""
@@ -301,22 +344,33 @@ class EventPool(db.Model):
         """Get the total number of active registrations"""
         return len(self.registrations)
 
+    def is_full(self):
+        """Check if the pool has reached maximum capacity"""
+        if self.max_players is None:
+            return False
+        return len(self.registrations) >= self.max_players
+
+    def can_register(self):
+        """Check if new registrations are allowed"""
+        return self.is_open and not self.is_full()
+
 
 class PoolRegistration(db.Model):
     """
-    Pool Registration model - tracks individual member registrations in event pools
-    Based on existing pool_members table structure
+    Pool Registration model - tracks individual member registrations in pools
+    Can be associated with event pools or booking pools
     """
-    __tablename__ = 'pool_members'
+    __tablename__ = 'pool_registrations'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    pool_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('event_pools.id'), nullable=False)
+    pool_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('pools.id'), nullable=False)
     member_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
     registered_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
     last_updated: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    status: so.Mapped[str] = so.mapped_column(sa.String(20), default='registered', nullable=False)  # 'registered', 'selected', 'declined'
 
     # Relationships
-    pool: so.Mapped['EventPool'] = so.relationship('EventPool', back_populates='registrations')
+    pool: so.Mapped['Pool'] = so.relationship('Pool', back_populates='registrations')
     member: so.Mapped['Member'] = so.relationship('Member')
 
     def __repr__(self):
@@ -351,7 +405,8 @@ class Booking(db.Model):
     # Many-to-one relationship with organizer (for roll-ups)
     organizer: so.Mapped[Optional['Member']] = so.relationship('Member', back_populates='organized_bookings', foreign_keys=[organizer_id])
     
-    
+    # One-to-one relationship with pool (for booking-specific pools)
+    pool: so.Mapped[Optional['Pool']] = so.relationship('Pool', back_populates='booking', uselist=False, cascade='all, delete-orphan')
 
     def __repr__(self):
         return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"

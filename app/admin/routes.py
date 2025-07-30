@@ -8,10 +8,11 @@ import os
 
 from app.admin import bp
 from app import db
-from app.models import Member, Role, Event, Booking, EventPool, PoolRegistration
+from app.models import Member, Role, Event, Booking, Pool, PoolRegistration
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
 from app.forms import FlaskForm
 from app.routes import role_required
+from app.events.utils import can_user_manage_event
 
 def admin_required(f):
     """
@@ -134,7 +135,7 @@ def manage_events():
                     db.session.flush()  # Get event ID
                     
                     # Automatically create a pool for the new event (open by default)
-                    event_pool = EventPool(
+                    event_pool = Pool(
                         event_id=event.id,
                         is_open=True
                     )
@@ -145,7 +146,7 @@ def manage_events():
                     
                     # Audit log
                     audit_log_create('Event', event.id, f'Created event: {event.name}')
-                    audit_log_create('EventPool', event_pool.id, f'Auto-created pool for event: {event.name}')
+                    audit_log_create('Pool', event_pool.id, f'Auto-created pool for event: {event.name}')
                     
                     flash(f'Event "{event.name}" created successfully with pool registration open!', 'success')
                     selected_event_id = event.id
@@ -333,6 +334,13 @@ def toggle_event_pool(event_id):
             flash('Event not found.', 'error')
             return redirect(url_for('admin.manage_events'))
         
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to toggle pool for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
         # Check if event has pool enabled
         if not event.has_pool_enabled():
             flash('This event does not have pool registration enabled.', 'error')
@@ -351,7 +359,7 @@ def toggle_event_pool(event_id):
         db.session.commit()
         
         # Audit log
-        audit_log_update('EventPool', event.pool.id, 
+        audit_log_update('Pool', event.pool.id, 
                         f'Pool registration {action} for event: {event.name}')
         
         return redirect(url_for('admin.manage_events', event_id=event_id))
@@ -381,13 +389,20 @@ def create_event_pool(event_id):
             flash('Event not found.', 'error')
             return redirect(url_for('admin.manage_events'))
         
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to create pool for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
         # Check if event already has a pool
         if event.has_pool_enabled():
             flash('This event already has pool registration enabled.', 'warning')
             return redirect(url_for('admin.manage_events', event_id=event_id))
         
         # Create new pool
-        new_pool = EventPool(
+        new_pool = Pool(
             event_id=event_id,
             is_open=True
         )
@@ -399,7 +414,7 @@ def create_event_pool(event_id):
         db.session.commit()
         
         # Audit log
-        audit_log_create('EventPool', new_pool.id, 
+        audit_log_create('Pool', new_pool.id, 
                         f'Created pool for event: {event.name}')
         
         flash(f'Pool registration has been enabled for "{event.name}".', 'success')
@@ -1171,8 +1186,10 @@ def auto_select_pool_members(event_id):
             flash('Event not found or pool not enabled.', 'error')
             return redirect(url_for('admin.manage_events'))
         
-        # Check permission
-        if not current_user.is_admin and current_user not in event.event_managers:
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to auto-select pool members for event {event_id}')
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('admin.manage_events'))
         
@@ -1394,6 +1411,13 @@ def add_member_to_pool(event_id):
             flash('Event not found.', 'error')
             return redirect(url_for('admin.manage_events'))
         
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to add member to pool for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('admin.manage_events'))
+        
         # Check if event has pool enabled
         if not event.has_pool_enabled():
             flash('This event does not have pool registration enabled.', 'error')
@@ -1462,8 +1486,10 @@ def delete_from_pool(registration_id):
         
         event = registration.pool.event
         
-        # Check permission
-        if not current_user.is_admin and current_user not in event.event_managers:
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to delete pool registration {registration_id}')
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('admin.manage_events'))
         

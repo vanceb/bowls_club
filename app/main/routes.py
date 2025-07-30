@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from app.main import bp
 from app import db
-from app.models import Member, Post, Booking, Event, EventPool, PoolRegistration
+from app.models import Member, Post, Booking, Event, Pool, PoolRegistration
 from app.forms import FlaskForm
 from app.routes import role_required
 
@@ -99,19 +99,34 @@ def upcoming_events():
         # Get today's date
         today = date.today()
         
-        # Get all events that have pools enabled
-        events_with_pools = db.session.scalars(
+        # Get events that either have active pools OR user is registered in
+        # First get events with active pools
+        events_with_active_pools = db.session.scalars(
             sa.select(Event)
             .where(Event.has_pool == True)
             .order_by(Event.created_at.desc())
         ).all()
         
+        # Then get events where user is registered (even if pool is disabled)
+        from app.models import Pool, PoolRegistration
+        events_user_registered = db.session.scalars(
+            sa.select(Event)
+            .join(Pool, Event.id == Pool.event_id)
+            .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
+            .where(PoolRegistration.member_id == current_user.id)
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        # Combine and deduplicate events
+        all_events = list({event.id: event for event in events_with_active_pools + events_user_registered}.values())
+        all_events.sort(key=lambda x: x.created_at, reverse=True)
+        
         # For each event, get the user's registration status
         events_data = []
-        for event in events_with_pools:
-            # Skip events that claim to have pools but don't actually have pool records
+        for event in all_events:
+            # Skip events that don't have pool records (shouldn't happen with our query)
             if not event.pool:
-                current_app.logger.warning(f"Event {event.name} (ID: {event.id}) has has_pool=True but no pool record")
+                current_app.logger.warning(f"Event {event.name} (ID: {event.id}) found in pool query but has no pool record")
                 continue
                 
             event_info = {

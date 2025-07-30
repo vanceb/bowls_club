@@ -14,7 +14,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.events import bp
-from app.models import Event, Member, EventPool, PoolRegistration
+from app.models import Event, Member, Pool, PoolRegistration
 from app.routes import role_required
 from app.events.forms import EventForm, EventSelectionForm, EventManagerAssignmentForm
 from app.events.utils import (
@@ -108,6 +108,12 @@ def create_event():
             # Add current user as event manager
             event.event_managers.append(current_user)
             
+            # Create pool if requested
+            if form.has_pool.data:
+                from app.pools.utils import create_pool_for_event
+                pool = create_pool_for_event(event, is_open=True)
+                db.session.add(pool)
+            
             db.session.commit()
             
             # Audit log
@@ -194,9 +200,10 @@ def manage_event(event_id):
                 return redirect(url_for('events.manage_event', event_id=event_id))
             
             elif action == 'update_managers' and manager_form.validate_on_submit():
-                # Update event managers
+                # Legacy bulk update (keeping for backwards compatibility)
                 old_managers = [em.id for em in event.event_managers]
-                new_manager_ids = manager_form.event_managers.data or []
+                raw_managers = request.form.getlist('event_managers')
+                new_manager_ids = [int(id) for id in raw_managers] if raw_managers else []
                 
                 # Clear existing managers and add new ones
                 event.event_managers.clear()
@@ -215,6 +222,69 @@ def manage_event(event_id):
                 
                 flash('Event managers updated successfully!', 'success')
                 return redirect(url_for('events.manage_event', event_id=event_id))
+            
+            elif action == 'add_manager':
+                # Add a single manager
+                member_id = request.form.get('member_id')
+                if member_id:
+                    try:
+                        member_id = int(member_id)
+                        member = db.session.get(Member, member_id)
+                        if member and member.status == 'Full':
+                            # Check if member is not already a manager
+                            if member not in event.event_managers:
+                                event.event_managers.append(member)
+                                db.session.commit()
+                                
+                                # Audit log
+                                audit_log_update('Event', event.id, 
+                                               f'Added event manager: {member.firstname} {member.lastname}',
+                                               {'added_manager': member_id})
+                                
+                                flash(f'{member.firstname} {member.lastname} has been added as an event manager.', 'success')
+                            else:
+                                flash(f'{member.firstname} {member.lastname} is already an event manager.', 'warning')
+                        else:
+                            flash('Invalid member selected.', 'error')
+                    except (ValueError, TypeError):
+                        flash('Invalid member ID.', 'error')
+                return redirect(url_for('events.manage_event', event_id=event_id))
+            
+            elif action == 'remove_manager':
+                # Remove a single manager
+                member_id = request.form.get('member_id')
+                if member_id:
+                    try:
+                        member_id = int(member_id)
+                        member = db.session.get(Member, member_id)
+                        if member and member in event.event_managers:
+                            event.event_managers.remove(member)
+                            db.session.commit()
+                            
+                            # Audit log
+                            audit_log_update('Event', event.id, 
+                                           f'Removed event manager: {member.firstname} {member.lastname}',
+                                           {'removed_manager': member_id})
+                            
+                            flash(f'{member.firstname} {member.lastname} has been removed as an event manager.', 'success')
+                        else:
+                            flash('Manager not found or not assigned to this event.', 'error')
+                    except (ValueError, TypeError):
+                        flash('Invalid member ID.', 'error')
+                return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Ensure manager form choices are populated before rendering
+        # (in case form validation failed and choices were lost)
+        if not manager_form.event_managers.choices:
+            event_managers = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status == 'Full')  # Only active/full members
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            manager_form.event_managers.choices = [
+                (member.id, f"{member.firstname} {member.lastname}")
+                for member in event_managers
+            ]
         
         return render_template('manage_event.html',
                              event=event,
@@ -311,7 +381,7 @@ def toggle_event_pool(event_id):
         
         # If enabling pool and none exists, create it
         if event.has_pool and not event.pool:
-            pool = EventPool(
+            pool = Pool(
                 event_id=event.id,
                 is_open=True,
                 max_players=None  # No limit by default
