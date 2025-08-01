@@ -75,6 +75,17 @@
                             {% endif %}
                         </td>
                         <td>
+                            {% if event_info.user_can_manage %}
+                                <div class="buttons is-grouped mb-2">
+                                    <a href="{{ url_for('events.manage_event', event_id=event.id) }}" class="button is-primary is-small">
+                                        <span class="icon">
+                                            <i class="fas fa-cog"></i>
+                                        </span>
+                                        <span>Manage Event</span>
+                                    </a>
+                                </div>
+                            {% endif %}
+                            
                             <form method="POST" action="{{ url_for('main.register_for_event') }}" style="display: inline;">
                                 {{ csrf_form.csrf_token }}
                                 <input type="hidden" name="event_id" value="{{ event.id }}">
@@ -166,6 +177,17 @@
                             </small>
                         </td>
                         <td>
+                            {% if event_info.user_can_manage %}
+                                <div class="buttons is-grouped mb-2">
+                                    <a href="{{ url_for('events.manage_event', event_id=event.id) }}" class="button is-primary is-small">
+                                        <span class="icon">
+                                            <i class="fas fa-cog"></i>
+                                        </span>
+                                        <span>Manage Event</span>
+                                    </a>
+                                </div>
+                            {% endif %}
+                            
                             {% if event_info.pool_open %}
                             <form method="POST" action="{{ url_for('main.withdraw_from_event') }}" style="display: inline;">
                                 {{ csrf_form.csrf_token }}
@@ -207,10 +229,11 @@
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
-                        <th style="width: 30%;">Event Details</th>
+                        <th style="width: 25%;">Event Details</th>
                         <th style="width: 20%;">Type/Format</th>
                         <th style="width: 15%;">Registered</th>
-                        <th style="width: 35%;">Status</th>
+                        <th style="width: 20%;">Status</th>
+                        <th style="width: 20%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -250,6 +273,18 @@
                                 </span>
                                 <span>Withdrawn</span>
                             </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if event_info.user_can_manage %}
+                                <a href="{{ url_for('events.manage_event', event_id=event.id) }}" class="button is-primary is-small">
+                                    <span class="icon">
+                                        <i class="fas fa-cog"></i>
+                                    </span>
+                                    <span>Manage Event</span>
+                                </a>
+                            {% else %}
+                                <small class="has-text-grey">No actions available</small>
                             {% endif %}
                         </td>
                     </tr>

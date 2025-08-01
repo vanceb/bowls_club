@@ -60,23 +60,100 @@ def create_initial_roles():
     return created_count
 
 
-def check_bootstrap_mode():
-    """Check if the system is in bootstrap mode (no users exist)."""
+def create_admin_user():
+    """Create the first admin user interactively."""
     user_count = db.session.query(Member).count()
-    is_bootstrap = user_count == 0
     
-    print(f"\nBootstrap mode check:")
-    print(f"  - Users in database: {user_count}")
-    print(f"  - Bootstrap mode: {'Yes' if is_bootstrap else 'No'}")
+    if user_count > 0:
+        print(f"\nUsers already exist in database ({user_count} users)")
+        print("Skipping admin user creation")
+        return False
     
-    if is_bootstrap:
-        print(f"  - System is ready for first user registration")
-        print(f"  - First user will automatically become admin")
-        print(f"  - Visit /members/apply to register the first admin user")
-    else:
-        print(f"  - System has existing users - normal operation mode")
+    print(f"\n" + "="*50)
+    print("CREATE FIRST ADMIN USER")
+    print("="*50)
+    print("No users exist in the database. Let's create the first admin user.")
+    print("This user will have full administrative privileges.")
+    print()
     
-    return is_bootstrap
+    # Get user details interactively
+    while True:
+        username = input("Username: ").strip()
+        if username:
+            # Check if username already exists (shouldn't happen but be safe)
+            existing = db.session.query(Member).filter_by(username=username).first()
+            if not existing:
+                break
+            print("Username already exists. Please choose another.")
+        else:
+            print("Username cannot be empty.")
+    
+    while True:
+        firstname = input("First Name: ").strip()
+        if firstname:
+            break
+        print("First name cannot be empty.")
+    
+    while True:
+        lastname = input("Last Name: ").strip()
+        if lastname:
+            break
+        print("Last name cannot be empty.")
+    
+    while True:
+        email = input("Email: ").strip()
+        if email and '@' in email:
+            break
+        print("Please enter a valid email address.")
+    
+    phone = input("Phone (optional): ").strip()
+    
+    # Get password securely
+    import getpass
+    while True:
+        password = getpass.getpass("Password: ")
+        if len(password) >= 6:
+            password_confirm = getpass.getpass("Confirm Password: ")
+            if password == password_confirm:
+                break
+            else:
+                print("Passwords don't match. Please try again.")
+        else:
+            print("Password must be at least 6 characters long.")
+    
+    # Create the admin user
+    admin_user = Member(
+        username=username,
+        firstname=firstname,
+        lastname=lastname,
+        email=email,
+        phone=phone,
+        status='Full',  # Full member status
+        is_admin=True,  # Admin privileges
+        share_email=True,
+        share_phone=bool(phone)
+    )
+    
+    admin_user.set_password(password)
+    
+    db.session.add(admin_user)
+    db.session.commit()
+    
+    # Audit log
+    audit_log_create('Member', admin_user.id, 
+                   f'Bootstrap admin user created: {admin_user.firstname} {admin_user.lastname} ({admin_user.username})',
+                   {
+                       'status': 'Full',
+                       'is_admin': True,
+                       'bootstrap_user': True
+                   })
+    
+    print(f"\n✓ Admin user '{username}' created successfully!")
+    print(f"✓ Status: Full")
+    print(f"✓ Admin privileges: Yes")
+    print(f"✓ You can now log in with these credentials")
+    
+    return True
 
 
 def verify_database_structure():
@@ -85,7 +162,7 @@ def verify_database_structure():
     
     expected_tables = [
         'roles', 'member', 'member_roles', 'events', 'event_member_managers',
-        'event_pools', 'pool_members', 'posts', 'policy_pages', 'bookings',
+        'pools', 'pool_registrations', 'posts', 'policy_pages', 'bookings',
         'teams', 'team_members'
     ]
     
@@ -128,28 +205,28 @@ def main():
         # Create roles
         roles_created = create_initial_roles()
         
-        # Check bootstrap mode (instead of creating admin user)
-        is_bootstrap = check_bootstrap_mode()
+        # Create admin user if no users exist
+        admin_created = create_admin_user()
         
         print("\n" + "=" * 60)
         print("SETUP COMPLETE!")
         print("=" * 60)
         print(f"Roles created: {roles_created}")
-        print(f"Bootstrap mode: {'Yes' if is_bootstrap else 'No'}")
+        print(f"Admin user created: {'Yes' if admin_created else 'No'}")
         
-        if is_bootstrap:
-            print("\nIMPORTANT NEXT STEPS:")
+        if admin_created:
+            print("\nSYSTEM READY FOR USE:")
             print("1. Start the Flask application:")
             print("   source venv/bin/activate")
             print("   flask run")
-            print("2. Visit the member application page: /members/apply")
-            print("3. Create the first user - they will automatically become admin")
-            print("4. Create additional members through the admin interface")
-            print("5. Assign appropriate roles to members as needed")
+            print("2. Log in using the admin credentials you just created")
+            print("3. Create additional members through the admin interface")
+            print("4. Assign appropriate roles to members as needed")
+            print("5. The /members/apply route is now for public member applications")
         else:
             print("\nSYSTEM READY:")
             print("- Users already exist in the system")
-            print("- No bootstrap needed")
+            print("- Admin user already configured")
         
         print("\nYour bowls club application is ready to use!")
 

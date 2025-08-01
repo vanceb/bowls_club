@@ -5,7 +5,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from datetime import date, timedelta
 from app import db
-from app.models import Member, Role, Booking, Event, EventTeam, BookingPlayer, BookingTeam, BookingTeamMember
+from app.models import Member, Role, Booking, Event, BookingPlayer, BookingTeam, BookingTeamMember
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -83,17 +83,7 @@ class EventFactory(SQLAlchemyModelFactory):
     gender = 3  # Mixed
 
 
-class EventTeamFactory(SQLAlchemyModelFactory):
-    """Factory for creating EventTeam instances."""
-    
-    class Meta:
-        model = EventTeam
-        sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = 'commit'
-    
-    event = factory.SubFactory(EventFactory)
-    team_name = factory.Sequence(lambda n: f'Event Team {n}')
-    team_number = factory.Sequence(lambda n: n)
+# EventTeamFactory removed - teams are now created from pools via bookings
 
 
 class BookingFactory(SQLAlchemyModelFactory):
@@ -151,7 +141,7 @@ class BookingTeamFactory(SQLAlchemyModelFactory):
         sqlalchemy_session_persistence = 'commit'
     
     booking = factory.SubFactory(EventBookingFactory)
-    event_team = factory.SubFactory(EventTeamFactory)  # Create associated event team
+    # event_team removed - teams are now created directly from pools
     team_name = factory.Sequence(lambda n: f'Team {n}')
     team_number = factory.Sequence(lambda n: n)
 

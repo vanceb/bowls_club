@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 from app.api import bp
 from app import db
-from app.models import Member, Event, Booking, EventPool, PoolRegistration
+from app.models import Member, Event, Booking, Pool, PoolRegistration
 from app.routes import role_required, admin_required
 
 

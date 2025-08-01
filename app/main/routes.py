@@ -99,7 +99,7 @@ def upcoming_events():
         # Get today's date
         today = date.today()
         
-        # Get events that either have active pools OR user is registered in
+        # Get events that either have active pools OR user is registered in OR user can manage
         # First get events with active pools
         events_with_active_pools = db.session.scalars(
             sa.select(Event)
@@ -117,11 +117,30 @@ def upcoming_events():
             .order_by(Event.created_at.desc())
         ).all()
         
+        # Finally get events the user can manage (includes admin, global event managers, and specific event managers)
+        events_user_manages = []
+        if current_user.is_admin or current_user.has_role('Event Manager'):
+            # Admin and global event managers can see all events with pools
+            events_user_manages = db.session.scalars(
+                sa.select(Event)
+                .join(Pool, Event.id == Pool.event_id)
+                .order_by(Event.created_at.desc())
+            ).all()
+        else:
+            # Specific event managers only see their assigned events (if they have pools)
+            events_user_manages = db.session.scalars(
+                sa.select(Event)
+                .join(Pool, Event.id == Pool.event_id)
+                .join(Event.event_managers)
+                .where(Event.event_managers.any(Member.id == current_user.id))
+                .order_by(Event.created_at.desc())
+            ).all()
+        
         # Combine and deduplicate events
-        all_events = list({event.id: event for event in events_with_active_pools + events_user_registered}.values())
+        all_events = list({event.id: event for event in events_with_active_pools + events_user_registered + events_user_manages}.values())
         all_events.sort(key=lambda x: x.created_at, reverse=True)
         
-        # For each event, get the user's registration status
+        # For each event, get the user's registration status and management permissions
         events_data = []
         for event in all_events:
             # Skip events that don't have pool records (shouldn't happen with our query)
@@ -129,12 +148,17 @@ def upcoming_events():
                 current_app.logger.warning(f"Event {event.name} (ID: {event.id}) found in pool query but has no pool record")
                 continue
                 
+            # Check if user can manage this event
+            from app.events.utils import can_user_manage_event
+            user_can_manage = can_user_manage_event(current_user, event)
+                
             event_info = {
                 'event': event,
                 'registration_status': 'not_registered',
                 'registration': None,
                 'pool_count': event.get_pool_member_count(),
-                'pool_open': event.is_pool_open()
+                'pool_open': event.is_pool_open(),
+                'user_can_manage': user_can_manage
             }
             
             # Check if user is registered

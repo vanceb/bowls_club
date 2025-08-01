@@ -14,7 +14,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.events import bp
-from app.models import Event, Member, Pool, PoolRegistration
+from app.models import Event, Member, Pool, PoolRegistration, Booking
 from app.routes import role_required
 from app.events.forms import EventForm, EventSelectionForm, EventManagerAssignmentForm
 from app.events.utils import (
@@ -171,6 +171,11 @@ def manage_event(event_id):
             action = request.form.get('action')
             
             if action == 'update_event' and event_form.validate_on_submit():
+                # Prevent event type changes once event is created (to protect pool integrity)
+                if event_form.event_type.data != event.event_type:
+                    flash('Event type cannot be changed after creation to protect pool data integrity. Delete and recreate the event if needed.', 'error')
+                    return redirect(url_for('events.manage_event', event_id=event_id))
+                
                 # Update event details
                 old_values = {
                     'name': event.name,
@@ -182,7 +187,7 @@ def manage_event(event_id):
                 }
                 
                 event.name = event_form.name.data
-                event.event_type = event_form.event_type.data
+                # event.event_type = event_form.event_type.data  # Removed - no longer allowed
                 event.gender = event_form.gender.data
                 event.format = event_form.format.data
                 event.scoring = event_form.scoring.data
@@ -286,11 +291,23 @@ def manage_event(event_id):
                 for member in event_managers
             ]
         
+        # Get pool information based on event type
+        from app.events.utils import get_event_pool_info
+        pool_info = get_event_pool_info(event)
+        
+        # Get bookings for this event
+        event_bookings = db.session.scalars(
+            sa.select(Booking).where(Booking.event_id == event_id)
+            .order_by(Booking.booking_date, Booking.session)
+        ).all()
+        
         return render_template('manage_event.html',
                              event=event,
                              stats=stats,
+                             pool_info=pool_info,
                              event_form=event_form,
-                             manager_form=manager_form)
+                             manager_form=manager_form,
+                             event_bookings=event_bookings)
         
     except Exception as e:
         db.session.rollback()
@@ -376,25 +393,61 @@ def toggle_event_pool(event_id):
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('events.list_events'))
         
-        old_status = event.has_pool
-        event.has_pool = not event.has_pool
+        # Get pool strategy for this event type
+        from app.events.utils import get_event_pool_strategy, get_event_pool_info
+        from app.pools.utils import create_pool_for_event, create_pool_for_booking
         
-        # If enabling pool and none exists, create it
-        if event.has_pool and not event.pool:
-            pool = Pool(
-                event_id=event.id,
-                is_open=True,
-                max_players=None  # No limit by default
-            )
-            db.session.add(pool)
+        strategy = get_event_pool_strategy(event)
+        pool_info = get_event_pool_info(event)
+        
+        if strategy == 'none':
+            flash('Pool management is not available for this event type.', 'warning')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        old_has_pools = pool_info['has_pools']
+        
+        if strategy == 'event':
+            # Event-level pool toggle
+            if old_has_pools:
+                # Disable: remove event pool
+                if event.pool:
+                    db.session.delete(event.pool)
+                event.has_pool = False
+                action = 'disabled'
+            else:
+                # Enable: create event pool
+                pool = create_pool_for_event(event, is_open=True)
+                db.session.add(pool)
+                action = 'enabled'
+                
+        elif strategy == 'booking':
+            # Booking-level pool toggle
+            if old_has_pools:
+                # Disable: remove all booking pools
+                for booking in event.bookings:
+                    if booking.pool:
+                        db.session.delete(booking.pool)
+                action = 'disabled'
+            else:
+                # Enable: create pools for all existing bookings
+                pools_created = 0
+                for booking in event.bookings:
+                    if not booking.pool:
+                        pool = create_pool_for_booking(booking, is_open=True)
+                        db.session.add(pool)
+                        pools_created += 1
+                
+                if pools_created > 0:
+                    action = f'enabled ({pools_created} pools created)'
+                else:
+                    action = 'enabled (no bookings yet - pools will be created when bookings are added)'
         
         db.session.commit()
         
         # Audit log
-        action = 'enabled' if event.has_pool else 'disabled'
         audit_log_update('Event', event.id, 
-                        f'Pool {action} for event: {event.name}',
-                        {'old_pool_status': old_status, 'new_pool_status': event.has_pool})
+                        f'Pool {action} for event: {event.name} (strategy: {strategy})',
+                        {'old_has_pools': old_has_pools, 'new_has_pools': not old_has_pools, 'strategy': strategy})
         
         flash(f'Pool {action} for event "{event.name}".', 'success')
         return redirect(url_for('events.manage_event', event_id=event_id))
@@ -403,6 +456,83 @@ def toggle_event_pool(event_id):
         db.session.rollback()
         current_app.logger.error(f"Error toggling pool for event {event_id}: {str(e)}")
         flash('An error occurred while updating the pool status.', 'error')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+
+
+@bp.route('/create_booking/<int:event_id>', methods=['POST'])
+@login_required
+def create_booking(event_id):
+    """
+    Create a new booking for an event.
+    """
+    try:
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check permissions
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to create booking for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Get form data
+        booking_date = datetime.strptime(request.form.get('booking_date'), '%Y-%m-%d').date()
+        session = int(request.form.get('session'))
+        vs = request.form.get('vs', '').strip() or None
+        home_away = request.form.get('home_away', 'home')
+        rink_count = int(request.form.get('rink_count', 1))
+        priority = request.form.get('priority', '').strip() or None
+        
+        # Create booking
+        booking = Booking(
+            booking_date=booking_date,
+            session=session,
+            rink_count=rink_count,
+            priority=priority,
+            vs=vs,
+            home_away=home_away,
+            event_id=event.id,
+            booking_type='event'
+        )
+        
+        db.session.add(booking)
+        db.session.flush()  # Get booking ID
+        
+        # Create pool if this event uses booking-level pools
+        from app.events.utils import get_event_pool_strategy
+        from app.pools.utils import create_pool_for_booking
+        
+        strategy = get_event_pool_strategy(event)
+        if strategy == 'booking':
+            # Create pool for this booking
+            pool = create_pool_for_booking(booking, is_open=True)
+            db.session.add(pool)
+        
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('Booking', booking.id, 
+                        f'Created booking for event: {event.name} on {booking_date}',
+                        {'event_id': event.id, 'date': str(booking_date), 'session': session, 'strategy': strategy})
+        
+        flash(f'Booking created successfully for {booking_date.strftime("%B %d, %Y")}!', 'success')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+        
+    except ValueError as e:
+        flash('Invalid date format.', 'error')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating booking for event {event_id}: {str(e)}")
+        flash('An error occurred while creating the booking.', 'error')
         return redirect(url_for('events.manage_event', event_id=event_id))
 
 

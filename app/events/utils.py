@@ -171,3 +171,111 @@ def get_recent_events(limit: int = 10) -> list[Event]:
         .order_by(Event.created_at.desc())
         .limit(limit)
     ).all()
+
+
+def get_event_pool_strategy(event: Event) -> str:
+    """
+    Get the pool attachment strategy for an event based on its type.
+    
+    Args:
+        event: Event instance
+        
+    Returns:
+        'event', 'booking', or 'none'
+    """
+    pool_strategy_config = current_app.config.get('EVENT_POOL_STRATEGY', {})
+    return pool_strategy_config.get(event.event_type, 'event')
+
+
+def get_event_pool_info(event: Event) -> dict:
+    """
+    Get pool information for an event, handling both event-level and booking-level pools.
+    
+    Args:
+        event: Event instance
+        
+    Returns:
+        Dictionary with pool information
+    """
+    strategy = get_event_pool_strategy(event)
+    
+    info = {
+        'strategy': strategy,
+        'has_pools': False,
+        'pools': [],
+        'total_members': 0,
+        'can_toggle_pools': True,
+        'pool_status': 'no_pool'
+    }
+    
+    if strategy == 'none':
+        info['can_toggle_pools'] = False
+        return info
+    
+    if strategy == 'event':
+        # Event-level pool
+        if event.pool:
+            info['has_pools'] = True
+            info['pools'] = [event.pool]
+            info['total_members'] = len(event.pool.registrations)
+            info['pool_status'] = 'open' if event.pool.is_open else 'closed'
+        else:
+            info['pool_status'] = 'no_pool'
+            
+    elif strategy == 'booking':
+        # Booking-level pools
+        pools = []
+        total_members = 0
+        has_open_pools = False
+        has_closed_pools = False
+        
+        for booking in event.bookings:
+            if booking.pool:
+                pools.append(booking.pool)
+                total_members += len(booking.pool.registrations)
+                if booking.pool.is_open:
+                    has_open_pools = True
+                else:
+                    has_closed_pools = True
+        
+        info['has_pools'] = len(pools) > 0
+        info['pools'] = pools
+        info['total_members'] = total_members
+        
+        # Determine overall pool status
+        if not pools:
+            info['pool_status'] = 'no_pool'
+        elif has_open_pools and has_closed_pools:
+            info['pool_status'] = 'mixed'
+        elif has_open_pools:
+            info['pool_status'] = 'open'
+        else:
+            info['pool_status'] = 'closed'
+    
+    return info
+
+
+def event_has_any_pools(event: Event) -> bool:
+    """
+    Check if an event has any pools (event-level or booking-level).
+    
+    Args:
+        event: Event instance
+        
+    Returns:
+        True if event has any pools
+    """
+    return get_event_pool_info(event)['has_pools']
+
+
+def event_pool_member_count(event: Event) -> int:
+    """
+    Get total number of members across all pools for an event.
+    
+    Args:
+        event: Event instance
+        
+    Returns:
+        Total member count
+    """
+    return get_event_pool_info(event)['total_members']

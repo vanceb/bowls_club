@@ -294,20 +294,9 @@ class TestBookingAdminRoutes:
         db_session.add(booking)
         db_session.commit()
         
-        # Create event team first (required for BookingTeam)
-        from app.models import EventTeam
-        event_team = EventTeam(
-            event_id=event.id,
-            team_name='Event Team 1',
-            team_number=1
-        )
-        db_session.add(event_team)
-        db_session.commit()
-        
-        # Create booking team
+        # Create booking team (no longer references EventTeam)
         team = BookingTeam(
             booking_id=booking.id,
-            event_team_id=event_team.id,
             team_name='Test Team',
             team_number=1
         )

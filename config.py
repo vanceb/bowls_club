@@ -123,6 +123,18 @@ class Config:
         'Event Manager'
     ]
     
+    # Pool attachment strategy by event type
+    # 'event' = pool attached to event (register once for whole event/season)
+    # 'booking' = pool attached to individual bookings (register per game)
+    EVENT_POOL_STRATEGY = {
+        1: 'booking',  # Social - booking-level (usually single booking, can be multiple)
+        2: 'event',    # Competition - event-level (register once for tournament)
+        3: 'event',    # League - event-level (commit to season)
+        4: 'booking',  # Friendly - booking-level (per game registration)
+        5: 'none',     # Roll Up - has own system
+        6: 'event',    # Other - default to event-level
+    }
+    
     # Roll-up booking configuration
     ROLLUP_ADVANCE_BOOKING_DAYS = 7  # How many days ahead users can book roll-ups
     ROLLUP_MAX_PLAYERS = 8  # Maximum players per roll-up (including organizer)

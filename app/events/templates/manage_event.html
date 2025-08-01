@@ -11,31 +11,31 @@
 {% block content %}
 <div class="container">
     <!-- Event Summary Header -->
-    <h1 class="title mb-5">{{ event.name }} - {{ event.get_format_name() }} {{ event.get_event_type_name() }}</h1>
+    <h1 class="title mb-5">{{ event.name }} - {{ event.get_gender_name() }} {{ event.get_format_name() }} {{ event.get_event_type_name() }}</h1>
     
     <!-- Statistics Bar -->
     <div class="box mb-5">
         <div class="level">
+            {% if pool_info.strategy == 'event' %}
+            <!-- Event-level pool statistics -->
             <div class="level-item has-text-centered">
                 <div>
                     <p class="heading">Pool Status</p>
                     <p class="title is-5">
-                        {% if event.pool %}
-                            {% if event.is_pool_open() %}
-                                <span class="tag is-success is-medium">
-                                    <span class="icon">
-                                        <i class="fas fa-door-open"></i>
-                                    </span>
-                                    <span>Pool Open</span>
+                        {% if pool_info.pool_status == 'open' %}
+                            <span class="tag is-success is-medium">
+                                <span class="icon">
+                                    <i class="fas fa-door-open"></i>
                                 </span>
-                            {% else %}
-                                <span class="tag is-warning is-medium">
-                                    <span class="icon">
-                                        <i class="fas fa-door-closed"></i>
-                                    </span>
-                                    <span>Pool Closed</span>
+                                <span>Pool Open</span>
+                            </span>
+                        {% elif pool_info.pool_status == 'closed' %}
+                            <span class="tag is-warning is-medium">
+                                <span class="icon">
+                                    <i class="fas fa-door-closed"></i>
                                 </span>
-                            {% endif %}
+                                <span>Pool Closed</span>
+                            </span>
                         {% else %}
                             <span class="tag is-light is-medium">
                                 <span class="icon">
@@ -50,9 +50,40 @@
             <div class="level-item has-text-centered">
                 <div>
                     <p class="heading">Pool Members</p>
-                    <p class="title is-4 has-text-info">{% if event.pool %}{{ stats.pool_members }}{% else %}0{% endif %}</p>
+                    <p class="title is-4 has-text-info">{{ pool_info.total_members }}</p>
                 </div>
             </div>
+            {% else %}
+            <!-- For booking-level pools, just show strategy info -->
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Pool Strategy</p>
+                    <p class="title is-5">
+                        {% if pool_info.strategy == 'booking' %}
+                            <span class="tag is-info is-medium">
+                                <span class="icon">
+                                    <i class="fas fa-calendar-check"></i>
+                                </span>
+                                <span>Per-Game Pools</span>
+                            </span>
+                        {% elif pool_info.strategy == 'none' %}
+                            <span class="tag is-light is-medium">
+                                <span class="icon">
+                                    <i class="fas fa-ban"></i>
+                                </span>
+                                <span>No Pools</span>
+                            </span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="level-item has-text-centered">
+                <div>
+                    <p class="heading">Total Pool Members</p>
+                    <p class="title is-4 has-text-info">{{ pool_info.total_members }}</p>
+                </div>
+            </div>
+            {% endif %}
             <div class="level-item has-text-centered">
                 <div>
                     <p class="heading">Bookings</p>
@@ -66,7 +97,36 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Additional Pool Controls for booking-level pools -->
+        {% if pool_info.strategy == 'event' and pool_info.can_toggle_pools %}
+        <div class="has-text-centered mt-4">
+            <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=event.id) }}" style="display: inline;">
+                {{ event_form.hidden_tag() }}
+                <button type="submit" class="button {% if pool_info.has_pools %}is-warning{% else %}is-success{% endif %}">
+                    <span class="icon">
+                        <i class="fas {% if pool_info.has_pools %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
+                    </span>
+                    <span>{% if pool_info.has_pools %}Disable{% else %}Enable{% endif %} Event Pool</span>
+                </button>
+            </form>
+        </div>
+        {% elif pool_info.strategy == 'booking' and pool_info.can_toggle_pools %}
+        <div class="has-text-centered mt-4">
+            <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=event.id) }}" style="display: inline;">
+                {{ event_form.hidden_tag() }}
+                <button type="submit" class="button {% if pool_info.has_pools %}is-warning{% else %}is-success{% endif %}">
+                    <span class="icon">
+                        <i class="fas {% if pool_info.has_pools %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
+                    </span>
+                    <span>{% if pool_info.has_pools %}Disable{% else %}Enable{% endif %} Booking Pools</span>
+                </button>
+            </form>
+            <p class="help mt-2">This will {% if pool_info.has_pools %}remove{% else %}create{% endif %} pools for all existing bookings and automatically manage pools for new bookings.</p>
+        </div>
+        {% endif %}
     </div>
+    
 
     <!-- Single Column Layout -->
     <div class="column">
@@ -93,9 +153,10 @@
                                 <label class="label">{{ event_form.event_type.label }}</label>
                                 <div class="control">
                                     <div class="select is-fullwidth">
-                                        {{ event_form.event_type }}
+                                        {{ event_form.event_type(disabled=true) }}
                                     </div>
                                 </div>
+                                <p class="help is-info">Event type cannot be changed after creation to protect pool data integrity.</p>
                                 {% for error in event_form.event_type.errors %}
                                     <p class="help is-danger">{{ error }}</p>
                                 {% endfor %}
@@ -154,16 +215,6 @@
                             </button>
                         </div>
                         
-                        <!-- Pool Toggle in same row -->
-                        <div class="control">
-                            <button type="button" class="button {% if event.has_pool %}is-warning{% else %}is-success{% endif %}" 
-                                    onclick="document.getElementById('pool-toggle-form').submit();">
-                                <span class="icon">
-                                    <i class="fas {% if event.has_pool %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
-                                </span>
-                                <span>{% if event.has_pool %}Disable{% else %}Enable{% endif %} Pool</span>
-                            </button>
-                        </div>
                         
                         <!-- Delete Event in same row -->
                         <div class="control">
@@ -207,6 +258,215 @@
                 <form method="POST" action="{{ url_for('events.delete_event', event_id=event.id) }}" id="delete-event-form" style="display: none;">
                     {{ event_form.hidden_tag() }}
                 </form>
+            </div>
+
+            <!-- Bookings Section -->
+            <div class="box">
+                <div class="level">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <h3 class="title is-4">Bookings</h3>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <button type="button" class="button is-success" onclick="toggleBookingForm()">
+                                <span class="icon">
+                                    <i class="fas fa-plus"></i>
+                                </span>
+                                <span>Schedule Game</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Bookings List -->
+                {% if event_bookings %}
+                <div class="table-container">
+                    <table class="table is-fullwidth is-striped is-hoverable">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Opponent</th>
+                                <th>Venue</th>
+                                <th>Rinks</th>
+                                <th>Priority</th>
+                                {% if pool_info.strategy == 'booking' %}
+                                <th>Pool Status</th>
+                                <th>Pool Members</th>
+                                {% endif %}
+                                <th>Teams</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in event_bookings %}
+                            <tr>
+                                <td>
+                                    <strong>{{ booking.booking_date.strftime('%a, %b %d %Y') }}</strong><br>
+                                    <small>Session {{ booking.session }}</small>
+                                </td>
+                                <td>
+                                    {% if booking.vs %}
+                                        <strong>vs {{ booking.vs }}</strong>
+                                    {% else %}
+                                        <span class="has-text-grey">No opponent</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="tag is-light">{{ booking.home_away|title if booking.home_away else 'Home' }}</span>
+                                </td>
+                                <td>
+                                    <span class="tag is-info">{{ booking.rink_count }} rink{{ 's' if booking.rink_count != 1 else '' }}</span>
+                                </td>
+                                <td>
+                                    {% if booking.priority %}
+                                        <span class="tag is-warning">{{ booking.priority }}</span>
+                                    {% else %}
+                                        <span class="has-text-grey">Normal</span>
+                                    {% endif %}
+                                </td>
+                                {% if pool_info.strategy == 'booking' %}
+                                <td>
+                                    {% if booking.pool %}
+                                        {% if booking.pool.is_open %}
+                                            <span class="tag is-success">
+                                                <span class="icon"><i class="fas fa-door-open"></i></span>
+                                                <span>Open</span>
+                                            </span>
+                                        {% else %}
+                                            <span class="tag is-warning">
+                                                <span class="icon"><i class="fas fa-door-closed"></i></span>
+                                                <span>Closed</span>
+                                            </span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="tag is-light">
+                                            <span class="icon"><i class="fas fa-times"></i></span>
+                                            <span>No Pool</span>
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="has-text-centered">
+                                        <p class="title is-6">{{ booking.pool.registrations|length if booking.pool else 0 }}</p>
+                                        <p class="heading">members</p>
+                                    </div>
+                                </td>
+                                {% endif %}
+                                <td>
+                                    <div class="has-text-centered">
+                                        <p class="title is-6">{{ booking.teams|length if booking.teams else 0 }}</p>
+                                        <p class="heading">teams</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="notification is-info is-light">
+                    <span class="icon">
+                        <i class="fas fa-calendar"></i>
+                    </span>
+                    <span>No bookings scheduled for this event yet. Use the "Schedule Game" button above to create the first booking.</span>
+                </div>
+                {% endif %}
+                
+                <!-- Booking Form (initially hidden) -->
+                <div id="booking-form-container" class="is-hidden">
+                    <hr>
+                    <form method="POST" action="{{ url_for('events.create_booking', event_id=event.id) }}">
+                        {{ event_form.hidden_tag() }}
+                        
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Date</label>
+                                    <div class="control">
+                                        <input class="input" type="date" name="booking_date" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Session</label>
+                                    <div class="control">
+                                        <div class="select is-fullwidth">
+                                            <select name="session" required>
+                                                <option value="">Select session...</option>
+                                                {% for session_id, session_time in config.DAILY_SESSIONS.items() %}
+                                                <option value="{{ session_id }}">{{ session_id }} - {{ session_time }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Opponent (optional)</label>
+                                    <div class="control">
+                                        <input class="input" type="text" name="vs" placeholder="e.g., Local Bowls Club">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label">Venue</label>
+                                    <div class="control">
+                                        <div class="select is-fullwidth">
+                                            <select name="home_away">
+                                                {% for name, value in config.HOME_AWAY_OPTIONS.items() %}
+                                                <option value="{{ value }}" {% if value == 'home' %}selected{% endif %}>{{ name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="columns">
+                            <div class="column is-half">
+                                <div class="field">
+                                    <label class="label">Rinks Required</label>
+                                    <div class="control">
+                                        <input class="input" type="number" name="rink_count" value="1" min="1" max="6" required>
+                                    </div>
+                                    <p class="help">Number of rinks needed for this game</p>
+                                </div>
+                            </div>
+                            <div class="column is-half">
+                                <div class="field">
+                                    <label class="label">Priority (optional)</label>
+                                    <div class="control">
+                                        <input class="input" type="text" name="priority" placeholder="e.g., League Game, Cup Final">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="field is-grouped">
+                            <div class="control">
+                                <button type="submit" class="button is-primary">
+                                    <span class="icon">
+                                        <i class="fas fa-calendar-plus"></i>
+                                    </span>
+                                    <span>Create Booking</span>
+                                </button>
+                            </div>
+                            <div class="control">
+                                <button type="button" class="button is-light" onclick="toggleBookingForm()">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Event Managers -->
@@ -394,5 +654,24 @@ document.addEventListener('keydown', function(event) {
         closeAddManagerModal();
     }
 });
+
+// Booking form toggle
+function toggleBookingForm() {
+    const container = document.getElementById('booking-form-container');
+    const button = document.querySelector('button[onclick="toggleBookingForm()"]');
+    const buttonText = button.querySelector('span:last-child');
+    
+    if (container.classList.contains('is-hidden')) {
+        container.classList.remove('is-hidden');
+        buttonText.textContent = 'Cancel';
+        button.classList.remove('is-success');
+        button.classList.add('is-light');
+    } else {
+        container.classList.add('is-hidden');
+        buttonText.textContent = 'Schedule Game';
+        button.classList.remove('is-light');
+        button.classList.add('is-success');
+    }
+}
 </script>
 {% endblock %}
