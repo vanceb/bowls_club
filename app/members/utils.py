@@ -198,14 +198,18 @@ def get_member_data(member, show_private_data=False):
     if show_private_data or member.share_phone:
         base_data['phone'] = member.phone
     
+    # Always include privacy flags so frontend can determine display logic
+    base_data.update({
+        'share_email': member.share_email,
+        'share_phone': member.share_phone
+    })
+    
     # Admin-only fields
     if show_private_data:
         base_data.update({
             'username': member.username,
             'gender': member.gender,
             'is_admin': member.is_admin,
-            'share_email': member.share_email,
-            'share_phone': member.share_phone,
             'last_login': member.last_login.isoformat() if member.last_login else None,
             'lockout': member.lockout
         })
