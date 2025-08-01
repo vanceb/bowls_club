@@ -407,18 +407,27 @@ def toggle_event_pool(event_id):
         old_has_pools = pool_info['has_pools']
         
         if strategy == 'event':
-            # Event-level pool toggle
+            # Event-level pool toggle - open/close registration instead of deleting pool
             if old_has_pools:
-                # Disable: remove event pool
                 if event.pool:
-                    db.session.delete(event.pool)
-                event.has_pool = False
-                action = 'disabled'
+                    # Toggle pool open/closed status
+                    if event.pool.is_open:
+                        event.pool.is_open = False
+                        action = 'closed for registration'
+                    else:
+                        event.pool.is_open = True
+                        action = 'reopened for registration'
+                else:
+                    # Create new pool if somehow missing
+                    pool = create_pool_for_event(event, is_open=True)
+                    db.session.add(pool)
+                    action = 'enabled and opened'
             else:
                 # Enable: create event pool
                 pool = create_pool_for_event(event, is_open=True)
                 db.session.add(pool)
-                action = 'enabled'
+                event.has_pool = True
+                action = 'enabled and opened'
                 
         elif strategy == 'booking':
             # Booking-level pool toggle

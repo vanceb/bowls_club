@@ -99,17 +99,36 @@ def upcoming_events():
         # Get today's date
         today = date.today()
         
-        # Get events that either have active pools OR user is registered in OR user can manage
-        # First get events with active pools
-        events_with_active_pools = db.session.scalars(
+        # Import models needed for queries
+        from app.models import Pool, PoolRegistration, Booking
+        
+        # Get all events that have any type of pool or user relationship
+        # Start with events that have event-level pools OR booking-level pools (has_pool flag)
+        events_with_pools = db.session.scalars(
             sa.select(Event)
             .where(Event.has_pool == True)
             .order_by(Event.created_at.desc())
         ).all()
         
-        # Then get events where user is registered (even if pool is disabled)
-        from app.models import Pool, PoolRegistration
-        events_user_registered = db.session.scalars(
+        # Fallback: Also get events that actually have pool records but may have incorrect has_pool flag
+        # This handles data inconsistencies where pools exist but has_pool=False
+        events_with_actual_event_pools = db.session.scalars(
+            sa.select(Event)
+            .join(Pool, Event.id == Pool.event_id)
+            .where(Event.has_pool == False)  # Only get ones not already captured above
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        events_with_actual_booking_pools = db.session.scalars(
+            sa.select(Event)
+            .join(Booking, Event.id == Booking.event_id)
+            .join(Pool, Booking.id == Pool.booking_id)
+            .where(Event.has_pool == False)  # Only get ones not already captured above
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        # Get events where user is registered in event-level pools
+        events_user_registered_event_pools = db.session.scalars(
             sa.select(Event)
             .join(Pool, Event.id == Pool.event_id)
             .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
@@ -117,55 +136,85 @@ def upcoming_events():
             .order_by(Event.created_at.desc())
         ).all()
         
-        # Finally get events the user can manage (includes admin, global event managers, and specific event managers)
+        # Get events where user is registered in booking-level pools
+        events_user_registered_booking_pools = db.session.scalars(
+            sa.select(Event)
+            .join(Booking, Event.id == Booking.event_id)
+            .join(Pool, Booking.id == Pool.booking_id)
+            .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
+            .where(PoolRegistration.member_id == current_user.id)
+            .order_by(Event.created_at.desc())
+        ).all()
+        
+        # Get events the user can manage (includes admin, global event managers, and specific event managers)
         events_user_manages = []
         if current_user.is_admin or current_user.has_role('Event Manager'):
             # Admin and global event managers can see all events with pools
-            events_user_manages = db.session.scalars(
-                sa.select(Event)
-                .join(Pool, Event.id == Pool.event_id)
-                .order_by(Event.created_at.desc())
-            ).all()
+            events_user_manages = events_with_pools
         else:
-            # Specific event managers only see their assigned events (if they have pools)
+            # Specific event managers only see their assigned events
             events_user_manages = db.session.scalars(
                 sa.select(Event)
-                .join(Pool, Event.id == Pool.event_id)
                 .join(Event.event_managers)
-                .where(Event.event_managers.any(Member.id == current_user.id))
+                .where(
+                    Event.event_managers.any(Member.id == current_user.id),
+                    Event.has_pool == True
+                )
                 .order_by(Event.created_at.desc())
             ).all()
         
         # Combine and deduplicate events
-        all_events = list({event.id: event for event in events_with_active_pools + events_user_registered + events_user_manages}.values())
+        all_events = list({event.id: event for event in 
+                          events_with_pools + 
+                          events_with_actual_event_pools + 
+                          events_with_actual_booking_pools +
+                          events_user_registered_event_pools + 
+                          events_user_registered_booking_pools + 
+                          events_user_manages}.values())
         all_events.sort(key=lambda x: x.created_at, reverse=True)
         
         # For each event, get the user's registration status and management permissions
         events_data = []
         for event in all_events:
-            # Skip events that don't have pool records (shouldn't happen with our query)
-            if not event.pool:
-                current_app.logger.warning(f"Event {event.name} (ID: {event.id}) found in pool query but has no pool record")
-                continue
-                
             # Check if user can manage this event
-            from app.events.utils import can_user_manage_event
+            from app.events.utils import can_user_manage_event, get_event_pool_info
             user_can_manage = can_user_manage_event(current_user, event)
+            
+            # Get comprehensive pool information (handles both event-level and booking-level pools)
+            pool_info = get_event_pool_info(event)
+            
+            # Skip events that don't actually have any pools
+            if not pool_info['has_pools']:
+                continue
                 
             event_info = {
                 'event': event,
                 'registration_status': 'not_registered',
                 'registration': None,
-                'pool_count': event.get_pool_member_count(),
-                'pool_open': event.is_pool_open(),
-                'user_can_manage': user_can_manage
+                'pool_count': pool_info['total_members'],
+                'pool_open': pool_info['pool_status'] in ['open', 'mixed'],
+                'user_can_manage': user_can_manage,
+                'pool_info': pool_info
             }
             
-            # Check if user is registered
-            user_registration = event.pool.get_member_registration(current_user.id)
+            # Check if user is registered in any pools for this event
+            user_registration = None
+            
+            # Check event-level pool first
+            if event.pool:
+                user_registration = event.pool.get_member_registration(current_user.id)
+            
+            # If not found in event pool, check booking-level pools
+            if not user_registration:
+                for booking in event.bookings:
+                    if booking.pool:
+                        user_registration = booking.pool.get_member_registration(current_user.id)
+                        if user_registration:
+                            break
+            
             if user_registration:
                 event_info['registration'] = user_registration
-                event_info['registration_status'] = 'registered'  # All pool registrations are 'registered' by existence
+                event_info['registration_status'] = 'registered'
             
             events_data.append(event_info)
         

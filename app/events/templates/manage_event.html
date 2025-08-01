@@ -103,11 +103,11 @@
         <div class="has-text-centered mt-4">
             <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=event.id) }}" style="display: inline;">
                 {{ event_form.hidden_tag() }}
-                <button type="submit" class="button {% if pool_info.has_pools %}is-warning{% else %}is-success{% endif %}">
+                <button type="submit" class="button {% if pool_info.pool_status == 'open' %}is-warning{% else %}is-success{% endif %}">
                     <span class="icon">
-                        <i class="fas {% if pool_info.has_pools %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
+                        <i class="fas {% if pool_info.pool_status == 'open' %}fa-door-closed{% else %}fa-door-open{% endif %}"></i>
                     </span>
-                    <span>{% if pool_info.has_pools %}Disable{% else %}Enable{% endif %} Event Pool</span>
+                    <span>{% if pool_info.pool_status == 'open' %}Close{% else %}Open{% endif %} Registration</span>
                 </button>
             </form>
         </div>
