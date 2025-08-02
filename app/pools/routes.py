@@ -448,6 +448,243 @@ def unregister_member(registration_id):
         return redirect(url_for('pools.list_pools'))
 
 
+# Admin pool management routes (migrated from admin blueprint)
+
+@bp.route('/admin/create_event_pool/<int:event_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def admin_create_event_pool(event_id):
+    """
+    Create a new pool for an event (admin interface)
+    """
+    try:
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to create pool for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check if event already has a pool
+        if event.has_pool_enabled():
+            flash('This event already has pool registration enabled.', 'warning')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Create new pool
+        new_pool = Pool(
+            event_id=event_id,
+            is_open=True
+        )
+        
+        # Enable pool on event
+        event.has_pool = True
+        
+        db.session.add(new_pool)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('Pool', new_pool.id, 
+                        f'Created pool for event: {event.name}')
+        
+        flash(f'Pool registration has been enabled for "{event.name}".', 'success')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error creating event pool: {str(e)}")
+        flash('An error occurred while creating the pool.', 'error')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+
+
+@bp.route('/admin/add_member_to_pool/<int:event_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def admin_add_member_to_pool(event_id):
+    """
+    Add a member to the event pool (for Event Managers to expand the pool)
+    """
+    try:
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Get the event
+        event = db.session.get(Event, event_id)
+        if not event:
+            flash('Event not found.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to add member to pool for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check if event has pool enabled
+        if not event.has_pool_enabled():
+            flash('This event does not have pool registration enabled.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Get member_id from form
+        member_id = request.form.get('member_id', type=int)
+        if not member_id:
+            flash('Please select a member to add.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Get the member
+        member = db.session.get(Member, member_id)
+        if not member:
+            flash('Member not found.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Check if member is already in the pool
+        existing_registration = event.pool.get_member_registration(member_id)
+        if existing_registration and existing_registration.is_active:
+            flash(f'{member.firstname} {member.lastname} is already registered for this event.', 'warning')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Add member to pool
+        registration = PoolRegistration(
+            pool_id=event.pool.id,
+            member_id=member_id
+        )
+        db.session.add(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_create('PoolRegistration', registration.id, 
+                        f'Event Manager added {member.firstname} {member.lastname} to pool for event: {event.name}')
+        
+        flash(f'{member.firstname} {member.lastname} added to event pool successfully!', 'success')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error adding member to pool: {str(e)}")
+        flash('An error occurred while adding member to pool.', 'error')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+
+
+@bp.route('/admin/delete_from_pool/<int:registration_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def admin_delete_from_pool(registration_id):
+    """
+    Remove a member from the event pool entirely (admin version of user withdrawal)
+    """
+    try:
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Get the registration
+        registration = db.session.get(PoolRegistration, registration_id)
+        if not registration:
+            flash('Registration not found.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        event = registration.pool.event
+        
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to delete pool registration {registration_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Store info for audit log and flash message
+        member_name = f"{registration.member.firstname} {registration.member.lastname}"
+        event_name = event.name
+        event_id = event.id
+        
+        # Delete the registration entirely (same as user withdrawal)
+        db.session.delete(registration)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_delete('PoolRegistration', registration_id, 
+                        f'Event Manager removed {member_name} from pool for event: {event_name}')
+        
+        flash(f'{member_name} removed from event pool successfully!', 'success')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+        
+    except Exception as e:
+        current_app.logger.error(f"Error removing member from pool: {str(e)}")
+        flash('An error occurred while removing member from pool.', 'error')
+        return redirect(url_for('events.list_events'))
+
+
+@bp.route('/admin/auto_select_pool_members/<int:event_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def admin_auto_select_pool_members(event_id):
+    """
+    Automatically select pool members for team creation based on criteria
+    """
+    try:
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        event = db.session.get(Event, event_id)
+        if not event or not event.has_pool_enabled():
+            flash('Event not found or pool not enabled.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check permissions - must be able to manage this specific event
+        if not can_user_manage_event(current_user, event):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to auto-select pool members for event {event_id}')
+            flash('You do not have permission to manage this event.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        selection_method = request.form.get('method', 'oldest_first')
+        num_to_select = request.form.get('count', type=int)
+        
+        if not num_to_select or num_to_select <= 0:
+            flash('Invalid selection count.', 'error')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Get all registered members (all pool registrations are active)
+        registered_members = list(event.pool.registrations)
+        
+        if len(registered_members) < num_to_select:
+            flash(f'Only {len(registered_members)} registered members available, cannot select {num_to_select}.', 'warning')
+            return redirect(url_for('events.manage_event', event_id=event_id))
+        
+        # Apply selection method
+        if selection_method == 'oldest_first':
+            selected_registrations = sorted(registered_members, key=lambda r: r.registered_at)[:num_to_select]
+        elif selection_method == 'random':
+            import random
+            selected_registrations = random.sample(registered_members, num_to_select)
+        else:
+            # Default to oldest first
+            selected_registrations = sorted(registered_members, key=lambda r: r.registered_at)[:num_to_select]
+        
+        # Pool status no longer tracked - all registered members are available for team creation
+        flash(f'Pool members are always available for team creation. Use "Create Teams from Pool" instead.', 'info')
+        return redirect(url_for('events.manage_event', event_id=event_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in auto pool selection: {str(e)}")
+        flash('An error occurred during automatic selection.', 'error')
+        return redirect(url_for('events.list_events'))
+
+
 @bp.route('/delete/<int:pool_id>', methods=['POST'])
 @login_required
 @role_required('Event Manager')

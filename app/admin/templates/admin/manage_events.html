@@ -163,7 +163,7 @@
                         <div class="control">
                             {{ event_form.submit(class="button is-primary") }}
                             {% if selected_event %}
-                                <a href="{{ url_for('admin.manage_events') }}" class="button is-light">Reset</a>
+                                <a href="{{ url_for('events.list_events') }}" class="button is-light">Reset</a>
                             {% endif %}
                         </div>
                     </div>
@@ -248,7 +248,7 @@
                         <div class="level-right">
                             <div class="level-item">
                                 {% if not selected_event.has_pool_enabled() %}
-                                    <form method="POST" action="{{ url_for('admin.create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                    <form method="POST" action="{{ url_for('pools.admin_create_event_pool', event_id=selected_event.id) }}" style="display: inline;">
                                         {{ event_form.csrf_token }}
                                         <button type="submit" class="button is-primary">
                                             <span class="icon"><i class="fas fa-plus"></i></span>
@@ -258,7 +258,7 @@
                                 {% else %}
                                     <div class="field is-grouped">
                                         {% if selected_event.is_pool_open() %}
-                                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                            <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
                                                 {{ event_form.csrf_token }}
                                                 <button type="submit" class="button is-warning">
                                                     <span class="icon"><i class="fas fa-door-closed"></i></span>
@@ -266,7 +266,7 @@
                                                 </button>
                                             </form>
                                         {% else %}
-                                            <form method="POST" action="{{ url_for('admin.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
+                                            <form method="POST" action="{{ url_for('events.toggle_event_pool', event_id=selected_event.id) }}" style="display: inline;">
                                                 {{ event_form.csrf_token }}
                                                 <button type="submit" class="button is-success">
                                                     <span class="icon"><i class="fas fa-door-open"></i></span>
@@ -363,7 +363,7 @@
                                     </td>
                                     <td>
                                         <div class="buttons are-small">
-                                            <form method="POST" action="{{ url_for('admin.delete_from_pool', registration_id=registration.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove {{ registration.member.firstname }} {{ registration.member.lastname }} from the pool?')">
+                                            <form method="POST" action="{{ url_for('pools.admin_delete_from_pool', registration_id=registration.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove {{ registration.member.firstname }} {{ registration.member.lastname }} from the pool?')">
                                                 {{ event_form.csrf_token }}
                                                 <button type="submit" class="button is-small is-danger" title="Remove member from pool entirely">
                                                     <span class="icon is-small">
@@ -389,7 +389,7 @@
                 <!-- Add Member to Pool Form -->
                 <div class="mt-4">
                     <h5 class="title is-6">Add Member to Pool</h5>
-                    <form method="POST" action="{{ url_for('admin.add_member_to_pool', event_id=selected_event.id) }}" onsubmit="rememberActiveStage()">
+                    <form method="POST" action="{{ url_for('pools.admin_add_member_to_pool', event_id=selected_event.id) }}" onsubmit="rememberActiveStage()">
                         {{ event_form.csrf_token }}
                         <div class="field has-addons">
                             <div class="control is-expanded">

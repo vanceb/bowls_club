@@ -276,14 +276,14 @@ def admin_edit_booking(booking_id):
         booking = db.session.get(Booking, booking_id)
         if not booking:
             flash('Booking not found.', 'error')
-            return redirect(url_for('admin.manage_events'))
+            return redirect(url_for('events.list_events'))
         
         # Check permissions - must be able to manage the associated event
         if booking.event and not can_user_manage_event(current_user, booking.event):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to edit booking {booking_id} for event {booking.event.id}')
             flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('admin.manage_events'))
+            return redirect(url_for('events.list_events'))
         
         form = BookingForm(obj=booking)
         
@@ -315,7 +315,7 @@ def admin_edit_booking(booking_id):
             
             # Redirect back to events management if the booking has an event
             if booking.event_id:
-                return redirect(url_for('admin.manage_events'))
+                return redirect(url_for('events.list_events'))
             else:
                 return redirect(url_for('bookings.bookings'))
         
@@ -351,7 +351,7 @@ def admin_edit_booking(booking_id):
     except Exception as e:
         current_app.logger.error(f"Error in edit_booking: {str(e)}")
         flash('An error occurred while editing the booking.', 'error')
-        return redirect(url_for('admin.manage_events'))
+        return redirect(url_for('events.list_events'))
 
 
 # DELETED: admin_copy_teams_to_booking - EventTeam functionality has been removed
@@ -574,3 +574,160 @@ def api_delete_booking(booking_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+# Admin team management routes (migrated from admin blueprint)
+
+@bp.route('/admin/manage_teams/<int:booking_id>', methods=['GET', 'POST'])
+@login_required
+@role_required('Event Manager')
+def admin_manage_teams(booking_id):
+    """
+    Admin interface for managing teams for a specific booking
+    Accessible to admins and booking organizers
+    """
+    try:
+        # Get the booking
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('events.list_events'))
+        
+        # Check if user has permission to manage teams
+        if not current_user.is_admin and booking.organizer_id != current_user.id:
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to manage teams for booking {booking_id}')
+            flash('You do not have permission to manage teams for this booking.', 'error')
+            return redirect(url_for('bookings.bookings'))
+        
+        from app.models import BookingTeam, BookingTeamMember
+        
+        # Get existing teams for this booking
+        teams = db.session.scalars(
+            sa.select(BookingTeam)
+            .where(BookingTeam.booking_id == booking_id)
+            .order_by(BookingTeam.team_name)
+        ).all()
+        
+        # Handle POST request for team management
+        if request.method == 'POST':
+            csrf_form = FlaskForm()
+            if not csrf_form.validate_on_submit():
+                flash('Security validation failed.', 'error')
+                return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
+            
+            # Handle different actions
+            action = request.form.get('action')
+            
+            if action == 'add_team':
+                team_name = request.form.get('team_name')
+                if team_name:
+                    new_team = BookingTeam(
+                        booking_id=booking_id,
+                        team_name=team_name,
+                        event_team_id=booking.event.teams[0].id if booking.event and booking.event.teams else None
+                    )
+                    db.session.add(new_team)
+                    db.session.commit()
+                    
+                    audit_log_create('BookingTeam', new_team.id, 
+                                   f'Added team {team_name} to booking {booking_id}')
+                    flash(f'Team "{team_name}" added successfully.', 'success')
+                else:
+                    flash('Team name is required.', 'error')
+            
+            elif action == 'substitute_player':
+                import json
+                
+                booking_team_member_id = request.form.get('booking_team_member_id')
+                new_member_id = request.form.get('new_member_id')
+                reason = request.form.get('reason', 'No reason provided')
+                
+                if booking_team_member_id and new_member_id:
+                    booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                    new_member = db.session.get(Member, int(new_member_id))
+                    
+                    if booking_team_member and new_member:
+                        # Get original player info before substitution
+                        original_player_name = f"{booking_team_member.member.firstname} {booking_team_member.member.lastname}"
+                        substitute_player_name = f"{new_member.firstname} {new_member.lastname}"
+                        position = booking_team_member.position
+                        original_member_id = booking_team_member.member_id
+                        
+                        # Log the substitution
+                        substitution_log_entry = {
+                            'timestamp': datetime.utcnow().isoformat(),
+                            'action': 'substitution',
+                            'original_player': original_player_name,
+                            'substitute_player': substitute_player_name,
+                            'position': position,
+                            'made_by': f"{current_user.firstname} {current_user.lastname}",
+                            'reason': reason
+                        }
+                        
+                        # Update the booking team member
+                        booking_team_member.member_id = new_member.id
+                        booking_team_member.is_substitute = True
+                        booking_team_member.substituted_at = datetime.utcnow()
+                        booking_team_member.availability_status = 'pending'  # New player needs to confirm
+                        
+                        # Update substitution log on the team
+                        booking_team = booking_team_member.booking_team
+                        current_log = json.loads(booking_team.substitution_log or '[]')
+                        current_log.append(substitution_log_entry)
+                        booking_team.substitution_log = json.dumps(current_log)
+                        
+                        db.session.commit()
+                        
+                        # Audit log the substitution
+                        audit_log_update('BookingTeamMember', booking_team_member.id, 
+                                       f'Substituted {original_player_name} with {substitute_player_name} for {position}',
+                                       {'original_member_id': original_member_id, 'new_member_id': new_member.id, 'reason': reason})
+                        
+                        flash(f'Successfully substituted {original_player_name} with {substitute_player_name} for {position}', 'success')
+                    else:
+                        flash('Invalid player selection for substitution.', 'error')
+                else:
+                    flash('Missing required information for substitution.', 'error')
+            
+            return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
+        
+        # Get session name
+        sessions = current_app.config.get('DAILY_SESSIONS', {})
+        session_name = sessions.get(booking.session, 'Unknown Session')
+        
+        # Get available members for substitutions 
+        available_members = []
+        if booking.event and booking.event.has_pool_enabled():
+            # Get all pool members (all registrations are active)
+            from app.models import PoolRegistration
+            available_members = db.session.scalars(
+                sa.select(Member)
+                .join(PoolRegistration, Member.id == PoolRegistration.member_id)
+                .where(PoolRegistration.pool_id == booking.event.pool.id)
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+        else:
+            # Fallback: get active members not already in the booking teams
+            current_member_ids = {member.member_id for team in teams for member in team.booking_team_members}
+            available_members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Social', 'Life']))
+                .where(~Member.id.in_(current_member_ids))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+        
+        # Create CSRF form for template
+        csrf_form = FlaskForm()
+        
+        return render_template('admin/manage_teams.html', 
+                             booking=booking,
+                             teams=teams,
+                             session_name=session_name,
+                             available_members=available_members,
+                             csrf_form=csrf_form)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")
+        flash('An error occurred while managing teams.', 'error')
+        return redirect(url_for('bookings.bookings'))
