@@ -5,7 +5,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from datetime import date, timedelta
 from app import db
-from app.models import Member, Role, Booking, Event, BookingPlayer, BookingTeam, BookingTeamMember
+from app.models import Member, Role, Booking, Event
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -118,42 +118,3 @@ class EventBookingFactory(BookingFactory):
     vs = factory.Faker('company')
 
 
-class BookingPlayerFactory(SQLAlchemyModelFactory):
-    """Factory for creating BookingPlayer instances."""
-    
-    class Meta:
-        model = BookingPlayer
-        sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = 'commit'
-    
-    booking = factory.SubFactory(RollUpBookingFactory)
-    member = factory.SubFactory(MemberFactory)
-    status = 'pending'
-    invited_by = factory.SelfAttribute('booking.organizer.id')
-
-
-class BookingTeamFactory(SQLAlchemyModelFactory):
-    """Factory for creating BookingTeam instances."""
-    
-    class Meta:
-        model = BookingTeam
-        sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = 'commit'
-    
-    booking = factory.SubFactory(EventBookingFactory)
-    # event_team removed - teams are now created directly from pools
-    team_name = factory.Sequence(lambda n: f'Team {n}')
-    team_number = factory.Sequence(lambda n: n)
-
-
-class BookingTeamMemberFactory(SQLAlchemyModelFactory):
-    """Factory for creating BookingTeamMember instances."""
-    
-    class Meta:
-        model = BookingTeamMember
-        sqlalchemy_session = db.session
-        sqlalchemy_session_persistence = 'commit'
-    
-    team = factory.SubFactory(BookingTeamFactory)
-    member = factory.SubFactory(MemberFactory)
-    position = 'Lead'

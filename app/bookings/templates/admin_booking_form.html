@@ -35,53 +35,52 @@
             </div>
             {% endif %}
             
-            {% if form.rink %}
+            {% if form.rink_count %}
             <div class="field">
-                <label class="label">{{ form.rink.label }}</label>
+                <label class="label">{{ form.rink_count.label }}</label>
+                <div class="control">
+                    {{ form.rink_count(class="input") }}
+                </div>
+                <p class="help">Enter the number of rinks needed for this booking (1-6)</p>
+                {% for error in form.rink_count.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.priority %}
+            <div class="field">
+                <label class="label">{{ form.priority.label }}</label>
+                <div class="control">
+                    {{ form.priority(class="input") }}
+                </div>
+                {% for error in form.priority.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.vs %}
+            <div class="field">
+                <label class="label">Opposition Team</label>
+                <div class="control">
+                    {{ form.vs(class="input", placeholder="e.g., Riverdale Bowls Club") }}
+                </div>
+                {% for error in form.vs.errors %}
+                    <p class="help is-danger">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if form.home_away %}
+            <div class="field">
+                <label class="label">{{ form.home_away.label }}</label>
                 <div class="control">
                     <div class="select is-fullwidth">
-                        {{ form.rink(class="select") }}
+                        {{ form.home_away() }}
                     </div>
                 </div>
-                {% for error in form.rink.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-            {% endif %}
-            
-            {% if form.status %}
-            <div class="field">
-                <label class="label">{{ form.status.label }}</label>
-                <div class="control">
-                    <div class="select is-fullwidth">
-                        {{ form.status(class="select") }}
-                    </div>
-                </div>
-                {% for error in form.status.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-            {% endif %}
-            
-            {% if form.organizer_notes %}
-            <div class="field">
-                <label class="label">{{ form.organizer_notes.label }}</label>
-                <div class="control">
-                    {{ form.organizer_notes(class="textarea") }}
-                </div>
-                {% for error in form.organizer_notes.errors %}
-                    <p class="help is-danger">{{ error }}</p>
-                {% endfor %}
-            </div>
-            {% endif %}
-            
-            {% if form.admin_notes %}
-            <div class="field">
-                <label class="label">{{ form.admin_notes.label }}</label>
-                <div class="control">
-                    {{ form.admin_notes(class="textarea") }}
-                </div>
-                {% for error in form.admin_notes.errors %}
+                {% for error in form.home_away.errors %}
                     <p class="help is-danger">{{ error }}</p>
                 {% endfor %}
             </div>

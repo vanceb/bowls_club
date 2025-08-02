@@ -4,7 +4,7 @@ Integration tests for booking functionality across different components.
 import pytest
 import json
 from datetime import date, timedelta
-from app.models import Member, Booking, BookingPlayer, Event, BookingTeam, BookingTeamMember
+from app.models import Member, Booking, Event
 
 
 @pytest.mark.integration

@@ -4,7 +4,7 @@ Integration tests for main booking routes.
 import pytest
 import json
 from datetime import date, timedelta
-from app.models import Member, Booking, BookingPlayer
+from app.models import Member, Booking
 
 
 @pytest.mark.integration

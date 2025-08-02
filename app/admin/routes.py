@@ -115,10 +115,3 @@ def admin_required(f):
 
 
 # MOVED: delete_from_pool moved to pools.admin_delete_from_pool
-
-
-@bp.route('/test')
-@login_required
-@admin_required
-def test():
-    return "Admin routes are working!"
