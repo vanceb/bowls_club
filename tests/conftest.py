@@ -150,3 +150,103 @@ def admin_client(client, admin_member):
         sess['_user_id'] = str(admin_member.id)
         sess['_fresh'] = True
     return client
+
+
+@pytest.fixture
+def test_event(db_session):
+    """Create a test event."""
+    from datetime import datetime, timedelta
+    event = Event(
+        name='Test Event',
+        event_date=datetime.now() + timedelta(days=7),
+        event_type=1,
+        gender=1,
+        format=1,
+        has_pool=False
+    )
+    db_session.add(event)
+    db_session.commit()
+    return event
+
+
+@pytest.fixture
+def test_event_with_pool(db_session, test_event):
+    """Create a test event with pool."""
+    pool = Pool(event_id=test_event.id, is_open=True)
+    test_event.has_pool = True
+    db_session.add(pool)
+    db_session.commit()
+    test_event.pool = pool
+    return test_event
+
+
+@pytest.fixture
+def test_pool(db_session, test_event):
+    """Create a test pool."""
+    pool = Pool(event_id=test_event.id, is_open=True)
+    db_session.add(pool)
+    db_session.commit()
+    return pool
+
+
+@pytest.fixture
+def test_booking(db_session, test_event):
+    """Create a test booking."""
+    from datetime import datetime, timedelta
+    booking = Booking(
+        date=datetime.now() + timedelta(days=1),
+        time_slot='Morning',
+        event_id=test_event.id,
+        status='Open'
+    )
+    db_session.add(booking)
+    db_session.commit()
+    return booking
+
+
+@pytest.fixture
+def event_manager_member(db_session, core_roles):
+    """Create a member with Event Manager role."""
+    event_manager_role = next((role for role in core_roles if role.name == 'Event Manager'), None)
+    if not event_manager_role:
+        event_manager_role = Role(name='Event Manager')
+        db_session.add(event_manager_role)
+        db_session.commit()
+    
+    member = Member(
+        username='eventmanager',
+        firstname='Event',
+        lastname='Manager',
+        email='eventmanager@example.com',
+        phone='123-456-7890',
+        status='Full'
+    )
+    member.set_password('managerpassword123')
+    member.roles = [event_manager_role]
+    db_session.add(member)
+    db_session.commit()
+    return member
+
+
+@pytest.fixture
+def content_manager_member(db_session, core_roles):
+    """Create a member with Content Manager role."""
+    content_manager_role = next((role for role in core_roles if role.name == 'Content Manager'), None)
+    if not content_manager_role:
+        content_manager_role = Role(name='Content Manager')
+        db_session.add(content_manager_role)
+        db_session.commit()
+    
+    member = Member(
+        username='contentmanager',
+        firstname='Content',
+        lastname='Manager',
+        email='contentmanager@example.com',
+        phone='123-456-7890',
+        status='Full'
+    )
+    member.set_password('managerpassword123')
+    member.roles = [content_manager_role]
+    db_session.add(member)
+    db_session.commit()
+    return member
