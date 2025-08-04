@@ -5,7 +5,7 @@ import sqlalchemy as sa
 
 from app.api import bp
 from app import db
-from app.models import Member, Event, Booking, Pool, PoolRegistration
+from app.models import Member, Booking, Pool, PoolRegistration
 from app.routes import role_required, admin_required
 
 
@@ -20,32 +20,32 @@ def get_event(event_id):
     Get event details (AJAX endpoint)
     """
     try:
-        event = db.session.get(Event, event_id)
-        if not event:
+        booking = db.session.get(Booking, event_id)
+        if not booking:
             return jsonify({
                 'success': False,
-                'error': 'Event not found'
+                'error': 'Booking not found'
             }), 404
         
-        # Format event data with correct field names
+        # Format booking data with correct field names
         event_data = {
-            'id': event.id,
-            'name': event.name,
-            'event_type': event.event_type,
-            'gender': event.gender,
-            'format': event.format,
-            'scoring': event.scoring,
+            'id': booking.id,
+            'name': booking.name,
+            'event_type': booking.event_type,
+            'gender': booking.gender,
+            'format': booking.format,
+            'scoring': booking.scoring,
             # Add computed fields for JavaScript summaries
-            'event_type_name': event.get_event_type_name(),
-            'format_name': event.get_format_name(),
-            'teams_count': len(event.event_teams) if event.event_teams else 0,
-            'bookings_count': len(event.bookings) if event.bookings else 0,
-            'has_pool_enabled': event.has_pool_enabled()
+            'event_type_name': booking.get_event_type_name(),
+            'format_name': booking.get_format_name(),
+            'teams_count': len(booking.teams) if hasattr(booking, 'teams') and booking.teams else 0,
+            'bookings_count': 1,  # In enhanced model, each booking IS an event
+            'has_pool_enabled': booking.has_pool
         }
         
-        # Add event managers
+        # Add booking managers
         event_managers = []
-        for manager in event.event_managers:
+        for manager in booking.booking_managers:
             event_managers.append({
                 'id': manager.id,
                 'name': f"{manager.firstname} {manager.lastname}"
@@ -54,8 +54,9 @@ def get_event(event_id):
         
         # Get event teams if they exist
         teams = []
-        for team in event.event_teams:
-            team_data = {
+        if hasattr(booking, 'teams') and booking.teams:
+            for team in booking.teams:
+                team_data = {
                 'id': team.id,
                 'team_name': team.team_name,
                 'team_number': team.team_number,
@@ -259,12 +260,12 @@ def get_upcoming_events():
     Returns user's registration status for each event
     """
     try:
-        # Get all events that have pools enabled
+        # Get all bookings that have pools enabled
         events_with_pools = db.session.scalars(
-            sa.select(Event)
-            .join(Event.pool)
-            .where(Event.has_pool == True)
-            .order_by(Event.created_at.desc())
+            sa.select(Booking)
+            .join(Pool, Booking.id == Pool.booking_id)
+            .where(Booking.has_pool == True)
+            .order_by(Booking.created_at_event.desc())
         ).all()
         
         # Format events data
@@ -330,11 +331,11 @@ def register_for_event_api():
             }), 400
         
         # Get the event
-        event = db.session.get(Event, event_id)
-        if not event:
+        booking = db.session.get(Booking, event_id)
+        if not booking:
             return jsonify({
                 'success': False,
-                'error': 'Event not found'
+                'error': 'Booking not found'
             }), 404
         
         # Check if event has pool enabled
@@ -407,11 +408,11 @@ def withdraw_from_event_api():
             }), 400
         
         # Get the event
-        event = db.session.get(Event, event_id)
-        if not event:
+        booking = db.session.get(Booking, event_id)
+        if not booking:
             return jsonify({
                 'success': False,
-                'error': 'Event not found'
+                'error': 'Booking not found'
             }), 404
         
         # Check if event has pool enabled
@@ -478,11 +479,11 @@ def get_event_pool():
             }), 400
         
         # Get the event
-        event = db.session.get(Event, event_id)
-        if not event:
+        booking = db.session.get(Booking, event_id)
+        if not booking:
             return jsonify({
                 'success': False,
-                'error': 'Event not found'
+                'error': 'Booking not found'
             }), 404
         
         # Check if event has pool enabled

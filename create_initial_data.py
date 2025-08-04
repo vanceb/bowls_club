@@ -12,7 +12,7 @@ Usage:
 
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, date
 
 # Add the app directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +26,6 @@ except ImportError:
 
 from app import create_app, db
 from app.models import Role, Member
-from app.audit import audit_log_create, audit_log_system_event
 from config import Config
 from werkzeug.security import generate_password_hash
 
@@ -51,11 +50,6 @@ def create_initial_roles():
     
     db.session.commit()
     
-    # Audit log the system initialization
-    if created_count > 0:
-        audit_log_system_event('INITIALIZATION', 
-                              f'System initialization: Created {created_count} initial roles',
-                              {'roles_created': created_count})
     print(f"Roles created: {created_count}")
     return created_count
 
@@ -130,6 +124,7 @@ def create_admin_user():
         phone=phone,
         status='Full',  # Full member status
         is_admin=True,  # Admin privileges
+        joined_date=date.today(),  # Required field
         share_email=True,
         share_phone=bool(phone)
     )
@@ -138,15 +133,6 @@ def create_admin_user():
     
     db.session.add(admin_user)
     db.session.commit()
-    
-    # Audit log
-    audit_log_create('Member', admin_user.id, 
-                   f'Bootstrap admin user created: {admin_user.firstname} {admin_user.lastname} ({admin_user.username})',
-                   {
-                       'status': 'Full',
-                       'is_admin': True,
-                       'bootstrap_user': True
-                   })
     
     print(f"\n✓ Admin user '{username}' created successfully!")
     print(f"✓ Status: Full")
@@ -161,7 +147,7 @@ def verify_database_structure():
     print("\nVerifying database structure...")
     
     expected_tables = [
-        'roles', 'member', 'member_roles', 'events', 'event_member_managers',
+        'roles', 'member', 'member_roles', 'booking_member_managers',
         'pools', 'pool_registrations', 'posts', 'policy_pages', 'bookings',
         'teams', 'team_members'
     ]

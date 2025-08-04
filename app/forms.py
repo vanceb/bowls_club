@@ -17,7 +17,7 @@ import re
 
 # Local application imports
 from app import db
-from app.models import Member, Event
+from app.models import Member, Booking
 
 # Custom password validator for complexity requirements
 class PasswordComplexity:
@@ -260,14 +260,18 @@ class EventSelectionForm(FlaskForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Populate the event choices dynamically from the database
-        from app.models import Event
+        # Populate the event choices dynamically from the database (now from Booking model)
+        from app.models import Booking
         from app import db
         import sqlalchemy as sa
         
-        events = db.session.scalars(sa.select(Event).order_by(Event.name)).all()
+        # Get unique event IDs from bookings
+        event_ids = db.session.scalars(
+            sa.select(Booking.event_id).where(Booking.event_id.is_not(None)).distinct()
+        ).all()
+        
         self.selected_event.choices = [(0, 'Create New Event')] + [
-            (event.id, event.name) for event in events
+            (event_id, f'Event {event_id}') for event_id in event_ids
         ]
 
 

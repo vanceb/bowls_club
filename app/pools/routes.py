@@ -14,12 +14,12 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.pools import bp
-from app.models import Pool, PoolRegistration, Event, Booking, Member
+from app.models import Pool, PoolRegistration, Booking, Member
 from app.routes import role_required
 from app.pools.forms import PoolForm, PoolRegistrationForm
 from app.pools.utils import (
     can_user_manage_pool, get_pool_statistics,
-    create_pool_for_event, create_pool_for_booking
+    create_pool_for_booking_with_event_id, create_pool_for_booking
 )
 from app.events.utils import can_user_manage_event
 from app.audit import (
@@ -85,31 +85,30 @@ def list_pools():
 @role_required('Event Manager')
 def create_event_pool(event_id):
     """
-    Create a pool for an event.
+    Create a pool for an event (via Booking model).
     """
     try:
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
-            return redirect(url_for('events.list_events'))
+        # Check if event exists by finding its bookings
+        event_booking = db.session.scalar(
+            sa.select(Booking).where(Booking.event_id == event_id).limit(1)
+        )
         
-        # Check permissions - must be able to manage this specific event
-        if not can_user_manage_event(current_user, event):
-            audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to create pool for event {event_id}')
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('events.list_events'))
+        # Get event name from first booking for display
+        event_name = f"Event {event_id}"
         
-        # Check if pool already exists
-        if event.pool:
+        # Check if pool already exists for this event
+        existing_pool = db.session.scalar(
+            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        )
+        if existing_pool:
             flash('Pool already exists for this event.', 'error')
-            return redirect(url_for('pools.manage_pool', pool_id=event.pool.id))
+            return redirect(url_for('pools.manage_pool', pool_id=existing_pool.id))
         
         form = PoolForm()
         
         if form.validate_on_submit():
-            pool = create_pool_for_event(
-                event=event,
+            pool = create_pool_for_booking_with_event_id(
+                event_id=event_id,
                 max_players=form.max_players.data,
                 auto_close_date=form.auto_close_date.data,
                 is_open=form.is_open.data
@@ -120,19 +119,20 @@ def create_event_pool(event_id):
             
             # Audit log
             audit_log_create('Pool', pool.id,
-                           f'Created event pool for: {event.name}', 
+                           f'Created event pool for event ID: {event_id}', 
                            {
-                               'event_id': event.id,
+                               'event_id': event_id,
                                'max_players': pool.max_players,
                                'is_open': pool.is_open
                            })
             
-            flash(f'Pool created successfully for event "{event.name}".', 'success')
+            flash(f'Pool created successfully for event.', 'success')
             return redirect(url_for('pools.manage_pool', pool_id=pool.id))
         
         return render_template('create_pool.html', 
                              form=form, 
-                             event=event,
+                             event_id=event_id,
+                             event_name=event_name,
                              pool_type='event')
         
     except Exception as e:
@@ -463,40 +463,28 @@ def admin_create_event_pool(event_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
-            return redirect(url_for('events.list_events'))
-        
-        # Check permissions - must be able to manage this specific event
-        if not can_user_manage_event(current_user, event):
-            audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to create pool for event {event_id}')
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('events.list_events'))
-        
         # Check if event already has a pool
-        if event.has_pool_enabled():
+        existing_pool = db.session.scalar(
+            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        )
+        if existing_pool:
             flash('This event already has pool registration enabled.', 'warning')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
-        # Create new pool
-        new_pool = Pool(
+        # Create new pool via booking
+        new_pool = create_pool_for_booking_with_event_id(
             event_id=event_id,
             is_open=True
         )
-        
-        # Enable pool on event
-        event.has_pool = True
         
         db.session.add(new_pool)
         db.session.commit()
         
         # Audit log
         audit_log_create('Pool', new_pool.id, 
-                        f'Created pool for event: {event.name}')
+                        f'Created pool for event ID: {event_id}')
         
-        flash(f'Pool registration has been enabled for "{event.name}".', 'success')
+        flash(f'Pool registration has been enabled for event.', 'success')
         return redirect(url_for('events.manage_event', event_id=event_id))
         
     except Exception as e:
@@ -518,21 +506,11 @@ def admin_add_member_to_pool(event_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
-        # Get the event
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
-            return redirect(url_for('events.list_events'))
-        
-        # Check permissions - must be able to manage this specific event
-        if not can_user_manage_event(current_user, event):
-            audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to add member to pool for event {event_id}')
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('events.list_events'))
-        
         # Check if event has pool enabled
-        if not event.has_pool_enabled():
+        event_pool = db.session.scalar(
+            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        )
+        if not event_pool:
             flash('This event does not have pool registration enabled.', 'error')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
@@ -549,14 +527,19 @@ def admin_add_member_to_pool(event_id):
             return redirect(url_for('events.manage_event', event_id=event_id))
         
         # Check if member is already in the pool
-        existing_registration = event.pool.get_member_registration(member_id)
-        if existing_registration and existing_registration.is_active:
+        existing_registration = db.session.scalar(
+            sa.select(PoolRegistration).where(
+                PoolRegistration.pool_id == event_pool.id,
+                PoolRegistration.member_id == member_id
+            )
+        )
+        if existing_registration:
             flash(f'{member.firstname} {member.lastname} is already registered for this event.', 'warning')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
         # Add member to pool
         registration = PoolRegistration(
-            pool_id=event.pool.id,
+            pool_id=event_pool.id,
             member_id=member_id
         )
         db.session.add(registration)
@@ -564,7 +547,7 @@ def admin_add_member_to_pool(event_id):
         
         # Audit log
         audit_log_create('PoolRegistration', registration.id, 
-                        f'Event Manager added {member.firstname} {member.lastname} to pool for event: {event.name}')
+                        f'Event Manager added {member.firstname} {member.lastname} to pool for event ID: {event_id}')
         
         flash(f'{member.firstname} {member.lastname} added to event pool successfully!', 'success')
         return redirect(url_for('events.manage_event', event_id=event_id))
@@ -594,19 +577,12 @@ def admin_delete_from_pool(registration_id):
             flash('Registration not found.', 'error')
             return redirect(url_for('events.list_events'))
         
-        event = registration.pool.event
-        
-        # Check permissions - must be able to manage this specific event
-        if not can_user_manage_event(current_user, event):
-            audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to delete pool registration {registration_id}')
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('events.list_events'))
+        # Get event info from pool's booking
+        event_booking = registration.pool.booking
+        event_id = event_booking.event_id if event_booking else 'unknown'
         
         # Store info for audit log and flash message
         member_name = f"{registration.member.firstname} {registration.member.lastname}"
-        event_name = event.name
-        event_id = event.id
         
         # Delete the registration entirely (same as user withdrawal)
         db.session.delete(registration)
@@ -614,7 +590,7 @@ def admin_delete_from_pool(registration_id):
         
         # Audit log
         audit_log_delete('PoolRegistration', registration_id, 
-                        f'Event Manager removed {member_name} from pool for event: {event_name}')
+                        f'Event Manager removed {member_name} from pool for event ID: {event_id}')
         
         flash(f'{member_name} removed from event pool successfully!', 'success')
         return redirect(url_for('events.manage_event', event_id=event_id))
@@ -638,16 +614,12 @@ def admin_auto_select_pool_members(event_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
-        event = db.session.get(Event, event_id)
-        if not event or not event.has_pool_enabled():
+        # Get event pool
+        event_pool = db.session.scalar(
+            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        )
+        if not event_pool:
             flash('Event not found or pool not enabled.', 'error')
-            return redirect(url_for('events.list_events'))
-        
-        # Check permissions - must be able to manage this specific event
-        if not can_user_manage_event(current_user, event):
-            audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to auto-select pool members for event {event_id}')
-            flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('events.list_events'))
         
         selection_method = request.form.get('method', 'oldest_first')
@@ -658,7 +630,7 @@ def admin_auto_select_pool_members(event_id):
             return redirect(url_for('events.manage_event', event_id=event_id))
         
         # Get all registered members (all pool registrations are active)
-        registered_members = list(event.pool.registrations)
+        registered_members = list(event_pool.registrations)
         
         if len(registered_members) < num_to_select:
             flash(f'Only {len(registered_members)} registered members available, cannot select {num_to_select}.', 'warning')
@@ -780,13 +752,14 @@ def api_get_pool(pool_id):
         }
         
         # Add association details
-        if pool.event:
+        if pool.booking and pool.booking.event_id:
             pool_data['event'] = {
-                'id': pool.event.id,
-                'name': pool.event.name,
-                'event_type': pool.event.get_event_type_name()
+                'id': pool.booking.event_id,
+                'name': f'Event {pool.booking.event_id}',
+                'event_type': 'Event'
             }
-        elif pool.booking:
+        
+        if pool.booking:
             pool_data['booking'] = {
                 'id': pool.booking.id,
                 'booking_date': pool.booking.booking_date.isoformat(),

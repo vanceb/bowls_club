@@ -8,7 +8,7 @@ import os
 
 from app.admin import bp
 from app import db
-from app.models import Member, Role, Event, Booking, Pool, PoolRegistration
+from app.models import Member, Role, Booking, Pool, PoolRegistration
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
 from app.forms import FlaskForm
 from app.routes import role_required

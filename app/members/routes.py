@@ -7,7 +7,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlsplit
 import sqlalchemy as sa
 from app import db
-from app.models import Member, Role, Event, Booking, PoolRegistration
+from app.models import Member, Role, Booking, PoolRegistration
 from app.forms import (LoginForm, RequestResetForm, ResetPasswordForm, 
                       PasswordChangeForm, EditProfileForm, MemberForm, 
                       EditMemberForm, ImportUsersForm)
@@ -484,14 +484,16 @@ def admin_import_users():
                         continue
                     
                     # Create new member with 'Pending' status
+                    from datetime import date
                     new_member = Member(
                         firstname=firstname,
                         lastname=lastname,
                         email=email,
                         phone=phone,
                         username=username,
-                        gender=gender if gender else None,
-                        status='Pending'
+                        gender=gender if gender else None,  # Optional field, defaults to None
+                        status='Pending',
+                        joined_date=date.today()  # Required field, default to today
                     )
                     
                     # Set a default password (should be reset by admin)

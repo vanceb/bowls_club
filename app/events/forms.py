@@ -55,15 +55,20 @@ class EventSelectionForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super(EventSelectionForm, self).__init__(*args, **kwargs)
         
-        # Populate with available events
-        from app.models import Event
-        events = db.session.scalars(
-            sa.select(Event).order_by(Event.name)
+        # Populate with available events (now from Booking model)
+        from app.models import Booking
+        bookings = db.session.scalars(
+            sa.select(Booking).where(Booking.event_id.is_not(None)).order_by(Booking.event_id)
         ).all()
         
+        # Group by event_id to avoid duplicates
+        event_choices = {}
+        for booking in bookings:
+            if booking.event_id not in event_choices:
+                event_choices[booking.event_id] = f"Event {booking.event_id}"
+        
         self.event_id.choices = [(0, 'Select an event')] + [
-            (event.id, f"{event.name} ({event.get_event_type_name()})")
-            for event in events
+            (event_id, event_name) for event_id, event_name in event_choices.items()
         ]
 
 

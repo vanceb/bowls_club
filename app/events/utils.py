@@ -7,7 +7,7 @@ from flask import current_app
 import sqlalchemy as sa
 
 from app import db
-from app.models import Event, Member
+from app.models import Member, Booking
 
 
 def get_event_type_blueprint(event_type: int) -> str:
@@ -34,72 +34,71 @@ def get_event_type_blueprint(event_type: int) -> str:
     return blueprint_mapping.get(event_type, 'events')
 
 
-def get_available_positions_for_event(event: Event) -> list[str]:
+def get_available_positions_for_booking(booking: Booking) -> list[str]:
     """
-    Get available team positions for an event based on its format.
+    Get available team positions for a booking based on its format.
     
     Args:
-        event: Event model instance
+        booking: Booking model instance
         
     Returns:
-        List of position names for this event format
+        List of position names for this booking format
     """
-    if not event or not event.format:
+    if not booking or not booking.format:
         return ['Player']
     
     team_positions_config = current_app.config.get('TEAM_POSITIONS', {})
-    return team_positions_config.get(event.format, ['Player'])
+    return team_positions_config.get(booking.format, ['Player'])
 
 
-def can_user_manage_event(user: Member, event: Event) -> bool:
+def can_user_manage_booking(user: Member, booking: Booking) -> bool:
     """
-    Check if a user can manage a specific event.
+    Check if a user can manage a specific booking.
     
     Args:
         user: Member instance
-        event: Event instance
+        booking: Booking instance
         
     Returns:
-        True if user can manage the event
+        True if user can manage the booking
     """
-    # Admins can manage all events
+    # Admins can manage all bookings
     if user.is_admin:
         return True
     
-    # Event Manager role can manage all events
+    # Event Manager role can manage all bookings
     if user.has_role('Event Manager'):
         return True
     
-    # Check if user is specifically assigned as event manager for this event
-    return user in event.event_managers
+    # Check if user is the organizer of this booking
+    return booking.organizer_id == user.id if booking.organizer_id else False
 
 
-def get_event_statistics(event: Event) -> Dict[str, Any]:
+def get_booking_statistics(booking: Booking) -> Dict[str, Any]:
     """
-    Get statistics for an event.
+    Get statistics for a booking.
     
     Args:
-        event: Event instance
+        booking: Booking instance
         
     Returns:
-        Dictionary with event statistics
+        Dictionary with booking statistics
     """
     stats = {
-        'total_bookings': len(event.bookings) if event.bookings else 0,
-        'total_teams': sum(len(booking.teams) for booking in event.bookings) if event.bookings else 0,
-        'has_pool': event.has_pool_enabled() if hasattr(event, 'has_pool_enabled') else event.has_pool,
+        'total_teams': len(booking.teams) if booking.teams else 0,
+        'has_pool': booking.pool is not None,
         'pool_members': 0,
         'pool_selected': 0,
         'pool_available': 0,
     }
     
-    # Calculate pool statistics if pool exists (regardless of enabled status)
-    if hasattr(event, 'pool') and event.pool:
+    # Calculate pool statistics if pool exists
+    if booking.pool:
         try:
-            # Use PoolRegistration model instead of generic "members"
+            # Use PoolRegistration model
             from app.models import PoolRegistration
             pool_registrations = db.session.scalars(
-                sa.select(PoolRegistration).where(PoolRegistration.pool_id == event.pool.id)
+                sa.select(PoolRegistration).where(PoolRegistration.pool_id == booking.pool.id)
             ).all()
             
             stats['pool_members'] = len(pool_registrations)
@@ -112,92 +111,90 @@ def get_event_statistics(event: Event) -> Dict[str, Any]:
     return stats
 
 
-def create_event_with_defaults(name: str, event_type: int, **kwargs) -> Event:
+def create_booking_with_defaults(booking_type: str, **kwargs) -> Booking:
     """
-    Create a new event with sensible defaults.
+    Create a new booking with sensible defaults.
     
     Args:
-        name: Event name
-        event_type: Event type integer
-        **kwargs: Additional event attributes
+        booking_type: Booking type string
+        **kwargs: Additional booking attributes
         
     Returns:
-        New Event instance (not yet committed to database)
+        New Booking instance (not yet committed to database)
     """
     defaults = {
         'gender': 4,  # Open gender by default
         'format': 5,  # Fours - 2 Wood by default
-        'has_pool': False,
+        'session': 'All Day',
     }
     
     # Merge defaults with provided kwargs
-    event_data = {**defaults, **kwargs}
-    event_data['name'] = name
-    event_data['event_type'] = event_type
+    booking_data = {**defaults, **kwargs}
+    booking_data['booking_type'] = booking_type
     
-    return Event(**event_data)
+    return Booking(**booking_data)
 
 
-def get_events_by_type(event_type: Optional[int] = None) -> list[Event]:
+def get_bookings_by_type(booking_type: Optional[str] = None) -> list[Booking]:
     """
-    Get events, optionally filtered by type.
+    Get bookings, optionally filtered by type.
     
     Args:
-        event_type: Optional event type to filter by
+        booking_type: Optional booking type to filter by
         
     Returns:
-        List of Event instances
+        List of Booking instances
     """
-    query = sa.select(Event).order_by(Event.name)
+    query = sa.select(Booking).order_by(Booking.booking_date.desc())
     
-    if event_type is not None:
-        query = query.where(Event.event_type == event_type)
+    if booking_type is not None:
+        query = query.where(Booking.booking_type == booking_type)
     
     return db.session.scalars(query).all()
 
 
-def get_recent_events(limit: int = 10) -> list[Event]:
+def get_recent_bookings(limit: int = 10) -> list[Booking]:
     """
-    Get recently created events.
+    Get recently created bookings.
     
     Args:
-        limit: Maximum number of events to return
+        limit: Maximum number of bookings to return
         
     Returns:
-        List of recent Event instances
+        List of recent Booking instances
     """
     return db.session.scalars(
-        sa.select(Event)
-        .order_by(Event.created_at.desc())
+        sa.select(Booking)
+        .order_by(Booking.created_at.desc())
         .limit(limit)
     ).all()
 
 
-def get_event_pool_strategy(event: Event) -> str:
+def get_booking_pool_strategy(booking: Booking) -> str:
     """
-    Get the pool attachment strategy for an event based on its type.
+    Get the pool attachment strategy for a booking based on its type.
     
     Args:
-        event: Event instance
+        booking: Booking instance
         
     Returns:
-        'event', 'booking', or 'none'
+        'booking' or 'none'
     """
-    pool_strategy_config = current_app.config.get('EVENT_POOL_STRATEGY', {})
-    return pool_strategy_config.get(event.event_type, 'event')
+    # Bookings can have pools attached directly
+    return 'booking' if booking.booking_type != 'Private' else 'none'
 
 
-def get_event_pool_info(event: Event) -> dict:
+def get_booking_pool_info(booking: Booking) -> dict:
     """
-    Get pool information for an event, handling both event-level and booking-level pools.
+    Get pool information for a booking.
     
     Args:
-        event: Event instance
+        booking: Booking instance
         
     Returns:
         Dictionary with pool information
     """
-    strategy = get_event_pool_strategy(event)
+    strategy = get_booking_pool_strategy(booking)
     
     info = {
         'strategy': strategy,
@@ -212,70 +209,54 @@ def get_event_pool_info(event: Event) -> dict:
         info['can_toggle_pools'] = False
         return info
     
-    if strategy == 'event':
-        # Event-level pool
-        if event.pool:
-            info['has_pools'] = True
-            info['pools'] = [event.pool]
-            info['total_members'] = len(event.pool.registrations)
-            info['pool_status'] = 'open' if event.pool.is_open else 'closed'
-        else:
-            info['pool_status'] = 'no_pool'
-            
-    elif strategy == 'booking':
-        # Booking-level pools
-        pools = []
-        total_members = 0
-        has_open_pools = False
-        has_closed_pools = False
-        
-        for booking in event.bookings:
-            if booking.pool:
-                pools.append(booking.pool)
-                total_members += len(booking.pool.registrations)
-                if booking.pool.is_open:
-                    has_open_pools = True
-                else:
-                    has_closed_pools = True
-        
-        info['has_pools'] = len(pools) > 0
-        info['pools'] = pools
-        info['total_members'] = total_members
-        
-        # Determine overall pool status
-        if not pools:
-            info['pool_status'] = 'no_pool'
-        elif has_open_pools and has_closed_pools:
-            info['pool_status'] = 'mixed'
-        elif has_open_pools:
-            info['pool_status'] = 'open'
-        else:
-            info['pool_status'] = 'closed'
+    # Booking-level pool
+    if booking.pool:
+        info['has_pools'] = True
+        info['pools'] = [booking.pool]
+        info['total_members'] = len(booking.pool.registrations)
+        info['pool_status'] = 'open' if booking.pool.is_open else 'closed'
+    else:
+        info['pool_status'] = 'no_pool'
     
     return info
 
 
-def event_has_any_pools(event: Event) -> bool:
+def booking_has_pool(booking: Booking) -> bool:
     """
-    Check if an event has any pools (event-level or booking-level).
+    Check if a booking has a pool.
     
     Args:
-        event: Event instance
+        booking: Booking instance
         
     Returns:
-        True if event has any pools
+        True if booking has a pool
     """
-    return get_event_pool_info(event)['has_pools']
+    return get_booking_pool_info(booking)['has_pools']
 
 
-def event_pool_member_count(event: Event) -> int:
+def booking_pool_member_count(booking: Booking) -> int:
     """
-    Get total number of members across all pools for an event.
+    Get total number of members in a booking's pool.
     
     Args:
-        event: Event instance
+        booking: Booking instance
         
     Returns:
-        Total member count
+        Pool member count
     """
-    return get_event_pool_info(event)['total_members']
+    return get_booking_pool_info(booking)['total_members']
+
+
+# Backward compatibility functions for existing code
+def can_user_manage_event(user: Member, event_or_booking) -> bool:
+    """
+    Backward compatibility function for can_user_manage_event.
+    
+    Args:
+        user: Member instance
+        event_or_booking: Booking instance (previously Event)
+        
+    Returns:
+        True if user can manage the booking
+    """
+    return can_user_manage_booking(user, event_or_booking)

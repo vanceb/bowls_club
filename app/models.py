@@ -22,10 +22,10 @@ member_roles = Table(
 )
 
 # Association table for many-to-many relationship between events and members (event managers)
-event_member_managers = Table(
-    'event_member_managers',
+booking_member_managers = Table(
+    'booking_member_managers',
     db.Model.metadata,
-    Column('event_id', Integer, ForeignKey('events.id', ondelete='CASCADE'), primary_key=True),
+    Column('booking_id', Integer, ForeignKey('bookings.id', ondelete='CASCADE'), primary_key=True),
     Column('member_id', Integer, ForeignKey('member.id', ondelete='CASCADE'), primary_key=True)
 )
 
@@ -55,10 +55,11 @@ class Member(UserMixin, db.Model):
     lastname: so.Mapped[str] = so.mapped_column(sa.String(64), index=True)
     password_hash: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256))
     is_admin: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False)
-    gender: so.Mapped[str] = so.mapped_column(sa.String(10), default="Male")  # New field
+    gender: so.Mapped[Optional[str]] = so.mapped_column(sa.String(10), nullable=True, default=None)  # Optional field
     status: so.Mapped[str] = so.mapped_column(
         sa.String(16), default="Pending", nullable=False
     )  # New field
+    joined_date: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     share_email: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
     share_phone: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=True, nullable=False)  # Privacy setting
     last_login: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)  # Last successful login
@@ -67,7 +68,7 @@ class Member(UserMixin, db.Model):
     roles = relationship('Role', secondary=member_roles, back_populates='members')
     
     # Many-to-many relationship with events (as event manager)
-    managed_events: so.Mapped[list['Event']] = so.relationship('Event', secondary=event_member_managers, back_populates='event_managers')
+    managed_bookings: so.Mapped[list['Booking']] = so.relationship('Booking', secondary=booking_member_managers, back_populates='booking_managers')
 
     def __repr__(self):
         return '<Member {}>'.format(self.username)
@@ -122,153 +123,24 @@ class Post(db.Model):
 Member.posts = so.relationship('Post', back_populates='author')
 Member.policy_pages = so.relationship('PolicyPage', back_populates='author')
 
-# EventManager model removed - now using Member-based system with event_member_managers association table
+# Event model removed - functionality moved to enhanced Booking model
+# EventManager model removed - now using Member-based system with booking_member_managers association table
 
-
-class Event(db.Model):
-    __tablename__ = 'events'
-
-    id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    name: so.Mapped[str] = so.mapped_column(sa.String(256), nullable=False)
-    event_type: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
-    gender: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=4)  # Default to "Open"
-    format: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=5)  # Default to "Fours - 2 Wood"
-    scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
-    created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
-    has_pool: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
-
-    # One-to-many relationship with bookings
-    bookings: so.Mapped[list['Booking']] = so.relationship('Booking', back_populates='event')
-    
-    
-    # One-to-one relationship with pool
-    pool: so.Mapped[Optional['Pool']] = so.relationship('Pool', back_populates='event', uselist=False, cascade='all, delete-orphan')
-    
-    # Many-to-many relationship with event managers (Members with Event Manager role)
-    event_managers: so.Mapped[list['Member']] = so.relationship('Member', secondary=event_member_managers, back_populates='managed_events')
-
-    def __repr__(self):
-        return f"<Event id={self.id}, name='{self.name}', type={self.event_type}, gender={self.gender}>"
-
-    def get_event_type_name(self):
-        """
-        Get the human-readable name for the event type.
-        """
-        from flask import current_app
-        event_types = current_app.config.get('EVENT_TYPES', {})
-        for name, value in event_types.items():
-            if value == self.event_type:
-                return name
-        return "Unknown"
-
-    def get_gender_name(self):
-        """
-        Get the human-readable name for the event gender.
-        """
-        from flask import current_app
-        event_genders = current_app.config.get('EVENT_GENDERS', {})
-        for name, value in event_genders.items():
-            if value == self.gender:
-                return name
-        return "Unknown"
-
-    def get_format_name(self):
-        """
-        Get the human-readable name for the event format.
-        """
-        from flask import current_app
-        event_formats = current_app.config.get('EVENT_FORMATS', {})
-        for name, value in event_formats.items():
-            if value == self.format:
-                return name
-        return "Unknown"
-
-    def is_ready_for_bookings(self):
-        """Check if the event is ready for booking creation"""
-        # Events are now ready for bookings when created
-        return True
-
-    # Pool-related methods
-    def has_pool_enabled(self):
-        """Check if this event has pool functionality enabled"""
-        return bool(self.has_pool) and self.pool is not None
-    
-    def is_pool_open(self):
-        """Check if the event pool is open for registration"""
-        return self.has_pool_enabled() and self.pool.is_open
-    
-    def get_pool_member_count(self):
-        """Get the number of members registered in the pool"""
-        if not self.pool:
-            return 0
-        return len(self.pool.registrations)
-    
-    def get_registration_status(self):
-        """Get event registration status: 'open', 'closed', 'no_pool'"""
-        if not self.pool:
-            return 'no_pool'
-        if not self.has_pool:
-            return 'closed'  # Pool disabled
-        return 'open' if self.pool.is_open else 'closed'
-    
-    def can_create_teams_from_pool(self):
-        """Check if teams can be created from pool members"""
-        if not self.has_pool_enabled():
-            return False, "No pool enabled for this event"
-        
-        registered_members = self.pool.get_registered_members()
-        if not registered_members:
-            return False, "No registered members in pool"
-        
-        from flask import current_app
-        team_positions = current_app.config.get('TEAM_POSITIONS', {})
-        positions = team_positions.get(self.format, [])
-        
-        if not positions:
-            return False, f"No team positions configured for format: {self.format}"
-        
-        team_size = len(positions)
-        if len(registered_members) < team_size:
-            return False, f"Not enough registered members ({len(registered_members)}) for a complete team (need {team_size})"
-        
-        return True, f"Can create {len(registered_members) // team_size} teams"
-    
-    
-    def get_workflow_status(self):
-        """Get the current status of the pool-to-booking workflow"""
-        status = {
-            'pool_enabled': self.has_pool_enabled(),
-            'pool_open': self.is_pool_open(),
-            'pool_members': self.get_pool_member_count(),
-            'registered_members': len(self.pool.get_registered_members()) if self.has_pool_enabled() else 0,
-            'bookings_count': len(self.bookings)
-        }
-        
-        # Determine workflow stage
-        if not status['pool_enabled']:
-            status['stage'] = 'no_pool'
-        elif status['pool_members'] == 0:
-            status['stage'] = 'awaiting_registrations'
-        elif status['bookings_count'] == 0:
-            status['stage'] = 'ready_for_booking'
-        else:
-            status['stage'] = 'complete'
-        
-        return status
+# COMMENTED OUT - Event model functionality moved to enhanced Booking model
+# Event model was here - all functionality moved to enhanced Booking model below
 
 
 class Pool(db.Model):
     """
-    Pool model - manages member registration for events or bookings
-    Can be associated with either an event (event-wide pool) or a booking (booking-specific pool)
+    Pool model - manages member registration for bookings
+    Always associated with a booking (no more event pools)
     """
     __tablename__ = 'pools'
 
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     
-    # Association with either event OR booking (one must be set, other must be null)
-    event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
-    booking_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=True)
+    # Association with booking only (event pools removed)
+    booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)
     
     is_open: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=True)
     max_players: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
@@ -277,35 +149,29 @@ class Pool(db.Model):
     closed_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
 
     # Relationships
-    event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='pool')
-    booking: so.Mapped[Optional['Booking']] = so.relationship('Booking', back_populates='pool')
+    booking: so.Mapped['Booking'] = so.relationship('Booking', back_populates='pool')
     registrations: so.Mapped[list['PoolRegistration']] = so.relationship('PoolRegistration', back_populates='pool', cascade='all, delete-orphan')
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Ensure exactly one of event_id or booking_id is set
-        if not ((self.event_id is None) ^ (self.booking_id is None)):
-            raise ValueError("Pool must be associated with exactly one of event_id or booking_id")
+        # Pool must have a booking_id
+        if not self.booking_id:
+            raise ValueError("Pool must be associated with a booking_id")
 
     def __repr__(self):
         status = "Open" if self.is_open else "Closed"
-        if self.event:
-            association = f"event='{self.event.name}'"
-        elif self.booking:
-            association = f"booking={self.booking.id} ({self.booking.booking_date})"
-        else:
-            association = "no_association"
+        association = f"booking={self.booking.id} ({self.booking.name})"
         return f"<Pool id={self.id}, {association}, status={status}>"
 
     @property
     def pool_type(self):
-        """Get the type of pool (event or booking)"""
-        return 'event' if self.event_id else 'booking'
+        """Get the type of pool (always booking now)"""
+        return 'booking'
 
     @property
     def associated_object(self):
-        """Get the associated event or booking object"""
-        return self.event if self.event_id else self.booking
+        """Get the associated booking object"""
+        return self.booking
 
     @property
     def pool_name(self):
@@ -383,8 +249,13 @@ class PoolRegistration(db.Model):
 
 
 class Booking(db.Model):
+    """
+    Enhanced Booking model - now serves as the core model combining Event and Booking functionality.
+    Replaces the previous Event/Booking hierarchy with a single, unified model.
+    """
     __tablename__ = 'bookings'
 
+    # Core booking fields
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
     booking_date: so.Mapped[date] = so.mapped_column(sa.Date, nullable=False)
     session: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
@@ -392,24 +263,162 @@ class Booking(db.Model):
     priority: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
     vs: so.Mapped[Optional[str]] = so.mapped_column(sa.String(128), nullable=True)  # Opposition team name
     home_away: so.Mapped[Optional[str]] = so.mapped_column(sa.String(10), nullable=True)  # 'home', 'away', or 'neutral'
-    event_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('events.id'), nullable=True)
     
-    # Roll-up booking fields
+    # Event fields (migrated from Event model)
+    name: so.Mapped[str] = so.mapped_column(sa.String(256), nullable=False)
+    description: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
+    rules: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
+    event_type: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False)
+    gender: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=4)  # Default to "Open"
+    format: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=5)  # Default to "Fours - 2 Wood"
+    scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
+    created_at_event: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
+    has_pool: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
+    
+    # Series grouping fields (new functionality)
+    series_id: so.Mapped[Optional[str]] = so.mapped_column(sa.String(36), nullable=True)  # UUID for grouping related bookings
+    series_commitment_required: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
+    
+    # Roll-up booking fields (preserved)
     booking_type: so.Mapped[str] = so.mapped_column(sa.String(20), default='event', nullable=False)  # 'event' or 'rollup'
     organizer_id: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=True)
     organizer_notes: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)
 
-    # Many-to-one relationship with event
-    event: so.Mapped[Optional['Event']] = so.relationship('Event', back_populates='bookings')
-    
+    # Relationships
     # Many-to-one relationship with organizer (for roll-ups)
     organizer: so.Mapped[Optional['Member']] = so.relationship('Member', back_populates='organized_bookings', foreign_keys=[organizer_id])
     
-    # One-to-one relationship with pool (for booking-specific pools)
+    # One-to-one relationship with pool
     pool: so.Mapped[Optional['Pool']] = so.relationship('Pool', back_populates='booking', uselist=False, cascade='all, delete-orphan')
+    
+    # Many-to-many relationship with booking managers (Members with Event Manager role)
+    booking_managers: so.Mapped[list['Member']] = so.relationship('Member', secondary=booking_member_managers, back_populates='managed_bookings')
 
     def __repr__(self):
-        return f"<Booking id={self.id}, date={self.booking_date}, session={self.session}, rink_count={self.rink_count}, event_id={self.event_id}>"
+        return f"<Booking id={self.id}, name='{self.name}', date={self.booking_date}, type={self.event_type}, series={self.series_id}>"
+
+    # Event-style methods (migrated from Event model)
+    def get_event_type_name(self):
+        """Get the human-readable name for the event type."""
+        from flask import current_app
+        event_types = current_app.config.get('EVENT_TYPES', {})
+        for name, value in event_types.items():
+            if value == self.event_type:
+                return name
+        return "Unknown"
+
+    def get_gender_name(self):
+        """Get the human-readable name for the event gender."""
+        from flask import current_app
+        event_genders = current_app.config.get('EVENT_GENDERS', {})
+        for name, value in event_genders.items():
+            if value == self.gender:
+                return name
+        return "Unknown"
+
+    def get_format_name(self):
+        """Get the human-readable name for the event format."""
+        from flask import current_app
+        event_formats = current_app.config.get('EVENT_FORMATS', {})
+        for name, value in event_formats.items():
+            if value == self.format:
+                return name
+        return "Unknown"
+
+    def is_ready_for_booking(self):
+        """Check if the booking is ready (always true for enhanced model)"""
+        return True
+
+    # Pool-related methods (adapted from Event model)
+    def has_pool_enabled(self):
+        """Check if this booking has pool functionality enabled"""
+        return bool(self.has_pool) and self.pool is not None
+    
+    def is_pool_open(self):
+        """Check if the booking pool is open for registration"""
+        return self.has_pool_enabled() and self.pool.is_open
+    
+    def get_pool_member_count(self):
+        """Get the number of members registered in the pool"""
+        if not self.pool:
+            return 0
+        return len(self.pool.registrations)
+    
+    def get_registration_status(self):
+        """Get booking registration status: 'open', 'closed', 'no_pool'"""
+        if not self.pool:
+            return 'no_pool'
+        if not self.has_pool:
+            return 'closed'  # Pool disabled
+        return 'open' if self.pool.is_open else 'closed'
+    
+    def can_create_teams_from_pool(self):
+        """Check if teams can be created from pool members"""
+        if not self.has_pool_enabled():
+            return False, "No pool enabled for this booking"
+        
+        registered_members = self.pool.get_registered_members()
+        if not registered_members:
+            return False, "No registered members in pool"
+        
+        from flask import current_app
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(self.format, [])
+        
+        if not positions:
+            return False, f"No team positions configured for format: {self.format}"
+        
+        team_size = len(positions)
+        if len(registered_members) < team_size:
+            return False, f"Not enough registered members ({len(registered_members)}) for a complete team (need {team_size})"
+        
+        return True, f"Can create {len(registered_members) // team_size} teams"
+    
+    def get_workflow_status(self):
+        """Get the current status of the pool-to-booking workflow"""
+        status = {
+            'pool_enabled': self.has_pool_enabled(),
+            'pool_open': self.is_pool_open(),
+            'pool_members': self.get_pool_member_count(),
+            'registered_members': len(self.pool.get_registered_members()) if self.has_pool_enabled() else 0,
+        }
+        
+        # Determine workflow stage
+        if not status['pool_enabled']:
+            status['stage'] = 'no_pool'
+        elif status['pool_members'] == 0:
+            status['stage'] = 'awaiting_registrations'
+        else:
+            status['stage'] = 'ready_for_teams'
+        
+        return status
+
+    # Series-related methods (new functionality)
+    def get_series_bookings(self):
+        """Get all bookings in the same series"""
+        if not self.series_id:
+            return [self]
+        
+        from app import db
+        import sqlalchemy as sa
+        return db.session.scalars(
+            sa.select(Booking).where(Booking.series_id == self.series_id)
+        ).all()
+    
+    def is_series_commitment(self):
+        """Check if this booking requires series commitment"""
+        return self.series_commitment_required
+    
+    def get_series_name(self):
+        """Get a human-readable series name"""
+        if not self.series_id:
+            return self.name
+        
+        # For series, use the name with series indicator
+        series_bookings = self.get_series_bookings()
+        if len(series_bookings) > 1:
+            return f"{self.name} (Series)"
+        return self.name
 
 
 class PolicyPage(db.Model):

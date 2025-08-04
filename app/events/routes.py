@@ -14,12 +14,12 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.events import bp
-from app.models import Event, Member, Pool, PoolRegistration, Booking
+from app.models import Member, Pool, PoolRegistration, Booking
 from app.routes import role_required
 from app.events.forms import EventForm, EventSelectionForm, EventManagerAssignmentForm
 from app.events.utils import (
-    can_user_manage_event, get_event_statistics, 
-    create_event_with_defaults, get_events_by_type
+    can_user_manage_event, get_booking_statistics, 
+    create_booking_with_defaults, get_bookings_by_type
 )
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete, 
@@ -44,8 +44,17 @@ def list_events():
         # Get filter parameters
         event_type_filter = request.args.get('type', type=int)
         
-        # Get events
-        events = get_events_by_type(event_type_filter)
+        # Get bookings (now representing events)
+        bookings = get_bookings_by_type(None)  # Get all bookings for now
+        
+        # In enhanced model, each booking IS an event
+        events = []
+        for booking in bookings:
+            events.append({
+                'id': booking.id,
+                'name': booking.name,
+                'bookings': [booking]  # Keep array structure for template compatibility
+            })
         
         # Get event type options for filter
         event_types = current_app.config.get('EVENT_TYPES', {})
@@ -54,11 +63,19 @@ def list_events():
         event_stats = {}
         for event in events:
             try:
-                event_stats[event.id] = get_event_statistics(event)
+                # Calculate combined stats from all bookings in this event
+                event_stats[event['id']] = {
+                    'total_bookings': len(event['bookings']),
+                    'total_teams': sum(len(booking.teams) for booking in event['bookings']),
+                    'has_pool': any(booking.pool for booking in event['bookings']),
+                    'pool_members': sum(len(booking.pool.registrations) for booking in event['bookings'] if booking.pool),
+                    'pool_selected': 0,  # Simplified for now
+                    'pool_available': 0,  # Simplified for now
+                }
             except Exception as stats_error:
-                current_app.logger.error(f"Error calculating stats for event {event.id}: {str(stats_error)}")
+                current_app.logger.error(f"Error calculating stats for event {event['id']}: {str(stats_error)}")
                 # Provide safe defaults
-                event_stats[event.id] = {
+                event_stats[event['id']] = {
                     'total_bookings': 0,
                     'total_teams': 0,
                     'has_pool': False,
@@ -92,42 +109,46 @@ def create_event():
         form = EventForm()
         
         if form.validate_on_submit():
-            # Create new event
-            event = create_event_with_defaults(
-                name=form.name.data,
-                event_type=form.event_type.data,
+            # Create new booking (representing an event)
+            # Generate a new event_id
+            max_event_id = db.session.scalar(
+                sa.select(sa.func.max(Booking.event_id)).where(Booking.event_id.is_not(None))
+            ) or 0
+            new_event_id = max_event_id + 1
+            
+            booking = create_booking_with_defaults(
+                booking_type=form.name.data,
+                event_id=new_event_id,
                 gender=form.gender.data,
                 format=form.format.data,
-                scoring=form.scoring.data,
-                has_pool=form.has_pool.data
+                organizer_id=current_user.id,
+                booking_date=date.today(),  # Default to today
             )
             
-            db.session.add(event)
-            db.session.flush()  # Get event ID
-            
-            # Add current user as event manager
-            event.event_managers.append(current_user)
+            db.session.add(booking)
+            db.session.flush()  # Get booking ID
             
             # Create pool if requested
             if form.has_pool.data:
-                from app.pools.utils import create_pool_for_event
-                pool = create_pool_for_event(event, is_open=True)
+                from app.pools.utils import create_pool_for_booking
+                pool = create_pool_for_booking(booking, is_open=True)
                 db.session.add(pool)
             
             db.session.commit()
             
             # Audit log
-            audit_log_create('Event', event.id, 
-                           f'Created event: {event.name} ({event.get_event_type_name()})',
+            audit_log_create('Booking', booking.id, 
+                           f'Created event via booking: {booking.booking_type}',
                            {
-                               'event_type': event.get_event_type_name(),
-                               'format': event.get_format_name(),
-                               'gender': event.get_gender_name(),
-                               'has_pool': event.has_pool
+                               'event_id': new_event_id,
+                               'booking_type': booking.booking_type,
+                               'format': booking.format,
+                               'gender': booking.gender,
+                               'has_pool': form.has_pool.data
                            })
             
-            flash(f'Event "{event.name}" created successfully!', 'success')
-            return redirect(url_for('events.manage_event', event_id=event.id))
+            flash(f'Event "{booking.name}" created successfully!', 'success')
+            return redirect(url_for('events.manage_event', event_id=new_event_id))
         
         return render_template('create_event.html', form=form)
         
@@ -145,27 +166,49 @@ def manage_event(event_id):
     Manage a specific event.
     """
     try:
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
+        # Get event (now represented as bookings with this event_id)
+        event_bookings = db.session.scalars(
+            sa.select(Booking).where(Booking.event_id == event_id)
+        ).all()
+        
+        if not event_bookings:
+            flash('Booking not found.', 'error')
             return redirect(url_for('events.list_events'))
         
-        # Check permissions
-        if not can_user_manage_event(current_user, event):
+        # Use the first booking to check permissions
+        primary_booking = event_bookings[0]
+        
+        # Check permissions - Event Managers can manage all events
+        if not (current_user.has_role('Event Manager') or current_user.is_admin or 
+                primary_booking.organizer_id == current_user.id):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to manage event {event_id}')
             flash('You do not have permission to manage this event.', 'error')
             return redirect(url_for('events.list_events'))
         
-        # Get event statistics
-        stats = get_event_statistics(event)
+        # Get event statistics (combined from all bookings)
+        booking_name = booking.name if booking else f"Booking {event_id}"
+        stats = {
+            'total_bookings': len(event_bookings),
+            'total_teams': sum(len(booking.teams) for booking in event_bookings),
+            'has_pool': any(booking.pool for booking in event_bookings),
+            'pool_members': sum(len(booking.pool.registrations) for booking in event_bookings if booking.pool),
+            'pool_selected': 0,  # Simplified for now
+            'pool_available': 0,  # Simplified for now
+        }
         
-        # Get forms
-        event_form = EventForm(obj=event)
+        # Get forms (populate with primary booking data)
+        event_form = EventForm()
+        event_form.name.data = primary_booking.booking_type
+        event_form.gender.data = primary_booking.gender
+        event_form.format.data = primary_booking.format
+        event_form.has_pool.data = any(booking.pool for booking in event_bookings)
+        
         manager_form = EventManagerAssignmentForm()
         
-        # Pre-populate manager form
-        manager_form.event_managers.data = [em.id for em in event.event_managers]
+        # For now, use organizer as the "manager"
+        if primary_booking.organizer_id:
+            manager_form.event_managers.data = [primary_booking.organizer_id]
         
         if request.method == 'POST':
             action = request.form.get('action')
@@ -173,8 +216,8 @@ def manage_event(event_id):
             if action == 'update_event' and event_form.validate_on_submit():
                 # Prevent event type changes once event is created (to protect pool integrity)
                 if event_form.event_type.data != event.event_type:
-                    flash('Event type cannot be changed after creation to protect pool data integrity. Delete and recreate the event if needed.', 'error')
-                    return redirect(url_for('events.manage_event', event_id=event_id))
+                    flash('Event type cannot be changed after creation to protect pool data integrity. Delete and recreate the booking if needed.', 'error')
+                    return redirect(url_for('events.manage_event', event_id=booking_id))
                 
                 # Update event details
                 old_values = {
@@ -198,11 +241,11 @@ def manage_event(event_id):
                 # Audit log changes
                 changes = get_model_changes(old_values, event_form.data)
                 if changes:
-                    audit_log_update('Event', event.id, 
+                    audit_log_update('Booking', booking.id, 
                                    f'Updated event: {event.name}', changes)
                 
-                flash('Event updated successfully!', 'success')
-                return redirect(url_for('events.manage_event', event_id=event_id))
+                flash('Booking updated successfully!', 'success')
+                return redirect(url_for('events.manage_event', event_id=booking_id))
             
             elif action == 'update_managers' and manager_form.validate_on_submit():
                 # Legacy bulk update (keeping for backwards compatibility)
@@ -221,12 +264,12 @@ def manage_event(event_id):
                 db.session.commit()
                 
                 # Audit log manager changes
-                audit_log_update('Event', event.id, 
+                audit_log_update('Booking', booking.id, 
                                f'Updated event managers for: {event.name}',
                                {'old_managers': old_managers, 'new_managers': new_manager_ids})
                 
-                flash('Event managers updated successfully!', 'success')
-                return redirect(url_for('events.manage_event', event_id=event_id))
+                flash('Booking managers updated successfully!', 'success')
+                return redirect(url_for('events.manage_event', event_id=booking_id))
             
             elif action == 'add_manager':
                 # Add a single manager
@@ -242,7 +285,7 @@ def manage_event(event_id):
                                 db.session.commit()
                                 
                                 # Audit log
-                                audit_log_update('Event', event.id, 
+                                audit_log_update('Booking', booking.id, 
                                                f'Added event manager: {member.firstname} {member.lastname}',
                                                {'added_manager': member_id})
                                 
@@ -253,7 +296,7 @@ def manage_event(event_id):
                             flash('Invalid member selected.', 'error')
                     except (ValueError, TypeError):
                         flash('Invalid member ID.', 'error')
-                return redirect(url_for('events.manage_event', event_id=event_id))
+                return redirect(url_for('events.manage_event', event_id=booking_id))
             
             elif action == 'remove_manager':
                 # Remove a single manager
@@ -267,7 +310,7 @@ def manage_event(event_id):
                             db.session.commit()
                             
                             # Audit log
-                            audit_log_update('Event', event.id, 
+                            audit_log_update('Booking', booking.id, 
                                            f'Removed event manager: {member.firstname} {member.lastname}',
                                            {'removed_manager': member_id})
                             
@@ -276,7 +319,7 @@ def manage_event(event_id):
                             flash('Manager not found or not assigned to this event.', 'error')
                     except (ValueError, TypeError):
                         flash('Invalid member ID.', 'error')
-                return redirect(url_for('events.manage_event', event_id=event_id))
+                return redirect(url_for('events.manage_event', event_id=booking_id))
         
         # Ensure manager form choices are populated before rendering
         # (in case form validation failed and choices were lost)
@@ -329,35 +372,33 @@ def delete_event(event_id):
             flash('Security validation failed.', 'error')
             return redirect(url_for('events.list_events'))
         
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
             return redirect(url_for('events.list_events'))
         
         # Check permissions
-        if not can_user_manage_event(current_user, event):
+        if not can_user_manage_event(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to delete event {event_id}')
             flash('You do not have permission to delete this event.', 'error')
             return redirect(url_for('events.list_events'))
         
-        # Check if event has bookings
-        if event.bookings:
-            flash('Cannot delete event with existing bookings. Please remove all bookings first.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+        # Enhanced booking model - in the new model, we can delete bookings directly
+        # No need to check for separate bookings relation
         
-        event_name = event.name
-        event_type = event.get_event_type_name()
+        booking_name = booking.name
+        event_type = booking.get_event_type_name()
         
         # Delete event (cascades to pool if exists)
-        db.session.delete(event)
+        db.session.delete(booking)
         db.session.commit()
         
         # Audit log
-        audit_log_delete('Event', event_id, 
-                        f'Deleted event: {event_name} ({event_type})')
+        audit_log_delete('Booking', event_id, 
+                        f'Deleted event: {booking_name} ({event_type})')
         
-        flash(f'Event "{event_name}" deleted successfully.', 'success')
+        flash(f'Booking "{booking_name}" deleted successfully.', 'success')
         return redirect(url_for('events.list_events'))
         
     except Exception as e:
@@ -379,15 +420,15 @@ def toggle_event_pool(event_id):
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('events.manage_event', event_id=booking_id))
         
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
             return redirect(url_for('events.list_events'))
         
         # Check permissions
-        if not can_user_manage_event(current_user, event):
+        if not can_user_manage_event(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to toggle pool for event {event_id}')
             flash('You do not have permission to manage this event.', 'error')
@@ -402,20 +443,20 @@ def toggle_event_pool(event_id):
         
         if strategy == 'none':
             flash('Pool management is not available for this event type.', 'warning')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('events.manage_event', event_id=booking_id))
         
         old_has_pools = pool_info['has_pools']
         
         if strategy == 'event':
             # Event-level pool toggle - open/close registration instead of deleting pool
             if old_has_pools:
-                if event.pool:
+                if booking.pool:
                     # Toggle pool open/closed status
-                    if event.pool.is_open:
-                        event.pool.is_open = False
+                    if booking.pool.is_open:
+                        booking.pool.is_open = False
                         action = 'closed for registration'
                     else:
-                        event.pool.is_open = True
+                        booking.pool.is_open = True
                         action = 'reopened for registration'
                 else:
                     # Create new pool if somehow missing
@@ -430,63 +471,60 @@ def toggle_event_pool(event_id):
                 action = 'enabled and opened'
                 
         elif strategy == 'booking':
-            # Booking-level pool toggle
+            # In enhanced booking model, each booking manages its own pool
             if old_has_pools:
-                # Disable: remove all booking pools
-                for booking in event.bookings:
-                    if booking.pool:
-                        db.session.delete(booking.pool)
+                # Disable: remove the pool for this booking
+                if booking.pool:
+                    db.session.delete(booking.pool)
+                booking.has_pool = False
                 action = 'disabled'
             else:
-                # Enable: create pools for all existing bookings
-                pools_created = 0
-                for booking in event.bookings:
-                    if not booking.pool:
-                        pool = create_pool_for_booking(booking, is_open=True)
-                        db.session.add(pool)
-                        pools_created += 1
-                
-                if pools_created > 0:
-                    action = f'enabled ({pools_created} pools created)'
+                # Enable: create pool for this booking
+                if not booking.pool:
+                    from app.pools.utils import create_pool_for_booking
+                    pool = create_pool_for_booking(booking, is_open=True)
+                    db.session.add(pool)
+                    booking.has_pool = True
+                    action = 'enabled (pool created)'
                 else:
-                    action = 'enabled (no bookings yet - pools will be created when bookings are added)'
+                    action = 'enabled (pool already exists)'
         
         db.session.commit()
         
         # Audit log
-        audit_log_update('Event', event.id, 
+        audit_log_update('Booking', booking.id, 
                         f'Pool {action} for event: {event.name} (strategy: {strategy})',
                         {'old_has_pools': old_has_pools, 'new_has_pools': not old_has_pools, 'strategy': strategy})
         
         flash(f'Pool {action} for event "{event.name}".', 'success')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('events.manage_event', event_id=booking_id))
         
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error toggling pool for event {event_id}: {str(e)}")
         flash('An error occurred while updating the pool status.', 'error')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('events.manage_event', event_id=booking_id))
 
 
-@bp.route('/create_booking/<int:event_id>', methods=['POST'])
+@bp.route('/create_booking/<int:booking_id>', methods=['POST'])
 @login_required
-def create_booking(event_id):
+def create_booking(booking_id):
     """
-    Create a new booking for an event.
+    Create a new booking session for an existing event/booking.
     """
     try:
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('events.manage_event', event_id=booking_id))
         
-        event = db.session.get(Event, event_id)
-        if not event:
-            flash('Event not found.', 'error')
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
             return redirect(url_for('events.list_events'))
         
         # Check permissions
-        if not can_user_manage_event(current_user, event):
+        if not can_user_manage_event(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to create booking for event {event_id}')
             flash('You do not have permission to manage this event.', 'error')
@@ -508,7 +546,7 @@ def create_booking(event_id):
             priority=priority,
             vs=vs,
             home_away=home_away,
-            event_id=event.id,
+            event_id=booking.id,
             booking_type='event'
         )
         
@@ -530,19 +568,19 @@ def create_booking(event_id):
         # Audit log
         audit_log_create('Booking', booking.id, 
                         f'Created booking for event: {event.name} on {booking_date}',
-                        {'event_id': event.id, 'date': str(booking_date), 'session': session, 'strategy': strategy})
+                        {'event_id': booking.id, 'date': str(booking_date), 'session': session, 'strategy': strategy})
         
         flash(f'Booking created successfully for {booking_date.strftime("%B %d, %Y")}!', 'success')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('events.manage_event', event_id=booking_id))
         
     except ValueError as e:
         flash('Invalid date format.', 'error')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('events.manage_event', event_id=booking_id))
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error creating booking for event {event_id}: {str(e)}")
         flash('An error occurred while creating the booking.', 'error')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('events.manage_event', event_id=booking_id))
 
 
 # API endpoints
@@ -554,15 +592,15 @@ def api_get_event(event_id):
     Get event details (AJAX endpoint).
     """
     try:
-        event = db.session.get(Event, event_id)
-        if not event:
+        booking = db.session.get(Booking, event_id)
+        if not booking:
             return jsonify({
                 'success': False,
-                'error': 'Event not found'
+                'error': 'Booking not found'
             }), 404
         
         # Check permission
-        if not can_user_manage_event(current_user, event):
+        if not can_user_manage_event(current_user, booking):
             return jsonify({
                 'success': False,
                 'error': 'Permission denied'
@@ -573,10 +611,10 @@ def api_get_event(event_id):
         
         # Format event data
         event_data = {
-            'id': event.id,
+            'id': booking.id,
             'name': event.name,
             'event_type': event.event_type,
-            'event_type_name': event.get_event_type_name(),
+            'event_type_name': booking.get_event_type_name(),
             'gender': event.gender,
             'gender_name': event.get_gender_name(),
             'format': event.format,

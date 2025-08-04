@@ -1,7 +1,7 @@
 ---
 author: 1
-description: This page provides the club's bank details to allow users to pay money
-  to the club
+description: "This page provides the club's bank details to allow users to pay money\
+  \ to the club\r\n\r\nGive us your money!"
 is_active: true
 show_in_footer: true
 slug: bank-details

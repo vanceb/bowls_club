@@ -155,7 +155,7 @@ class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL') or \
-        'sqlite:///../app.db'
+        'sqlite:///app.db'
     SESSION_COOKIE_SECURE = False  # Allow HTTP in development
 
 

@@ -8,7 +8,7 @@ import sqlalchemy as sa
 
 from app.main import bp
 from app import db
-from app.models import Member, Post, Booking, Event, Pool, PoolRegistration
+from app.models import Member, Post, Booking, Pool, PoolRegistration
 from app.forms import FlaskForm
 from app.routes import role_required
 
@@ -45,7 +45,6 @@ def index():
         # Get upcoming events (next 7 days)
         upcoming_events = db.session.scalars(
             sa.select(Booking)
-            .join(Event)
             .where(
                 Booking.booking_date >= today,
                 Booking.booking_date <= today + timedelta(days=7)
@@ -86,7 +85,7 @@ def index():
 @login_required
 def upcoming_events():
     """
-    Display upcoming events that are open for registration
+    Display upcoming events (bookings) that are open for registration
     Show user's registration status for each event
     """
     try:
@@ -102,115 +101,92 @@ def upcoming_events():
         # Import models needed for queries
         from app.models import Pool, PoolRegistration, Booking
         
-        # Get all events that have any type of pool or user relationship
-        # Start with events that have event-level pools OR booking-level pools (has_pool flag)
-        events_with_pools = db.session.scalars(
-            sa.select(Event)
-            .where(Event.has_pool == True)
-            .order_by(Event.created_at.desc())
+        # Get all bookings (events) that have pools enabled
+        bookings_with_pools = db.session.scalars(
+            sa.select(Booking)
+            .where(Booking.has_pool == True)
+            .order_by(Booking.created_at_event.desc())
         ).all()
         
-        # Fallback: Also get events that actually have pool records but may have incorrect has_pool flag
+        # Fallback: Get bookings that actually have pool records but may have incorrect has_pool flag
         # This handles data inconsistencies where pools exist but has_pool=False
-        events_with_actual_event_pools = db.session.scalars(
-            sa.select(Event)
-            .join(Pool, Event.id == Pool.event_id)
-            .where(Event.has_pool == False)  # Only get ones not already captured above
-            .order_by(Event.created_at.desc())
-        ).all()
-        
-        events_with_actual_booking_pools = db.session.scalars(
-            sa.select(Event)
-            .join(Booking, Event.id == Booking.event_id)
+        bookings_with_actual_pools = db.session.scalars(
+            sa.select(Booking)
             .join(Pool, Booking.id == Pool.booking_id)
-            .where(Event.has_pool == False)  # Only get ones not already captured above
-            .order_by(Event.created_at.desc())
+            .where(Booking.has_pool == False)  # Only get ones not already captured above
+            .order_by(Booking.created_at_event.desc())
         ).all()
         
-        # Get events where user is registered in event-level pools
-        events_user_registered_event_pools = db.session.scalars(
-            sa.select(Event)
-            .join(Pool, Event.id == Pool.event_id)
-            .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
-            .where(PoolRegistration.member_id == current_user.id)
-            .order_by(Event.created_at.desc())
-        ).all()
-        
-        # Get events where user is registered in booking-level pools
-        events_user_registered_booking_pools = db.session.scalars(
-            sa.select(Event)
-            .join(Booking, Event.id == Booking.event_id)
+        # Get bookings where user is registered in pools
+        bookings_user_registered = db.session.scalars(
+            sa.select(Booking)
             .join(Pool, Booking.id == Pool.booking_id)
             .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
             .where(PoolRegistration.member_id == current_user.id)
-            .order_by(Event.created_at.desc())
+            .order_by(Booking.created_at_event.desc())
         ).all()
         
-        # Get events the user can manage (includes admin, global event managers, and specific event managers)
-        events_user_manages = []
+        # Get bookings the user can manage (includes admin, global event managers, and specific booking managers)
+        bookings_user_manages = []
         if current_user.is_admin or current_user.has_role('Event Manager'):
-            # Admin and global event managers can see all events with pools
-            events_user_manages = events_with_pools
+            # Admin and global event managers can see all bookings with pools
+            bookings_user_manages = bookings_with_pools
         else:
-            # Specific event managers only see their assigned events
-            events_user_manages = db.session.scalars(
-                sa.select(Event)
-                .join(Event.event_managers)
+            # Specific booking managers only see their assigned bookings
+            bookings_user_manages = db.session.scalars(
+                sa.select(Booking)
+                .join(Booking.booking_managers)
                 .where(
-                    Event.event_managers.any(Member.id == current_user.id),
-                    Event.has_pool == True
+                    Booking.booking_managers.any(Member.id == current_user.id),
+                    Booking.has_pool == True
                 )
-                .order_by(Event.created_at.desc())
+                .order_by(Booking.created_at_event.desc())
             ).all()
         
-        # Combine and deduplicate events
-        all_events = list({event.id: event for event in 
-                          events_with_pools + 
-                          events_with_actual_event_pools + 
-                          events_with_actual_booking_pools +
-                          events_user_registered_event_pools + 
-                          events_user_registered_booking_pools + 
-                          events_user_manages}.values())
-        all_events.sort(key=lambda x: x.created_at, reverse=True)
+        # Combine and deduplicate bookings
+        all_bookings = list({booking.id: booking for booking in 
+                           bookings_with_pools + 
+                           bookings_with_actual_pools +
+                           bookings_user_registered + 
+                           bookings_user_manages}.values())
+        all_bookings.sort(key=lambda x: x.created_at_event or datetime.now(), reverse=True)
         
-        # For each event, get the user's registration status and management permissions
+        # For each booking, get the user's registration status and management permissions
         events_data = []
-        for event in all_events:
-            # Check if user can manage this event
-            from app.events.utils import can_user_manage_event, get_event_pool_info
-            user_can_manage = can_user_manage_event(current_user, event)
+        for booking in all_bookings:
+            # Check if user can manage this booking
+            user_can_manage = (current_user.is_admin or 
+                             current_user.has_role('Event Manager') or
+                             current_user in booking.booking_managers)
             
-            # Get comprehensive pool information (handles both event-level and booking-level pools)
-            pool_info = get_event_pool_info(event)
+            # Get pool information for this booking
+            pool = booking.pool if hasattr(booking, 'pool') else None
+            has_pools = pool is not None
+            pool_open = pool.is_open if pool else False
+            pool_count = len(pool.registrations) if pool else 0
             
-            # Skip events that don't actually have any pools
-            if not pool_info['has_pools']:
+            # Skip bookings that don't actually have any pools
+            if not has_pools:
                 continue
                 
             event_info = {
-                'event': event,
+                'event': booking,  # Keep 'event' key for template compatibility
                 'registration_status': 'not_registered',
                 'registration': None,
-                'pool_count': pool_info['total_members'],
-                'pool_open': pool_info['pool_status'] in ['open', 'mixed'],
+                'pool_count': pool_count,
+                'pool_open': pool_open,
                 'user_can_manage': user_can_manage,
-                'pool_info': pool_info
+                'pool_info': {
+                    'has_pools': has_pools,
+                    'total_members': pool_count,
+                    'pool_status': 'open' if pool_open else 'closed'
+                }
             }
             
-            # Check if user is registered in any pools for this event
+            # Check if user is registered in the pool
             user_registration = None
-            
-            # Check event-level pool first
-            if event.pool:
-                user_registration = event.pool.get_member_registration(current_user.id)
-            
-            # If not found in event pool, check booking-level pools
-            if not user_registration:
-                for booking in event.bookings:
-                    if booking.pool:
-                        user_registration = booking.pool.get_member_registration(current_user.id)
-                        if user_registration:
-                            break
+            if pool:
+                user_registration = pool.get_member_registration(current_user.id)
             
             if user_registration:
                 event_info['registration'] = user_registration
@@ -258,7 +234,7 @@ def upcoming_events():
 @login_required
 def register_for_event():
     """
-    Register current user for an event pool
+    Register current user for a booking (event) pool
     """
     try:
         from app.audit import audit_log_create
@@ -275,31 +251,37 @@ def register_for_event():
             flash('Missing event information.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
-        # Get the event
-        event = db.session.get(Event, int(event_id))
-        if not event:
+        # Get the booking (event)
+        booking = db.session.get(Booking, int(event_id))
+        if not booking:
             flash('Event not found.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
-        # Check if event has pool enabled
-        if not event.has_pool_enabled():
+        # Check if booking has pool enabled
+        if not booking.has_pool:
             flash('This event does not have pool registration enabled.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
+        # Get the pool for this booking
+        pool = booking.pool if hasattr(booking, 'pool') else None
+        if not pool:
+            flash('No pool found for this event.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
         # Check if pool is open
-        if not event.is_pool_open():
+        if not pool.is_open:
             flash('Registration for this event is closed.', 'warning')
             return redirect(url_for('main.upcoming_events'))
         
         # Check if user is already registered
-        existing_registration = event.pool.get_member_registration(current_user.id)
+        existing_registration = pool.get_member_registration(current_user.id)
         if existing_registration and existing_registration.is_active:
-            flash(f'You are already registered for {event.name}.', 'warning')
+            flash(f'You are already registered for {booking.name}.', 'warning')
             return redirect(url_for('main.upcoming_events'))
         
         # Create new registration
         registration = PoolRegistration(
-            pool_id=event.pool.id,
+            pool_id=pool.id,
             member_id=current_user.id
         )
         
@@ -308,9 +290,9 @@ def register_for_event():
         
         # Audit log
         audit_log_create('PoolRegistration', registration.id, 
-                        f'User {current_user.username} registered for event: {event.name}')
+                        f'User {current_user.username} registered for event: {booking.name}')
         
-        flash(f'Successfully registered for {event.name}!', 'success')
+        flash(f'Successfully registered for {booking.name}!', 'success')
         return redirect(url_for('main.upcoming_events'))
         
     except Exception as e:
@@ -323,7 +305,7 @@ def register_for_event():
 @login_required
 def withdraw_from_event():
     """
-    Withdraw current user from an event pool
+    Withdraw current user from a booking (event) pool
     """
     try:
         from app.audit import audit_log_update
@@ -340,25 +322,31 @@ def withdraw_from_event():
             flash('Missing event information.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
-        # Get the event
-        event = db.session.get(Event, int(event_id))
-        if not event:
+        # Get the booking (event)
+        booking = db.session.get(Booking, int(event_id))
+        if not booking:
             flash('Event not found.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
-        # Check if event has pool enabled
-        if not event.has_pool_enabled():
+        # Check if booking has pool enabled
+        if not booking.has_pool:
             flash('This event does not have pool registration.', 'error')
             return redirect(url_for('main.upcoming_events'))
         
+        # Get the pool for this booking
+        pool = booking.pool if hasattr(booking, 'pool') else None
+        if not pool:
+            flash('No pool found for this event.', 'error')
+            return redirect(url_for('main.upcoming_events'))
+        
         # Get user's registration
-        registration = event.pool.get_member_registration(current_user.id)
+        registration = pool.get_member_registration(current_user.id)
         if not registration or not registration.is_active:
-            flash(f'You are not registered for {event.name}.', 'warning')
+            flash(f'You are not registered for {booking.name}.', 'warning')
             return redirect(url_for('main.upcoming_events'))
         
         # Check if pool is still open
-        if not event.is_pool_open():
+        if not pool.is_open:
             flash('Registration for this event is closed. Contact the event manager to make changes.', 'warning')
             return redirect(url_for('main.upcoming_events'))
         
@@ -370,9 +358,9 @@ def withdraw_from_event():
         # Audit log
         from app.audit import audit_log_delete
         audit_log_delete('PoolRegistration', registration_id, 
-                        f'User {current_user.username} withdrew from event: {event.name}')
+                        f'User {current_user.username} withdrew from event: {booking.name}')
         
-        flash(f'Successfully withdrawn from {event.name}.', 'success')
+        flash(f'Successfully withdrawn from {booking.name}.', 'success')
         return redirect(url_for('main.upcoming_events'))
         
     except Exception as e:

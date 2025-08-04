@@ -55,9 +55,6 @@ def create_app(config_name='development'):
     # Register blueprints/routes
     register_routes(app)
     
-    # Initialize core roles
-    initialize_core_roles(app)
-    
     return app
 
 
@@ -261,29 +258,3 @@ def register_routes(app):
     from app import models
 
 
-def initialize_core_roles(app):
-    """Initialize core roles if they don't exist"""
-    with app.app_context():
-        try:
-            from app.models import Role
-            
-            core_roles = app.config.get('CORE_ROLES', [])
-            created_count = 0
-            
-            for role_name in core_roles:
-                existing_role = db.session.scalar(
-                    sa.select(Role).where(Role.name == role_name)
-                )
-                if not existing_role:
-                    role = Role(name=role_name)
-                    db.session.add(role)
-                    created_count += 1
-                    app.logger.info(f"Created core role: {role_name}")
-            
-            if created_count > 0:
-                db.session.commit()
-                app.logger.info(f"Initialized {created_count} core roles")
-                
-        except Exception as e:
-            app.logger.error(f"Error initializing core roles: {str(e)}")
-            db.session.rollback()

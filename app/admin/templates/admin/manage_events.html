@@ -1149,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } else if (eventId > 0) {
             // Load selected event data via AJAX
-            fetch(`/api/event/${eventId}`)
+            fetch(`/events/api/v1/event/${eventId}`)
                 .then(response => {
                     console.log('API Response status:', response.status);
                     console.log('API Response headers:', response.headers);

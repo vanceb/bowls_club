@@ -11,7 +11,7 @@ from flask_wtf import FlaskForm
 
 from app import db
 from app.bookings import bp
-from app.models import Booking, Member, Event, Team
+from app.models import Booking, Member, Team
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
 from app.events.utils import can_user_manage_event

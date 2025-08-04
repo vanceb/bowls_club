@@ -1,7 +1,7 @@
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from app import create_app, db
-from app.models import Member, Booking, Event, Role, Post, PolicyPage, Team, TeamMember
+from app.models import Member, Booking, Role, Post, PolicyPage, Team, TeamMember
 import os
 
 app = create_app(os.getenv('FLASK_CONFIG') or 'development')
@@ -14,7 +14,6 @@ def make_shell_context():
         'db': db, 
         'Member': Member, 
         'Booking': Booking, 
-        'Event': Event,
         'Role': Role,
         'Post': Post,
         'PolicyPage': PolicyPage,

@@ -8,7 +8,7 @@ from flask import current_app
 import sqlalchemy as sa
 
 from app import db
-from app.models import Pool, PoolRegistration, Event, Booking, Member
+from app.models import Pool, PoolRegistration, Booking, Member
 
 
 def can_user_manage_pool(user: Member, pool: Pool) -> bool:
@@ -150,14 +150,14 @@ def get_pool_statistics(pool: Pool) -> Dict[str, Any]:
         }
 
 
-def create_pool_for_event(event: Event, max_players: Optional[int] = None, 
+def create_pool_for_booking_with_event_id(event_id: int, max_players: Optional[int] = None, 
                          auto_close_date: Optional[datetime] = None,
                          is_open: bool = True) -> Pool:
     """
-    Create a new pool associated with an event.
+    Create a new pool associated with an event (via Booking model).
     
     Args:
-        event: The event to associate the pool with
+        event_id: The event ID to associate the pool with
         max_players: Maximum number of players (None for unlimited)
         auto_close_date: Date to automatically close the pool
         is_open: Whether the pool starts open for registration
@@ -165,16 +165,32 @@ def create_pool_for_event(event: Event, max_players: Optional[int] = None,
     Returns:
         New Pool instance (not yet committed to database)
     """
+    # Find or create a booking for this event
+    from app.models import Booking
+    import sqlalchemy as sa
+    
+    # Find existing booking for this event or create one
+    booking = db.session.scalar(
+        sa.select(Booking).where(Booking.event_id == event_id).limit(1)
+    )
+    
+    if not booking:
+        # Create a default booking for the event
+        booking = Booking(
+            event_id=event_id,
+            booking_type='Event Pool',
+            session='All Day'
+        )
+        db.session.add(booking)
+        db.session.flush()  # Get the ID
+    
     pool = Pool(
-        event_id=event.id,
-        booking_id=None,
+        event_id=None,
+        booking_id=booking.id,
         is_open=is_open,
         max_players=max_players,
         auto_close_date=auto_close_date
     )
-    
-    # Update event's has_pool flag
-    event.has_pool = True
     
     return pool
 
@@ -243,20 +259,12 @@ def get_pools_for_user(user: Member, include_managed: bool = True,
     pool_ids = set()
     
     if include_managed:
-        # Pools for events the user manages
+        # Pools for events the user manages (via Booking model)
         if user.has_role('Event Manager') or user.has_role('Admin'):
             # All pools
             all_pools = db.session.scalars(sa.select(Pool)).all()
             pool_ids.update(pool.id for pool in all_pools)
         else:
-            # Only pools for events they manage
-            managed_event_pools = db.session.scalars(
-                sa.select(Pool).join(Event).where(
-                    Event.event_managers.contains(user)
-                )
-            ).all()
-            pool_ids.update(pool.id for pool in managed_event_pools)
-            
             # Pools for bookings they organize
             organized_booking_pools = db.session.scalars(
                 sa.select(Pool).join(Booking).where(
