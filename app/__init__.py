@@ -233,7 +233,6 @@ def register_routes(app):
     from app.content import bp as content_bp
     from app.bookings import bp as bookings_bp
     from app.teams import bp as teams_bp
-    from app.events import bp as events_bp
     from app.pools import bp as pools_bp
     from app.api import bp as api_bp
     from app.admin import bp as admin_bp
@@ -244,7 +243,6 @@ def register_routes(app):
     app.register_blueprint(content_bp, url_prefix='/content')
     app.register_blueprint(bookings_bp, url_prefix='/bookings')
     app.register_blueprint(teams_bp, url_prefix='/teams')
-    app.register_blueprint(events_bp, url_prefix='/events')
     app.register_blueprint(pools_bp, url_prefix='/pools')
     app.register_blueprint(rollups_bp, url_prefix='/rollups')
     app.register_blueprint(api_bp)

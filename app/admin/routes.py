@@ -12,7 +12,7 @@ from app.models import Member, Role, Booking, Pool, PoolRegistration
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_security_event, get_model_changes
 from app.forms import FlaskForm
 from app.routes import role_required
-from app.events.utils import can_user_manage_event
+from app.bookings.utils import can_user_manage_event
 
 def admin_required(f):
     """

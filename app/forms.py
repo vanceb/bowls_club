@@ -180,74 +180,116 @@ class EditProfileForm(FlaskForm):
 
 
 
-class EventForm(FlaskForm):
-    event_id = HiddenField('Event ID')
+class BookingManagementForm(FlaskForm):
+    """Consolidated form for managing both booking logistics and event details"""
+    
+    # Event Details
     name = StringField('Event Name', validators=[DataRequired(), Length(min=1, max=256)])
     event_type = SelectField(
         'Event Type',
         coerce=int,
-        choices=[],  # Choices will be populated dynamically
+        choices=[],
         validators=[DataRequired()]
     )
     gender = SelectField(
         'Gender',
         coerce=int,
-        choices=[],  # Choices will be populated dynamically
+        choices=[],
         validators=[DataRequired()]
     )
     format = SelectField(
         'Format',
         coerce=int,
-        choices=[],  # Choices will be populated dynamically
+        choices=[],
         validators=[DataRequired()]
     )
     scoring = StringField('Scoring', validators=[Optional(), Length(max=64)])
-    event_managers = SelectMultipleField(
-        'Event Managers',
+    has_pool = BooleanField('Enable Pool Registration', default=False)
+    
+    # Booking Logistics
+    booking_date = DateField('Event Date', validators=[DataRequired()])
+    session = SelectField(
+        'Session',
         coerce=int,
-        choices=[],  # Choices will be populated dynamically
-        validators=[Optional()],
-        option_widget=CheckboxInput(),
-        widget=ListWidget(prefix_label=False)
+        choices=[],
+        validators=[DataRequired()]
     )
+    rink_count = IntegerField(
+        'Number of Rinks',
+        validators=[DataRequired()],
+        default=1
+    )
+    vs = StringField('Opposition Team', validators=[Optional(), Length(max=128)])
+    home_away = SelectField(
+        'Venue',
+        choices=[],
+        validators=[Optional()]
+    )
+    
+    # Series Management
+    series_id = HiddenField('Series ID')
+    create_series = BooleanField('Create as Series (multiple dates)', default=False)
+    series_name = StringField('Series Name', validators=[Optional(), Length(max=256)])
+    
+    # Form Actions
     submit = SubmitField('Save Event')
-
+    duplicate = SubmitField('Duplicate to New Date')
+    
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Populate the event type choices dynamically from the app config
-        event_types = current_app.config.get('EVENT_TYPES', {})
-        self.event_type.choices = [
-            (value, name) for name, value in event_types.items()
-        ]
-        
-        # Populate the gender choices dynamically from the app config
-        event_genders = current_app.config.get('EVENT_GENDERS', {})
-        self.gender.choices = [
-            (value, name) for name, value in event_genders.items()
-        ]
-        
-        # Populate the format choices dynamically from the app config
-        event_formats = current_app.config.get('EVENT_FORMATS', {})
-        self.format.choices = [
-            (value, name) for name, value in event_formats.items()
-        ]
-        
-        # Populate the event managers choices dynamically from Members with Event Manager role
-        from app.models import Member, Role
-        from app import db
-        import sqlalchemy as sa
-        
-        # Get Members who have the Event Manager role
-        event_managers = db.session.scalars(
-            sa.select(Member)
-            .join(Member.roles)
-            .where(Role.name == 'Event Manager')
-            .order_by(Member.firstname, Member.lastname)
-        ).all()
-        
-        self.event_managers.choices = [
-            (manager.id, f"{manager.firstname} {manager.lastname}") for manager in event_managers
-        ]
+        try:
+            super().__init__(*args, **kwargs)
+            
+            # Populate event type choices
+            event_types = current_app.config.get('EVENT_TYPES', {})
+            self.event_type.choices = [
+                (value, name) for name, value in event_types.items()
+            ]
+            
+            # Populate gender choices
+            event_genders = current_app.config.get('EVENT_GENDERS', {})
+            self.gender.choices = [
+                (value, name) for name, value in event_genders.items()
+            ]
+            
+            # Populate format choices
+            event_formats = current_app.config.get('EVENT_FORMATS', {})
+            self.format.choices = [
+                (value, name) for name, value in event_formats.items()
+            ]
+            
+            # Populate session choices
+            self.session.choices = [
+                (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
+            ]
+            
+            # Populate venue choices
+            self.home_away.choices = [('', 'Select venue...')] + [
+                (value, key) for key, value in current_app.config.get('HOME_AWAY_OPTIONS', {}).items()
+            ]
+            
+            # Set rink count validation
+            max_rinks = int(current_app.config.get('RINKS', 6))
+            self.rink_count.validators.append(NumberRange(min=1, max=max_rinks))
+            
+        except Exception as init_error:
+            current_app.logger.error(f"BookingManagementForm initialization error: {str(init_error)}")
+            # Set default empty choices if initialization fails
+            if hasattr(self, 'event_type'):
+                self.event_type.choices = []
+            if hasattr(self, 'gender'):
+                self.gender.choices = []
+            if hasattr(self, 'format'):
+                self.format.choices = []
+            if hasattr(self, 'session'):
+                self.session.choices = []
+            if hasattr(self, 'home_away'):
+                self.home_away.choices = []
+            raise init_error
+
+# Keep EventForm for backward compatibility but make it inherit from BookingManagementForm
+class EventForm(BookingManagementForm):
+    """Legacy EventForm - now inherits from BookingManagementForm for backward compatibility"""
+    pass
 
 
 class EventSelectionForm(FlaskForm):

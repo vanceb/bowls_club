@@ -14,7 +14,7 @@ from app.bookings import bp
 from app.models import Booking, Member, Team
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
-from app.events.utils import can_user_manage_event
+from app.bookings.utils import can_user_manage_event
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation, audit_log_security_event, get_model_changes
 
 
@@ -127,25 +127,37 @@ def get_bookings_range(start_date, end_date):
             if session not in bookings_by_date[date_str]:
                 bookings_by_date[date_str][session] = []
             
+            # Safely get organizer name
+            try:
+                organizer_name = f"{booking.organizer.firstname} {booking.organizer.lastname}" if booking.organizer else "Unknown"
+            except Exception as organizer_error:
+                current_app.logger.error(f"Error accessing organizer for booking {booking.id}: {str(organizer_error)}")
+                organizer_name = "Unknown"
+            
             booking_info = {
                 'id': booking.id,
                 'rink_count': booking.rink_count,
                 'booking_type': booking.booking_type,
-                'organizer': f"{booking.organizer.firstname} {booking.organizer.lastname}" if booking.organizer else "Unknown",
+                'organizer': organizer_name,
                 'organizer_notes': booking.organizer_notes
             }
             
             if booking.booking_type == 'rollup':
                 # For roll-ups, include player count from team members
                 team_member_count = 0
-                if booking.teams:
-                    for team in booking.teams:
-                        team_member_count += len(team.members)
+                try:
+                    if hasattr(booking, 'teams') and booking.teams:
+                        for team in booking.teams:
+                            if hasattr(team, 'members') and team.members:
+                                team_member_count += len(team.members)
+                except Exception as team_error:
+                    current_app.logger.error(f"Error counting team members for booking {booking.id}: {str(team_error)}")
+                    team_member_count = 0
                 booking_info['player_count'] = team_member_count
-            elif booking.event:
-                # For regular events, include event details
-                booking_info['event_name'] = booking.event.name
-                booking_info['event_type'] = booking.event.event_type
+            else:
+                # For regular events, include event details from booking (booking IS the event now)
+                booking_info['event_name'] = booking.name
+                booking_info['event_type'] = booking.event_type
                 booking_info['vs'] = booking.vs
             
             bookings_by_date[date_str][session].append(booking_info)
@@ -213,7 +225,7 @@ def my_games():
             return redirect(url_for('bookings.my_games'))
         
         # GET request - display games
-        from app.models import TeamMember, Team
+        from app.models import TeamMember, Team, Pool, PoolRegistration
         
         # Get current date
         today = date.today()
@@ -244,12 +256,25 @@ def my_games():
             .order_by(Booking.booking_date)
         ).all()
         
+        # Get pool registrations for current user (events they registered interest in)
+        pool_registrations = db.session.scalars(
+            sa.select(PoolRegistration)
+            .join(PoolRegistration.pool)
+            .join(Pool.booking)
+            .where(
+                PoolRegistration.member_id == current_user.id,
+                PoolRegistration.status == 'registered'
+            )
+            .order_by(Booking.booking_date)
+        ).all()
+        
         # Create CSRF form for POST actions
         csrf_form = FlaskForm()
         
         return render_template('my_games.html', 
                              assignments=assignments,
                              roll_up_invitations=roll_up_invitations,
+                             pool_registrations=pool_registrations,
                              today=today,
                              csrf_form=csrf_form)
                              
@@ -259,6 +284,7 @@ def my_games():
         return render_template('my_games.html', 
                              assignments=[], 
                              roll_up_invitations=[],
+                             pool_registrations=[],
                              today=date.today(),
                              csrf_form=FlaskForm())
 
@@ -276,14 +302,15 @@ def admin_edit_booking(booking_id):
         booking = db.session.get(Booking, booking_id)
         if not booking:
             flash('Booking not found.', 'error')
-            return redirect(url_for('events.list_events'))
+            return redirect(url_for('bookings.admin_list_bookings'))
         
-        # Check permissions - must be able to manage the associated event
-        if booking.event and not can_user_manage_event(current_user, booking.event):
+        # Check permissions - must be able to manage the booking
+        from app.bookings.utils import can_user_manage_booking
+        if not can_user_manage_booking(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized attempt to edit booking {booking_id} for event {booking.event.id}')
-            flash('You do not have permission to manage this event.', 'error')
-            return redirect(url_for('events.list_events'))
+                                   f'Unauthorized attempt to edit booking {booking_id}')
+            flash('You do not have permission to manage this booking.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
         
         form = BookingForm(obj=booking)
         
@@ -315,7 +342,7 @@ def admin_edit_booking(booking_id):
             
             # Redirect back to events management if the booking has an event
             if booking.event_id:
-                return redirect(url_for('events.list_events'))
+                return redirect(url_for('bookings.admin_list_bookings'))
             else:
                 return redirect(url_for('bookings.bookings'))
         
@@ -351,7 +378,7 @@ def admin_edit_booking(booking_id):
     except Exception as e:
         current_app.logger.error(f"Error in edit_booking: {str(e)}")
         flash('An error occurred while editing the booking.', 'error')
-        return redirect(url_for('events.list_events'))
+        return redirect(url_for('bookings.admin_list_bookings'))
 
 
 # DELETED: admin_copy_teams_to_booking - EventTeam functionality has been removed
@@ -591,7 +618,7 @@ def admin_manage_teams(booking_id):
         booking = db.session.get(Booking, booking_id)
         if not booking:
             flash('Booking not found.', 'error')
-            return redirect(url_for('events.list_events'))
+            return redirect(url_for('bookings.admin_list_bookings'))
         
         # Check if user has permission to manage teams
         if not current_user.is_admin and booking.organizer_id != current_user.id:
@@ -731,3 +758,374 @@ def admin_manage_teams(booking_id):
         current_app.logger.error(f"Error managing teams for booking {booking_id}: {str(e)}")
         flash('An error occurred while managing teams.', 'error')
         return redirect(url_for('bookings.bookings'))
+
+
+@bp.route('/admin/list')
+@login_required
+@role_required('Event Manager')
+def admin_list_bookings():
+    """
+    List all bookings for Event Manager management (replaces events.list_events)
+    """
+    try:
+        # Get filter parameters
+        event_type_filter = request.args.get('type', type=int)
+        
+        # Get all bookings (events are now bookings)
+        query = sa.select(Booking).order_by(Booking.booking_date.desc())
+        
+        if event_type_filter:
+            query = query.where(Booking.event_type == event_type_filter)
+        
+        bookings = db.session.scalars(query).all()
+        
+        # Get event type options for filter
+        event_types = current_app.config.get('EVENT_TYPES', {})
+        
+        # Calculate statistics for each booking
+        booking_stats = {}
+        for booking in bookings:
+            try:
+                # Safely calculate team count
+                try:
+                    total_teams = len(booking.teams) if hasattr(booking, 'teams') and booking.teams else 0
+                except:
+                    total_teams = 0
+                
+                # Safely calculate pool statistics
+                try:
+                    pool_members = len(booking.pool.registrations) if booking.pool and hasattr(booking.pool, 'registrations') else 0
+                except:
+                    pool_members = 0
+                
+                booking_stats[booking.id] = {
+                    'total_teams': total_teams,
+                    'has_pool': booking.pool is not None,
+                    'pool_members': pool_members,
+                    'pool_selected': 0,  # Simplified for now
+                    'pool_available': pool_members,
+                }
+            except Exception as stats_error:
+                current_app.logger.error(f"Error calculating stats for booking {booking.id}: {str(stats_error)}")
+                booking_stats[booking.id] = {
+                    'total_teams': 0,
+                    'has_pool': False,
+                    'pool_members': 0,
+                    'pool_selected': 0,
+                    'pool_available': 0,
+                }
+        
+        return render_template('admin_list_bookings.html', 
+                             bookings=bookings,
+                             booking_stats=booking_stats,
+                             event_types=event_types,
+                             current_filter=event_type_filter)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in admin list bookings: {str(e)}")
+        flash('An error occurred while loading bookings.', 'error')
+        return redirect(url_for('main.index'))
+
+
+@bp.route('/admin/create', methods=['GET', 'POST'])
+@login_required
+@role_required('Event Manager')
+def admin_create_booking():
+    """
+    Create a new booking/event (replaces events.create_event)
+    """
+    try:
+        from app.forms import EventForm
+        from app.bookings.utils import create_booking_with_defaults
+        
+        form = EventForm()
+        
+        if form.validate_on_submit():
+            # Create new booking (representing an event)
+            booking = create_booking_with_defaults(
+                name=form.name.data,
+                event_type=form.event_type.data,
+                gender=form.gender.data,
+                format=form.format.data,
+                scoring=form.scoring.data,
+                organizer_id=current_user.id,
+                has_pool=form.has_pool.data,
+            )
+            
+            db.session.add(booking)
+            db.session.flush()  # Get booking ID
+            
+            # Add current user as booking manager
+            booking.booking_managers.append(current_user)
+            
+            # Create pool if requested
+            if form.has_pool.data:
+                from app.models import Pool
+                pool = Pool(
+                    booking_id=booking.id,
+                    is_open=True,
+                    max_players=None,
+                    auto_close_date=None
+                )
+                db.session.add(pool)
+            
+            db.session.commit()
+            
+            # Audit log
+            audit_log_create('Booking', booking.id, 
+                           f'Created event booking: {booking.name}',
+                           {
+                               'event_type': booking.event_type,
+                               'format': booking.format,
+                               'gender': booking.gender,
+                               'has_pool': form.has_pool.data
+                           })
+            
+            flash(f'Event "{booking.name}" created successfully!', 'success')
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=booking.id))
+        
+        return render_template('admin_create_booking.html', form=form)
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error creating booking: {str(e)}")
+        flash('An error occurred while creating the event.', 'error')
+        return redirect(url_for('bookings.admin_list_bookings'))
+
+
+@bp.route('/admin/manage/<int:booking_id>', methods=['GET', 'POST'])
+@login_required
+@role_required('Event Manager')
+def admin_manage_booking(booking_id):
+    """
+    Consolidated booking/event management interface with series support
+    Replaces both admin_edit_booking and old events.manage_event
+    """
+    try:
+        from app.forms import BookingManagementForm
+        from app.bookings.utils import can_user_manage_booking, create_booking_with_defaults
+        
+        
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+        
+        # Check permissions
+        if not can_user_manage_booking(current_user, booking):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to manage booking {booking_id}')
+            flash('You do not have permission to manage this booking.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+        
+        # Calculate statistics
+        try:
+            total_teams = len(booking.teams) if hasattr(booking, 'teams') and booking.teams else 0
+        except:
+            total_teams = 0
+            
+        try:
+            pool_members = len(booking.pool.registrations) if booking.pool and hasattr(booking.pool, 'registrations') else 0
+        except:
+            pool_members = 0
+            
+        stats = {
+            'total_teams': total_teams,
+            'has_pool': booking.pool is not None,
+            'pool_members': pool_members,
+            'pool_selected': 0,  # Simplified for now
+            'pool_available': pool_members,
+        }
+        
+        # Create consolidated form with current booking data
+        form = BookingManagementForm()
+        
+        if request.method == 'GET':
+            # Populate form with current booking data
+            form.name.data = booking.name
+            form.event_type.data = booking.event_type
+            form.gender.data = booking.gender
+            form.format.data = booking.format
+            form.scoring.data = booking.scoring
+            form.has_pool.data = booking.pool is not None
+            form.booking_date.data = booking.booking_date
+            form.session.data = booking.session
+            form.rink_count.data = booking.rink_count
+            form.vs.data = booking.vs
+            form.home_away.data = booking.home_away
+            form.series_id.data = booking.series_id if hasattr(booking, 'series_id') else None
+        
+        if request.method == 'POST' and form.validate_on_submit():
+            # Check which button was clicked
+            if form.duplicate.data:
+                # Handle duplication/series creation
+                duplicate_booking = create_booking_with_defaults(
+                    name=form.name.data,
+                    event_type=form.event_type.data,
+                    gender=form.gender.data,
+                    format=form.format.data,
+                    scoring=form.scoring.data,
+                    booking_date=form.booking_date.data,
+                    session=form.session.data,
+                    rink_count=form.rink_count.data,
+                    vs=form.vs.data,
+                    home_away=form.home_away.data,
+                    organizer_id=booking.organizer_id,
+                    has_pool=form.has_pool.data,
+                    series_id=booking.series_id if hasattr(booking, 'series_id') else None
+                )
+                
+                # If creating a series, generate series_id if needed
+                if form.create_series.data and not duplicate_booking.series_id:
+                    import uuid
+                    series_id = str(uuid.uuid4())
+                    # Update both original and duplicate with series_id
+                    booking.series_id = series_id
+                    duplicate_booking.series_id = series_id
+                
+                db.session.add(duplicate_booking)
+                db.session.commit()
+                
+                # Create pool for duplicate if original has pool
+                if form.has_pool.data and booking.pool:
+                    from app.models import Pool
+                    duplicate_pool = Pool(
+                        booking_id=duplicate_booking.id,
+                        is_open=True,
+                        max_players=booking.pool.max_players
+                    )
+                    db.session.add(duplicate_pool)
+                    db.session.commit()
+                
+                audit_log_create('Booking', duplicate_booking.id, 
+                               f'Duplicated booking: {duplicate_booking.name} from booking {booking.id}')
+                
+                flash(f'Event duplicated successfully! New event created for {duplicate_booking.booking_date}', 'success')
+                return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
+            
+            else:
+                # Handle regular update
+                changes = {}
+                
+                # Track all changes
+                if booking.name != form.name.data:
+                    changes['name'] = {'old': booking.name, 'new': form.name.data}
+                    booking.name = form.name.data
+                    
+                if booking.event_type != form.event_type.data:
+                    changes['event_type'] = {'old': booking.event_type, 'new': form.event_type.data}
+                    booking.event_type = form.event_type.data
+                    
+                if booking.gender != form.gender.data:
+                    changes['gender'] = {'old': booking.gender, 'new': form.gender.data}
+                    booking.gender = form.gender.data
+                    
+                if booking.format != form.format.data:
+                    changes['format'] = {'old': booking.format, 'new': form.format.data}
+                    booking.format = form.format.data
+                    
+                if booking.scoring != form.scoring.data:
+                    changes['scoring'] = {'old': booking.scoring, 'new': form.scoring.data}
+                    booking.scoring = form.scoring.data
+                    
+                if booking.booking_date != form.booking_date.data:
+                    changes['booking_date'] = {'old': booking.booking_date.isoformat(), 'new': form.booking_date.data.isoformat()}
+                    booking.booking_date = form.booking_date.data
+                    
+                if booking.session != form.session.data:
+                    changes['session'] = {'old': booking.session, 'new': form.session.data}
+                    booking.session = form.session.data
+                    
+                if booking.rink_count != form.rink_count.data:
+                    changes['rink_count'] = {'old': booking.rink_count, 'new': form.rink_count.data}
+                    booking.rink_count = form.rink_count.data
+                    
+                if booking.vs != form.vs.data:
+                    changes['vs'] = {'old': booking.vs, 'new': form.vs.data}
+                    booking.vs = form.vs.data
+                    
+                if booking.home_away != form.home_away.data:
+                    changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
+                    booking.home_away = form.home_away.data
+                
+                # Handle pool creation/deletion
+                current_has_pool = booking.pool is not None
+                if current_has_pool != form.has_pool.data:
+                    if form.has_pool.data and not current_has_pool:
+                        # Create new pool
+                        from app.models import Pool
+                        new_pool = Pool(booking_id=booking.id, is_open=True)
+                        db.session.add(new_pool)
+                        changes['pool'] = {'old': 'None', 'new': 'Created'}
+                    elif not form.has_pool.data and current_has_pool:
+                        # Delete existing pool
+                        db.session.delete(booking.pool)
+                        changes['pool'] = {'old': 'Exists', 'new': 'Deleted'}
+                
+                db.session.commit()
+                
+                # Audit log changes
+                if changes:
+                    audit_log_update('Booking', booking.id, 
+                                   f'Updated booking: {booking.name}', changes)
+                
+                flash('Event updated successfully!', 'success')
+                return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+        
+        return render_template('admin_manage_booking.html', 
+                             booking=booking,
+                             form=form,
+                             stats=stats)
+                             
+    except Exception as e:
+        current_app.logger.error(f"Error managing booking {booking_id}: {str(e)}")
+        flash('An error occurred while managing the booking.', 'error')
+        return redirect(url_for('bookings.admin_list_bookings'))
+
+
+@bp.route('/admin/delete/<int:booking_id>', methods=['POST'])
+@login_required
+@role_required('Event Manager')
+def admin_delete_booking(booking_id):
+    """
+    Delete a booking/event (replaces events.delete_event)
+    """
+    try:
+        from app.bookings.utils import can_user_manage_booking
+        
+        csrf_form = FlaskForm()
+        if not csrf_form.validate_on_submit():
+            flash('Security validation failed.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+        
+        booking = db.session.get(Booking, booking_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+        
+        # Check permissions
+        if not can_user_manage_booking(current_user, booking):
+            audit_log_security_event('ACCESS_DENIED', 
+                                   f'Unauthorized attempt to delete booking {booking_id}')
+            flash('You do not have permission to delete this booking.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+        
+        booking_name = booking.name
+        event_type_name = booking.get_event_type_name()
+        
+        # Delete booking (cascades to pool and teams if they exist)
+        db.session.delete(booking)
+        db.session.commit()
+        
+        # Audit log
+        audit_log_delete('Booking', booking_id, 
+                        f'Deleted booking: {booking_name} ({event_type_name})')
+        
+        flash(f'Event "{booking_name}" deleted successfully.', 'success')
+        return redirect(url_for('bookings.admin_list_bookings'))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting booking {booking_id}: {str(e)}")
+        flash('An error occurred while deleting the booking.', 'error')
+        return redirect(url_for('bookings.admin_list_bookings'))

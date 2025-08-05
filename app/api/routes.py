@@ -265,7 +265,7 @@ def get_upcoming_events():
             sa.select(Booking)
             .join(Pool, Booking.id == Pool.booking_id)
             .where(Booking.has_pool == True)
-            .order_by(Booking.created_at_event.desc())
+            .order_by(Booking.created_at.desc())
         ).all()
         
         # Format events data

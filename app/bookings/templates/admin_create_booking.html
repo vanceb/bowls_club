@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set active_page = "events" %}
+{% set active_page = "bookings" %}
 
 {% block title %}Create Event{% endblock %}
 
@@ -73,7 +73,7 @@
                             <div class="field">
                                 <label class="label">{{ form.scoring.label }}</label>
                                 <div class="control">
-                                    {{ form.scoring(class="input", placeholder="e.g., Sets to 21, First to 25") }}
+                                    {{ form.scoring(class="input") }}
                                 </div>
                                 {% for error in form.scoring.errors %}
                                     <p class="help is-danger">{{ error }}</p>
@@ -85,7 +85,8 @@
                     <div class="field">
                         <div class="control">
                             <label class="checkbox">
-                                {{ form.has_pool }} {{ form.has_pool.label }}
+                                {{ form.has_pool }}
+                                Enable Pool Registration
                             </label>
                         </div>
                         <p class="help">Enable pool registration to allow members to register interest before team selection</p>
@@ -104,9 +105,9 @@
                             </button>
                         </div>
                         <div class="control">
-                            <a href="{{ url_for('events.list_events') }}" class="button is-light">
+                            <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
                                 <span class="icon">
-                                    <i class="fas fa-arrow-left"></i>
+                                    <i class="fas fa-times"></i>
                                 </span>
                                 <span>Cancel</span>
                             </a>

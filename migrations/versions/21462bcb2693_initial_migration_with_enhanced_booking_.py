@@ -99,7 +99,7 @@ def upgrade():
     sa.Column('gender', sa.Integer(), nullable=False),
     sa.Column('format', sa.Integer(), nullable=False),
     sa.Column('scoring', sa.String(length=64), nullable=True),
-    sa.Column('created_at_event', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('has_pool', sa.Boolean(), nullable=False),
     sa.Column('series_id', sa.String(length=36), nullable=True),
     sa.Column('series_commitment_required', sa.Boolean(), nullable=False),

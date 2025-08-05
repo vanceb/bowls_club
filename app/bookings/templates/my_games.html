@@ -5,12 +5,23 @@
     <h1 class="title">My Games</h1>
     <p class="subtitle">View and confirm your availability for upcoming team assignments. Please confirm your availability at least {{ config.get('AVAILABILITY_DEADLINE_DAYS', 7) }} days before each game date. Once confirmed, contact the event organizer to make changes.</p>
 
-    {% if assignments or roll_up_invitations %}
-    <!-- Group all games and roll-ups by status and date -->
+    {% if assignments or roll_up_invitations or pool_registrations %}
+    <!-- Group all games, roll-ups, and pool registrations by status and date -->
+    {% set pool_awaiting_selection = [] %}
     {% set pending_games = [] %}
     {% set confirmed_games = [] %}
     {% set unavailable_games = [] %}
     {% set played_games = [] %}
+    
+    <!-- Process pool registrations first - these go at the top as they're awaiting team selection -->
+    {% for registration in pool_registrations %}
+        {% set game_date = registration.pool.booking.booking_date %}
+        {% if game_date < today %}
+            {% set _ = played_games.append({'type': 'pool_registration', 'data': registration}) %}
+        {% else %}
+            {% set _ = pool_awaiting_selection.append({'type': 'pool_registration', 'data': registration}) %}
+        {% endif %}
+    {% endfor %}
     
     <!-- Process regular team assignments -->
     {% for assignment in assignments %}
@@ -41,10 +52,17 @@
     {% endfor %}
 
     <!-- Sort each group by date (nearest first) - we'll handle mixed types in the template -->
+    {% set pool_sorted = [] %}
     {% set pending_sorted = [] %}
     {% set confirmed_sorted = [] %}
     {% set unavailable_sorted = [] %}
     {% set played_sorted = [] %}
+    
+    <!-- Sort pool registrations awaiting selection -->
+    {% for item in pool_awaiting_selection %}
+        {% set _ = pool_sorted.append((item.data.pool.booking.booking_date, item)) %}
+    {% endfor %}
+    {% set pool_awaiting_selection = (pool_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     <!-- Create sorted lists with date extraction for mixed types -->
     {% for item in pending_games %}
@@ -63,9 +81,99 @@
     {% set unavailable_games = (unavailable_sorted | sort(attribute='0') | map(attribute='1') | list) %}
     
     {% for item in played_games %}
-        {% set _ = played_sorted.append((item.data.team.booking.booking_date, item)) %}
+        {% if item.type == 'pool_registration' %}
+            {% set _ = played_sorted.append((item.data.pool.booking.booking_date, item)) %}
+        {% else %}
+            {% set _ = played_sorted.append((item.data.team.booking.booking_date, item)) %}
+        {% endif %}
     {% endfor %}
     {% set played_games = (played_sorted | sort(attribute='0', reverse=true) | map(attribute='1') | list) %}
+
+    <!-- Pool Registrations Awaiting Selection Section -->
+    {% if pool_awaiting_selection %}
+    <div class="box">
+        <h3 class="title is-4 has-text-info">
+            <span class="icon">
+                <i class="fas fa-users"></i>
+            </span>
+            <span>Registered Interest - Awaiting Team Selection ({{ pool_awaiting_selection | length }})</span>
+        </h3>
+        <p class="subtitle is-6 has-text-grey">Events you've registered interest in - event managers will select teams from the pool</p>
+        
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Event Details</th>
+                        <th style="width: 15%;">Type</th>
+                        <th style="width: 20%;">Pool Status</th>
+                        <th style="width: 20%;">Registration</th>
+                        <th style="width: 15%;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in pool_awaiting_selection %}
+                    {% set registration = item.data %}
+                    <tr class="has-background-info-light">
+                        <td>
+                            {% set sessions = config['DAILY_SESSIONS'] %}
+                            <strong>{{ registration.pool.booking.booking_date.strftime('%A %b %d') }} {{ sessions.get(registration.pool.booking.session, 'Unknown') }}</strong><br>
+                            <span class="has-text-grey">{{ registration.pool.booking.name }}
+                            {% if registration.pool.booking.vs %}
+                                vs {{ registration.pool.booking.vs }}
+                            {% endif %}
+                            {%- if registration.pool.booking.home_away -%}
+                                {%- for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() -%}
+                                    {%- if value == registration.pool.booking.home_away %} ({{ key }}){%- endif -%}
+                                {%- endfor -%}
+                            {%- endif -%}</span>
+                        </td>
+                        <td><span class="tag is-link">Pool Event</span></td>
+                        <td>
+                            <div class="has-text-centered">
+                                <p class="title is-6 has-text-info">{{ registration.pool.registrations | length }}</p>
+                                <p class="heading">members in pool</p>
+                            </div>
+                            {% if registration.pool.is_open %}
+                                <span class="tag is-success is-small">
+                                    <span class="icon">
+                                        <i class="fas fa-door-open"></i>
+                                    </span>
+                                    <span>Open</span>
+                                </span>
+                            {% else %}
+                                <span class="tag is-warning is-small">
+                                    <span class="icon">
+                                        <i class="fas fa-door-closed"></i>
+                                    </span>
+                                    <span>Closed</span>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="tag is-info">
+                                <span class="icon">
+                                    <i class="fas fa-user-check"></i>
+                                </span>
+                                <span>Registered</span>
+                            </span>
+                            <br>
+                            <small class="has-text-grey">
+                                {{ registration.registered_at.strftime('%b %d at %I:%M %p') }}
+                            </small>
+                        </td>
+                        <td>
+                            <small class="has-text-grey">
+                                Awaiting team selection by event manager
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Pending Confirmation Section -->
     {% if pending_games %}
@@ -553,10 +661,16 @@
     {% endif %}
 
     <!-- Summary Statistics -->
-    {% if assignments or roll_up_invitations %}
+    {% if assignments or roll_up_invitations or pool_registrations %}
     <div class="box">
         <h3 class="title is-5">Summary</h3>
         <div class="columns">
+            <div class="column">
+                <div class="has-text-centered">
+                    <p class="heading">Pool Registrations</p>
+                    <p class="title is-4 has-text-info">{{ pool_awaiting_selection | length }}</p>
+                </div>
+            </div>
             <div class="column">
                 <div class="has-text-centered">
                     <p class="heading">Pending Confirmation</p>

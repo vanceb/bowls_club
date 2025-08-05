@@ -21,7 +21,7 @@ from app.pools.utils import (
     can_user_manage_pool, get_pool_statistics,
     create_pool_for_booking_with_event_id, create_pool_for_booking
 )
-from app.events.utils import can_user_manage_event
+from app.bookings.utils import can_user_manage_event
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete,
     audit_log_security_event, get_model_changes
@@ -139,7 +139,7 @@ def create_event_pool(event_id):
         db.session.rollback()
         current_app.logger.error(f"Error creating event pool for event {event_id}: {str(e)}")
         flash('An error occurred while creating the pool.', 'error')
-        return redirect(url_for('events.list_events'))
+        return redirect(url_for('bookings.admin_list_bookings'))
 
 
 @bp.route('/create/booking/<int:booking_id>', methods=['GET', 'POST'])
@@ -569,13 +569,13 @@ def admin_delete_from_pool(registration_id):
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.list_events'))
+            return redirect(url_for('bookings.admin_list_bookings'))
         
         # Get the registration
         registration = db.session.get(PoolRegistration, registration_id)
         if not registration:
             flash('Registration not found.', 'error')
-            return redirect(url_for('events.list_events'))
+            return redirect(url_for('bookings.admin_list_bookings'))
         
         # Get event info from pool's booking
         event_booking = registration.pool.booking
@@ -598,7 +598,7 @@ def admin_delete_from_pool(registration_id):
     except Exception as e:
         current_app.logger.error(f"Error removing member from pool: {str(e)}")
         flash('An error occurred while removing member from pool.', 'error')
-        return redirect(url_for('events.list_events'))
+        return redirect(url_for('bookings.admin_list_bookings'))
 
 
 @bp.route('/admin/auto_select_pool_members/<int:event_id>', methods=['POST'])
@@ -620,7 +620,7 @@ def admin_auto_select_pool_members(event_id):
         )
         if not event_pool:
             flash('Event not found or pool not enabled.', 'error')
-            return redirect(url_for('events.list_events'))
+            return redirect(url_for('bookings.admin_list_bookings'))
         
         selection_method = request.form.get('method', 'oldest_first')
         num_to_select = request.form.get('count', type=int)
@@ -654,7 +654,7 @@ def admin_auto_select_pool_members(event_id):
         db.session.rollback()
         current_app.logger.error(f"Error in auto pool selection: {str(e)}")
         flash('An error occurred during automatic selection.', 'error')
-        return redirect(url_for('events.list_events'))
+        return redirect(url_for('bookings.admin_list_bookings'))
 
 
 @bp.route('/delete/<int:pool_id>', methods=['POST'])

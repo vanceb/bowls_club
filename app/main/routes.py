@@ -81,7 +81,7 @@ def index():
 
 
 
-@bp.route('/upcoming_events')
+@bp.route('/upcoming_events', methods=['GET', 'POST'])
 @login_required
 def upcoming_events():
     """
@@ -91,65 +91,90 @@ def upcoming_events():
     try:
         from app.audit import audit_log_create, audit_log_delete
         from app.forms import FlaskForm
+        from app.models import Pool, PoolRegistration, Booking
         
         # Create CSRF form for the template
         csrf_form = FlaskForm()
         
+        # Handle POST requests for pool registration/unregistration
+        if request.method == 'POST':
+            if csrf_form.validate_on_submit():
+                action = request.form.get('action')
+                booking_id = request.form.get('booking_id', type=int)
+                
+                if action and booking_id:
+                    booking = db.session.get(Booking, booking_id)
+                    if booking and booking.pool:
+                        if action == 'register':
+                            # Register user in pool
+                            existing_registration = db.session.scalar(
+                                sa.select(PoolRegistration).where(
+                                    PoolRegistration.pool_id == booking.pool.id,
+                                    PoolRegistration.member_id == current_user.id
+                                )
+                            )
+                            
+                            if not existing_registration:
+                                new_registration = PoolRegistration(
+                                    pool_id=booking.pool.id,
+                                    member_id=current_user.id,
+                                    status='registered'
+                                )
+                                db.session.add(new_registration)
+                                db.session.commit()
+                                
+                                audit_log_create('PoolRegistration', new_registration.id,
+                                               f'Registered for event: {booking.name}')
+                                flash(f'Successfully registered for "{booking.name}"!', 'success')
+                            else:
+                                flash(f'You are already registered for "{booking.name}".', 'info')
+                                
+                        elif action == 'unregister':
+                            # Unregister user from pool
+                            existing_registration = db.session.scalar(
+                                sa.select(PoolRegistration).where(
+                                    PoolRegistration.pool_id == booking.pool.id,
+                                    PoolRegistration.member_id == current_user.id
+                                )
+                            )
+                            
+                            if existing_registration:
+                                db.session.delete(existing_registration)
+                                db.session.commit()
+                                
+                                audit_log_delete('PoolRegistration', existing_registration.id,
+                                                f'Unregistered from event: {booking.name}')
+                                flash(f'Successfully unregistered from "{booking.name}".', 'info')
+                            else:
+                                flash(f'You are not registered for "{booking.name}".', 'warning')
+                    else:
+                        flash('Event not found or pool not available.', 'error')
+                else:
+                    flash('Invalid registration request.', 'error')
+            else:
+                flash('Security validation failed.', 'error')
+            
+            return redirect(url_for('main.upcoming_events'))
+        
         # Get today's date
         today = date.today()
         
-        # Import models needed for queries
-        from app.models import Pool, PoolRegistration, Booking
-        
-        # Get all bookings (events) that have pools enabled
-        bookings_with_pools = db.session.scalars(
+        # Get ALL bookings (events) that have pools enabled - this is the registration interface
+        # Users should see all events they can potentially register for
+        all_bookings = db.session.scalars(
             sa.select(Booking)
-            .where(Booking.has_pool == True)
-            .order_by(Booking.created_at_event.desc())
-        ).all()
-        
-        # Fallback: Get bookings that actually have pool records but may have incorrect has_pool flag
-        # This handles data inconsistencies where pools exist but has_pool=False
-        bookings_with_actual_pools = db.session.scalars(
-            sa.select(Booking)
-            .join(Pool, Booking.id == Pool.booking_id)
-            .where(Booking.has_pool == False)  # Only get ones not already captured above
-            .order_by(Booking.created_at_event.desc())
-        ).all()
-        
-        # Get bookings where user is registered in pools
-        bookings_user_registered = db.session.scalars(
-            sa.select(Booking)
-            .join(Pool, Booking.id == Pool.booking_id)
-            .join(PoolRegistration, Pool.id == PoolRegistration.pool_id)
-            .where(PoolRegistration.member_id == current_user.id)
-            .order_by(Booking.created_at_event.desc())
-        ).all()
-        
-        # Get bookings the user can manage (includes admin, global event managers, and specific booking managers)
-        bookings_user_manages = []
-        if current_user.is_admin or current_user.has_role('Event Manager'):
-            # Admin and global event managers can see all bookings with pools
-            bookings_user_manages = bookings_with_pools
-        else:
-            # Specific booking managers only see their assigned bookings
-            bookings_user_manages = db.session.scalars(
-                sa.select(Booking)
-                .join(Booking.booking_managers)
-                .where(
-                    Booking.booking_managers.any(Member.id == current_user.id),
-                    Booking.has_pool == True
+            .where(
+                sa.or_(
+                    Booking.has_pool == True,  # Bookings marked as having pools
+                    sa.exists().where(  # OR bookings that actually have pool records
+                        sa.and_(
+                            Pool.booking_id == Booking.id
+                        )
+                    )
                 )
-                .order_by(Booking.created_at_event.desc())
-            ).all()
-        
-        # Combine and deduplicate bookings
-        all_bookings = list({booking.id: booking for booking in 
-                           bookings_with_pools + 
-                           bookings_with_actual_pools +
-                           bookings_user_registered + 
-                           bookings_user_manages}.values())
-        all_bookings.sort(key=lambda x: x.created_at_event or datetime.now(), reverse=True)
+            )
+            .order_by(Booking.booking_date.asc())  # Order by booking date, not created_at
+        ).all()
         
         # For each booking, get the user's registration status and management permissions
         events_data = []

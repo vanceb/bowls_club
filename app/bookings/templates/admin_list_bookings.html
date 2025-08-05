@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% set active_page = "events" %}
+{% set active_page = "bookings" %}
 
-{% block title %}Events{% endblock %}
+{% block title %}Manage Events{% endblock %}
 
 {% block page_header %}
-<h1 class="title">Events</h1>
-<h2 class="subtitle">Manage all club events</h2>
+<h1 class="title">Manage Events</h1>
+<h2 class="subtitle">Event management interface</h2>
 {% endblock %}
 
 {% block content %}
@@ -31,7 +31,7 @@
         </div>
         <div class="level-right">
             <div class="level-item">
-                <a href="{{ url_for('events.create_event') }}" class="button is-primary">
+                <a href="{{ url_for('bookings.admin_create_booking') }}" class="button is-primary">
                     <span class="icon">
                         <i class="fas fa-plus"></i>
                     </span>
@@ -42,69 +42,58 @@
     </div>
 
     <div class="box">
-        {% if events %}
+        {% if bookings %}
         <div class="table-container">
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
                     <tr>
                         <th>Event Name</th>
                         <th>Type</th>
-                        <th>Format</th>
-                        <th>Gender</th>
-                        <th>Bookings</th>
+                        <th>Date</th>
                         <th>Teams</th>
                         <th>Pool</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for event in events %}
-                    {% set stats = event_stats[event.id] %}
+                    {% for booking in bookings %}
                     <tr>
                         <td>
-                            <strong>{{ event.name }}</strong>
-                            {% if event.scoring %}
-                            <br><small class="has-text-grey">{{ event.scoring }}</small>
+                            <strong>{{ booking.name }}</strong>
+                            {% if booking.vs %}
+                            <br><small class="has-text-grey">vs {{ booking.vs }}</small>
                             {% endif %}
                         </td>
                         <td>
-                            <span class="tag is-info">{{ event.get_event_type_name() }}</span>
+                            <span class="tag is-light">{{ booking.get_event_type_name() }}</span>
                         </td>
-                        <td>{{ event.get_format_name() }}</td>
-                        <td>{{ event.get_gender_name() }}</td>
+                        <td>{{ booking.booking_date.strftime('%d %b %Y') }}</td>
                         <td>
-                            <span class="tag {% if stats.total_bookings > 0 %}is-success{% else %}is-light{% endif %}">
-                                {{ stats.total_bookings }}
-                            </span>
+                            {% set stats = booking_stats[booking.id] %}
+                            {{ stats.total_teams }} teams
                         </td>
                         <td>
-                            <span class="tag {% if stats.total_teams > 0 %}is-success{% else %}is-light{% endif %}">
-                                {{ stats.total_teams }}
-                            </span>
-                            <br><small class="has-text-grey">via bookings</small>
-                        </td>
-                        <td>
-                            {% if stats.pool_members > 0 %}
-                            <span class="tag {% if stats.has_pool %}is-primary{% else %}is-warning{% endif %}">
-                                <i class="fas fa-users"></i>&nbsp;{{ stats.pool_members }}
-                                {% if not stats.has_pool %}<i class="fas fa-lock ml-1"></i>{% endif %}
-                            </span>
-                            {% elif stats.has_pool %}
-                            <span class="tag is-light">
-                                <i class="fas fa-users"></i>&nbsp;0
-                            </span>
+                            {% if stats.has_pool %}
+                            <span class="tag is-info">{{ stats.pool_members }} registered</span>
                             {% else %}
-                            <span class="tag is-light">None</span>
+                            <span class="tag is-light">No Pool</span>
                             {% endif %}
                         </td>
                         <td>
-                            <div class="buttons are-small">
-                                <a href="{{ url_for('events.manage_event', event_id=event.id) }}" 
-                                   class="button is-primary is-small">
+                            <div class="buttons">
+                                <a href="{{ url_for('bookings.admin_manage_booking', booking_id=booking.id) }}" 
+                                   class="button is-small is-primary">
                                     <span class="icon">
-                                        <i class="fas fa-cog"></i>
+                                        <i class="fas fa-edit"></i>
                                     </span>
                                     <span>Manage</span>
+                                </a>
+                                <a href="{{ url_for('bookings.admin_edit_booking', booking_id=booking.id) }}" 
+                                   class="button is-small is-info">
+                                    <span class="icon">
+                                        <i class="fas fa-calendar"></i>
+                                    </span>
+                                    <span>Booking</span>
                                 </a>
                             </div>
                         </td>
@@ -115,11 +104,15 @@
         </div>
         {% else %}
         <div class="has-text-centered">
-            <p class="is-size-5 has-text-grey">No events found.</p>
-            <p class="has-text-grey">
-                <a href="{{ url_for('events.create_event') }}" class="button is-primary">
-                    Create your first event
-                </a>
+            <p class="title is-4 has-text-grey-light">No Events Found</p>
+            <p class="subtitle is-6 has-text-grey">
+                {% if current_filter %}
+                No events found for the selected filter. Try changing the filter or 
+                <a href="{{ url_for('bookings.admin_create_booking') }}">create a new event</a>.
+                {% else %}
+                No events have been created yet. 
+                <a href="{{ url_for('bookings.admin_create_booking') }}">Create your first event</a> to get started.
+                {% endif %}
             </p>
         </div>
         {% endif %}
@@ -129,15 +122,13 @@
 <script>
 function filterEvents() {
     const filter = document.getElementById('type-filter').value;
-    const url = new URL(window.location);
-    
+    const url = new URL(window.location.href);
     if (filter) {
         url.searchParams.set('type', filter);
     } else {
         url.searchParams.delete('type');
     }
-    
-    window.location = url.toString();
+    window.location.href = url.toString();
 }
 </script>
 {% endblock %}

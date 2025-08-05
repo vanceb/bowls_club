@@ -39,11 +39,13 @@ def book_rollup():
         if form.validate_on_submit():
             # Create the booking
             booking = Booking(
+                name=f"Roll-up {form.booking_date.data}",  # Required field
                 booking_date=form.booking_date.data,
                 session=form.session.data,
                 organizer_id=current_user.id,
                 rink_count=1,  # Roll-ups always use 1 rink
                 booking_type='rollup',
+                event_type=5,  # Roll-up event type from config
                 organizer_notes=form.organizer_notes.data
             )
             

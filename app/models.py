@@ -272,7 +272,7 @@ class Booking(db.Model):
     gender: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=4)  # Default to "Open"
     format: so.Mapped[int] = so.mapped_column(sa.Integer, nullable=False, default=5)  # Default to "Fours - 2 Wood"
     scoring: so.Mapped[Optional[str]] = so.mapped_column(sa.String(64), nullable=True)
-    created_at_event: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)
+    created_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True, default=datetime.utcnow)
     has_pool: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
     
     # Series grouping fields (new functionality)
