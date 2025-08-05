@@ -2,20 +2,64 @@
 
 This file provides guidance specific to Flask application development in the `app` directory.
 
-## Development Workflow
+## Flask Blueprint Architecture
 
-**IMPORTANT: Before making ANY changes to Flask application code, follow the GitHub Flow workflow:**
+**This application uses Flask Blueprints for modular organization:**
 
-1. **Check current status**: `git status` (should be on main, clean working directory)
-2. **Update main branch**: `git checkout main && git pull origin main`
-3. **Create feature branch**: `git checkout -b feature/your-feature-name`
-4. **Make changes** to Flask app files
-5. **Test thoroughly** using `flask run`
-6. **Commit changes**: `git add . && git commit -m "descriptive message"`
-7. **Push and create PR**: `git push -u origin feature/your-feature-name`
-8. **After PR merged**: Clean up branch and return to main
+### Current Blueprint Structure
+- **`api`** - RESTful API endpoints for AJAX functionality
+- **`bookings`** - Booking-centric event and rink management (consolidated from events)
+- **`content`** - Content management for posts and policy pages
+- **`main`** - Core application routes and home page (legacy/overlapped with root)
+- **`members`** - Member management, profiles, directory, and authentication
+- **`pools`** - Pool management and specialist event functionality
+- **`rollups`** - Roll-up booking functionality
+- **`teams`** - Team management and player assignments
 
-**NEVER work directly on main branch when making Flask application changes.**
+### Blueprint Organization Principles
+- **Logical functional grouping** - Group related functionality together
+- **Minimize cross-blueprint dependencies** - Each blueprint should be self-contained
+- **Follow domain boundaries** - Organize by business functionality, not technical layers
+
+### Blueprint Directory Structure
+```
+app/
+└── blueprint_name/
+    ├── __init__.py          # Blueprint definition with template_folder='templates'
+    ├── routes.py           # All route handlers for the blueprint
+    ├── forms.py            # Blueprint-specific forms (optional)
+    ├── utils.py            # Blueprint-specific utilities (optional)
+    └── templates/          # Blueprint-specific templates
+        └── template_name.html
+```
+
+### Blueprint URL Structure
+- **Root level**: Core functionality (`/directory`, `/apply`)
+- **`auth/` prefix**: Authentication routes (`/auth/login`, `/auth/profile`)
+- **`admin/` prefix**: Administrative functions requiring special permissions
+- **`api/v1/` prefix**: API endpoints for AJAX calls (versioned for compatibility)
+
+### Blueprint Template Configuration
+```python
+# In blueprint_name/__init__.py - CRITICAL: Must specify template_folder
+from flask import Blueprint
+
+bp = Blueprint('blueprint_name', __name__, template_folder='templates')
+
+from app.blueprint_name import routes
+```
+
+### Blueprint Registration
+```python
+# In app/__init__.py
+from app.members import bp as members_bp
+from app.bookings import bp as bookings_bp
+from app.teams import bp as teams_bp
+
+app.register_blueprint(members_bp, url_prefix='/members')
+app.register_blueprint(bookings_bp, url_prefix='/bookings')
+app.register_blueprint(teams_bp, url_prefix='/teams')
+```
 
 ## Application Structure
 
@@ -324,6 +368,100 @@ with app.app_context():
 with app.test_client() as client:
     response = client.post('/login', data={'username': 'test', 'password': 'test'})
     assert response.status_code == 200
+```
+
+## Code Style Standards
+
+### Python Import Organization (PEP 8)
+```python
+# Standard library imports
+import os
+from datetime import datetime, timedelta
+from functools import wraps
+
+# Third-party imports
+import sqlalchemy as sa
+from flask import render_template, flash, redirect, url_for
+from flask_login import current_user, login_user
+
+# Local application imports
+from app import app, db
+from app.forms import LoginForm, MemberForm
+from app.models import Member, Role
+from app.utils import generate_reset_token
+```
+
+### Variable Naming Standards
+- Use `snake_case` for Python variables and functions
+- Use `UPPER_CASE` for constants in config.py
+- Use descriptive names that explain purpose
+- Avoid abbreviations unless widely understood
+
+### Function Documentation
+```python
+def generate_reset_token(email):
+    """
+    Generate a secure reset token for password reset functionality.
+    
+    Args:
+        email (str): The email address to generate token for.
+        
+    Returns:
+        str: Secure token string for password reset.
+    """
+    # Implementation here
+
+@app.route('/logout')
+def logout():
+    """
+    Route: Logout
+    - Logs out current user and redirects to home page
+    - Clears user session
+    """
+    # Implementation here
+```
+
+## Blueprint Migration Guidelines
+
+### When Creating New Blueprints
+1. **Create directory structure** with proper template folder
+2. **Move related routes** in logical groups (auth, admin, api, core)
+3. **Update route decorators** to use blueprint format
+4. **Resolve naming conflicts** between route functions
+5. **Move templates** and update `render_template()` calls
+6. **Update all `url_for()`** references throughout codebase
+7. **Test all functionality** thoroughly
+
+### Common Blueprint Issues
+- **TemplateNotFound**: Ensure `template_folder='templates'` in blueprint definition
+- **URL generation errors**: Update all `url_for()` calls with new blueprint names
+- **Import errors**: Check circular imports and update import paths
+- **Form import issues**: Verify forms exist in `app/forms.py` or use FlaskForm for CSRF only
+
+### Template Organization
+- **Templates location**: `app/blueprint_name/templates/`
+- **Naming convention**: Use descriptive names (`member_login.html`, `booking_create.html`)
+- **Template references**: Use simple names in `render_template()` calls
+- **URL generation**: Use `url_for('blueprint.function_name')` format
+
+### Route Migration Best Practices
+```python
+# Function naming conflicts resolution
+# Before (in different blueprints)
+def manage_members():  # admin/routes.py
+def manage_bookings(): # admin/routes.py
+
+# After (in new blueprint)
+def admin_manage_members():  # members/routes.py
+def create_booking():        # bookings/routes.py
+
+# Decorator updates
+# Old: @admin_bp.route('/manage_members')
+# New: @bp.route('/admin/manage')
+
+# URL generation updates
+# Old: url_for('admin.manage_members')
+# New: url_for('members.admin_manage')
 ```
 
 ## Performance Considerations

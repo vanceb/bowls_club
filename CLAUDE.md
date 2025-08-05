@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Structure
+
+This project uses hierarchical CLAUDE.md files for specific areas:
+
+- **`CLAUDE.md`** (this file) - Project overview, environment setup, and Git workflow
+- **`app/CLAUDE.md`** - Flask application development guidelines including blueprints, security, and patterns
+- **`app/templates/CLAUDE.md`** - HTML template and frontend development guidelines
+
+Always check the appropriate file for specific guidance on the area you're working in.
+
 ## Environment Setup
 
 **CRITICAL: Always activate the virtual environment first before running any Flask commands:**
@@ -17,14 +27,6 @@ export FLASK_ENV=development
 
 ## Development Commands
 
-### Running the Application
-```bash
-# Run the Flask development server
-flask run
-# or
-python bowls.py
-```
-
 ### Running a Test/Debug Server
 **For testing and debugging purposes, especially when port 5000 is in use:**
 
@@ -32,36 +34,33 @@ python bowls.py
 # ALWAYS activate virtual environment first
 source venv/bin/activate
 
-# Method 1: Use Flask CLI with custom port
+# Use Flask with custom port
 flask run --port 5001
-
-# Method 2: Use python directly with environment variables
-export SECRET_KEY=2471a028b502cffda6c49f3caf6b3ab9f2de7ce454867a99d5be3dee14de15b5 
-python bowls.py
-
-# Method 3: Run with custom port using Flask CLI
-export FLASK_RUN_PORT=5001
-flask run
 ```
 
 **Important Notes:**
 - The `.flaskenv` file contains the SECRET_KEY and other environment variables
 - If you get "SECRET_KEY environment variable is required", either:
   - Ensure `.flaskenv` exists and contains `SECRET_KEY=your-key-here`
-  - Or export the SECRET_KEY manually as shown above
-- Port 5000 may be in use; use port 5001 for testing to avoid conflicts
+  - Or export the SECRET_KEY manually
 - The server will show a warning about in-memory rate limiting storage - this is normal for development
+
+## Access Flask shell with pre-loaded Flask context
+```bash
+flask shell
+```
 
 ### Database Operations
 ```bash
 # Create database migration
 flask db migrate -m "description of changes"
+```
 
+**Important** If this is a complex migration then you may need to edit the migration script
+
+```bash
 # Apply database migrations
 flask db upgrade
-
-# Access Flask shell with pre-loaded context
-flask shell
 ```
 
 ## Package Management
@@ -93,12 +92,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**Why This Matters:**
-- Ensures other developers can recreate identical environments
-- Prevents "works on my machine" issues
-- Required for deployment and CI/CD processes
-- Maintains package version consistency across environments
-
 ## Testing Guidelines
 
 **IMPORTANT: When testing Flask forms programmatically, avoid CSRF failures:**
@@ -113,85 +106,17 @@ pip install -r requirements.txt
 
 ## Security Guidelines
 
-### CSRF (Cross-Site Request Forgery) Protection
-- Always use Flask-WTF's CSRF protection for forms
-- Generate CSRF tokens for each form submission
-- Validate CSRF tokens on the server-side
-- Do not disable CSRF protection in production environments
-- Use secret key to sign and validate CSRF tokens
-- Regenerate CSRF tokens on each form render
-- Implement proper error handling for CSRF token validation failures
+### Security Guidelines
 
-### Audit Logging Requirements
-**CRITICAL: All database changes MUST be logged for security and compliance.**
-
-#### Required for ALL Database Operations:
-```python
-from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation
-
-# For new records
-audit_log_create('ModelName', record.id, 'Description of action', optional_data_dict)
-
-# For updates
-audit_log_update('ModelName', record.id, 'Description of action', changes_dict, optional_data_dict)
-
-# For deletions
-audit_log_delete('ModelName', record_id, 'Description of action', optional_data_dict)
-
-# For bulk operations
-audit_log_bulk_operation('BULK_CREATE', 'ModelName', count, 'Description', optional_data_dict)
-```
-
-#### Authentication Events:
-```python
-from app.audit import audit_log_authentication
-
-# Login/logout events
-audit_log_authentication('LOGIN', username, success_boolean, optional_data_dict)
-audit_log_authentication('LOGOUT', username, True)
-audit_log_authentication('PASSWORD_RESET', username, success_boolean)
-```
-
-#### Security Events:
-```python
-from app.audit import audit_log_security_event
-
-# Access denied, invalid tokens, etc.
-audit_log_security_event('ACCESS_DENIED', 'Description', optional_data_dict)
-```
-
-#### System Events:
-```python
-from app.audit import audit_log_system_event
-
-# System initialization, migrations, etc.
-audit_log_system_event('INITIALIZATION', 'Description', optional_data_dict)
-```
-
-#### Audit Log Format:
-All audit logs are written to `instance/logs/audit.log` with format:
-```
-YYYY-MM-DD HH:MM:SS | INFO | OPERATION | ModelName | ID: xxx | User: username (ID: xxx) | Description | Changes: {...} | Data: {...}
-```
-
-#### Examples:
-```python
-# Member creation
-audit_log_create('Member', new_member.id, 
-                f'Created member: {new_member.firstname} {new_member.lastname} ({new_member.username})',
-                {'status': new_member.status, 'is_admin': new_member.is_admin})
-
-# Member update with changes tracking
-changes = get_model_changes(member, form_data)
-audit_log_update('Member', member.id, 
-                f'Updated member: {member.firstname} {member.lastname}', 
-                changes)
-
-# Member deletion
-audit_log_delete('Member', member_id, f'Deleted member: {member_name}')
-```
+**CRITICAL Security Requirements:**
+- All Flask-specific security patterns are detailed in `app/CLAUDE.md`
+- CSRF protection, audit logging, and authentication patterns
+- Never expose or log secrets and keys
+- Never commit secrets or keys to the repository
 
 ### General Security Notes
+
+**CRITICAL** 
 - Always follow security best practices
 - Never introduce code that exposes or logs secrets and keys
 - Never commit secrets or keys to the repository
@@ -202,12 +127,9 @@ audit_log_delete('Member', member_id, f'Deleted member: {member_name}')
 
 **IMPORTANT: DO NOT ADD ANY COMMENTS unless asked**
 
-- Follow existing code conventions and patterns
-- Mimic code style, use existing libraries and utilities
-- When making changes to files, first understand the file's code conventions
-- NEVER assume that a given library is available - check that this codebase already uses it
-- When creating new components, look at existing components first
-- When editing code, look at surrounding context to understand framework choices
+- Follow existing code conventions and patterns in `app/CLAUDE.md`
+- See detailed style guidelines in `app/CLAUDE.md` for Flask-specific patterns
+- See `app/templates/CLAUDE.md` for frontend and template guidelines
 
 ## Code Reuse and Minimalism
 
@@ -320,21 +242,14 @@ git checkout -b feature/your-new-feature
 2. Continue your work on the feature branch
 3. Follow the PR process before merging
 
-## Architecture Notes
+## Architecture Overview
 
-- Flask web application with SQLAlchemy ORM
-- Bulma CSS framework for UI
+- Flask web application with Blueprint architecture (see `app/CLAUDE.md`)
+- SQLAlchemy ORM with audit logging
+- Bulma CSS framework for UI (see `app/templates/CLAUDE.md`)
 - Role-based access control system
-- Event and booking management system
-- Team management with position-based assignments
+- Event and booking management with team assignments
 - File-based content management for posts and policies
-
-## Hierarchical Documentation
-
-This project uses hierarchical CLAUDE.md files for specific areas:
-
-- `app/CLAUDE.md` - Flask application development guidelines
-- `app/templates/CLAUDE.md` - HTML template and frontend development
 - `migrations/CLAUDE.md` - Database migration procedures
 
 # important-instruction-reminders
