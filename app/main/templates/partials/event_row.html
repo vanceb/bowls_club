@@ -1,0 +1,108 @@
+{% set event = event_info.event %}
+<tr class="{{ row_class }}">
+    <td>
+        <strong>
+            {{ event.name }}
+            {% if event.vs %} vs {{ event.vs }}{% endif %}
+            {% if event.home_away %} ({{ event.home_away|title }}){% endif %}
+            {% if event.booking_date %} - {{ event.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+        </strong>
+    </td>
+    <td>
+        {{ event.get_gender_name() }} {{ event.get_format_name() }} {{ event.get_event_type_name() }}
+    </td>
+    <td>
+        {% if event_info.pool_open %}
+            <span class="tag is-success">
+                <span class="icon">
+                    <i class="fas fa-door-open"></i>
+                </span>
+                <span>Open ({{ event_info.pool_count }})</span>
+            </span>
+        {% else %}
+            <span class="tag is-warning">
+                <span class="icon">
+                    <i class="fas fa-door-closed"></i>
+                </span>
+                <span>Closed ({{ event_info.pool_count }})</span>
+            </span>
+        {% endif %}
+    </td>
+    <td>
+        {% if event_info.registration_status == 'registered' %}
+            <span class="tag is-info">
+                <span class="icon">
+                    <i class="fas fa-user-check"></i>
+                </span>
+                <span>Registered</span>
+            </span>
+        {% elif event_info.registration_status == 'withdrawn' %}
+            <span class="tag is-light">
+                <span class="icon">
+                    <i class="fas fa-user-times"></i>
+                </span>
+                <span>Withdrawn</span>
+            </span>
+        {% else %}
+            <span class="tag is-light">
+                <span class="icon">
+                    <i class="fas fa-user-clock"></i>
+                </span>
+                <span>Not Registered</span>
+            </span>
+        {% endif %}
+    </td>
+    <td>
+        {% if event_info.registration_status == 'registered' %}
+            {% if event_info.pool_open %}
+            <form method="POST" action="{{ url_for('main.upcoming_events') }}" style="display: inline;">
+                {{ csrf_form.csrf_token }}
+                <input type="hidden" name="action" value="unregister">
+                <input type="hidden" name="booking_id" value="{{ event.id }}">
+                <button type="submit" class="button is-danger is-small"
+                    <span class="icon">
+                        <i class="fas fa-user-minus"></i>
+                    </span>
+                    <span>Withdraw</span>
+                </button>
+            </form>
+            {% endif %}
+            {% if event_info.user_can_manage %}
+                <a href="{{ url_for('bookings.admin_manage_booking', booking_id=event.id) }}" class="button is-primary is-small">
+                    <span class="icon">
+                        <i class="fas fa-cog"></i>
+                    </span>
+                    <span>Manage Event</span>
+                </a>
+            {% elif not event_info.pool_open %}
+                <small class="has-text-grey">
+                    Registration closed - contact event manager for changes
+                </small>
+            {% endif %}
+        {% else %}
+            {% if event_info.pool_open and (event_info.registration_status == 'not_registered' or event_info.registration_status == 'withdrawn') %}
+            <form method="POST" action="{{ url_for('main.upcoming_events') }}" style="display: inline;">
+                {{ csrf_form.csrf_token }}
+                <input type="hidden" name="action" value="register">
+                <input type="hidden" name="booking_id" value="{{ event.id }}">
+                <button type="submit" class="button is-success is-small">
+                    <span class="icon">
+                        <i class="fas fa-user-plus"></i>
+                    </span>
+                    <span>{% if event_info.registration_status == 'withdrawn' %}Re-register{% else %}Register{% endif %}</span>
+                </button>
+            </form>
+            {% endif %}
+            {% if event_info.user_can_manage %}
+                <a href="{{ url_for('bookings.admin_manage_booking', booking_id=event.id) }}" class="button is-primary is-small">
+                    <span class="icon">
+                        <i class="fas fa-cog"></i>
+                    </span>
+                    <span>Manage Event</span>
+                </a>
+            {% elif not event_info.user_can_manage and not event_info.pool_open %}
+                <small class="has-text-grey">No actions available</small>
+            {% endif %}
+        {% endif %}
+    </td>
+</tr>

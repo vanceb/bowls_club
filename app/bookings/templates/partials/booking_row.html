@@ -1,0 +1,44 @@
+<tr class="{{ row_class if row_class else '' }}">
+    <td style="{{ 'padding-left: 2rem;' if indent else '' }}">
+        <strong>{{ booking.name }}</strong>
+        {% if booking.vs %}
+        <br><small class="has-text-grey">vs {{ booking.vs }}</small>
+        {% endif %}
+        {% if booking.series_id and show_series_info %}
+        <br><small class="has-text-info">{{ booking.get_series_name() }}</small>
+        {% endif %}
+    </td>
+    <td>
+        <span class="tag is-light">{{ booking.get_event_type_name() }}</span>
+    </td>
+    <td>{{ booking.booking_date.strftime('%d %b %Y') }}</td>
+    <td>
+        {% set stats = booking_stats[booking.id] %}
+        {{ stats.total_teams }} teams
+    </td>
+    <td>
+        {% if stats.has_pool %}
+        <span class="tag is-info">{{ stats.pool_members }} registered</span>
+        {% else %}
+        <span class="tag is-light">No Pool</span>
+        {% endif %}
+    </td>
+    <td>
+        <div class="buttons">
+            <a href="{{ url_for('bookings.admin_manage_booking', booking_id=booking.id) }}" 
+               class="button is-small is-primary">
+                <span class="icon">
+                    <i class="fas fa-edit"></i>
+                </span>
+                <span>Manage</span>
+            </a>
+            <a href="{{ url_for('bookings.admin_edit_booking', booking_id=booking.id) }}" 
+               class="button is-small is-info">
+                <span class="icon">
+                    <i class="fas fa-calendar"></i>
+                </span>
+                <span>Booking</span>
+            </a>
+        </div>
+    </td>
+</tr>

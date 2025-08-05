@@ -771,8 +771,8 @@ def admin_list_bookings():
         # Get filter parameters
         event_type_filter = request.args.get('type', type=int)
         
-        # Get all bookings (events are now bookings)
-        query = sa.select(Booking).order_by(Booking.booking_date.desc())
+        # Get all bookings (events are now bookings) - closest events first
+        query = sa.select(Booking).order_by(Booking.booking_date.asc())
         
         if event_type_filter:
             query = query.where(Booking.event_type == event_type_filter)
@@ -815,8 +815,26 @@ def admin_list_bookings():
                     'pool_available': 0,
                 }
         
+        # Group bookings by type and series
+        regular_bookings = []
+        rollup_bookings = []
+        series_groups = {}
+        
+        for booking in bookings:
+            if booking.booking_type == 'rollup':
+                rollup_bookings.append(booking)
+            elif booking.series_id:
+                series_name = booking.get_series_name()
+                if series_name not in series_groups:
+                    series_groups[series_name] = []
+                series_groups[series_name].append(booking)
+            else:
+                regular_bookings.append(booking)
+        
         return render_template('admin_list_bookings.html', 
-                             bookings=bookings,
+                             regular_bookings=regular_bookings,
+                             series_groups=series_groups,
+                             rollup_bookings=rollup_bookings,
                              booking_stats=booking_stats,
                              event_types=event_types,
                              current_filter=event_type_filter)
@@ -940,6 +958,35 @@ def admin_manage_booking(booking_id):
         # Create consolidated form with current booking data
         form = BookingManagementForm()
         
+        # Populate existing series dropdown
+        existing_series_query = db.session.scalars(
+            sa.select(Booking)
+            .where(Booking.series_id.isnot(None))
+            .where(Booking.series_id != booking.series_id)  # Exclude current booking's series
+        ).all()
+        
+        series_choices = [('', 'Select a series...')]
+        existing_series_names = {}
+        
+        for series_booking in existing_series_query:
+            if series_booking.series_id not in existing_series_names:
+                series_name = series_booking.get_series_name()
+                existing_series_names[series_booking.series_id] = series_name
+                series_choices.append((series_booking.series_id, series_name))
+        
+        form.existing_series.choices = series_choices
+        
+        # Debug: Log what series were found
+        current_app.logger.info(f"Populating series dropdown for booking {booking_id}")
+        current_app.logger.info(f"Found {len(series_choices)-1} existing series: {series_choices}")
+        if len(series_choices) == 1:
+            current_app.logger.info("No existing series found - dropdown will only show 'Select a series...'")
+        
+        # Debug: Log current booking's series status
+        current_app.logger.info(f"Current booking series_id: {booking.series_id}")
+        if booking.series_id:
+            current_app.logger.info(f"Current booking series name: {booking.get_series_name()}")
+        
         if request.method == 'GET':
             # Populate form with current booking data
             form.name.data = booking.name
@@ -954,54 +1001,140 @@ def admin_manage_booking(booking_id):
             form.vs.data = booking.vs
             form.home_away.data = booking.home_away
             form.series_id.data = booking.series_id if hasattr(booking, 'series_id') else None
+            form.create_series.data = booking.series_id is not None
+            form.series_name.data = booking.get_series_name() if booking.series_id else None
         
-        if request.method == 'POST' and form.validate_on_submit():
-            # Check which button was clicked
-            if form.duplicate.data:
-                # Handle duplication/series creation
-                duplicate_booking = create_booking_with_defaults(
-                    name=form.name.data,
-                    event_type=form.event_type.data,
-                    gender=form.gender.data,
-                    format=form.format.data,
-                    scoring=form.scoring.data,
-                    booking_date=form.booking_date.data,
-                    session=form.session.data,
-                    rink_count=form.rink_count.data,
-                    vs=form.vs.data,
-                    home_away=form.home_away.data,
-                    organizer_id=booking.organizer_id,
-                    has_pool=form.has_pool.data,
-                    series_id=booking.series_id if hasattr(booking, 'series_id') else None
-                )
-                
-                # If creating a series, generate series_id if needed
-                if form.create_series.data and not duplicate_booking.series_id:
-                    import uuid
-                    series_id = str(uuid.uuid4())
-                    # Update both original and duplicate with series_id
-                    booking.series_id = series_id
-                    duplicate_booking.series_id = series_id
-                
-                db.session.add(duplicate_booking)
-                db.session.commit()
-                
-                # Create pool for duplicate if original has pool
-                if form.has_pool.data and booking.pool:
-                    from app.models import Pool
-                    duplicate_pool = Pool(
-                        booking_id=duplicate_booking.id,
-                        is_open=True,
-                        max_players=booking.pool.max_players
+        if request.method == 'POST':
+            # Check if this is a duplicate action from the modal
+            action = request.form.get('action')
+            
+            if action == 'duplicate':
+                # Handle modal-based duplication
+                try:
+                    # Get duplicate parameters from the modal form
+                    duplicate_date_str = request.form.get('duplicate_date')
+                    duplicate_session = request.form.get('duplicate_session') 
+                    duplicate_venue = request.form.get('duplicate_venue')
+                    duplicate_opposition = request.form.get('duplicate_opposition')
+                    
+                    # Parse the date
+                    from datetime import datetime
+                    duplicate_date = datetime.strptime(duplicate_date_str, '%Y-%m-%d').date() if duplicate_date_str else None
+                    
+                    if not duplicate_date or not duplicate_session:
+                        flash('Date and session are required for duplication.', 'error')
+                        return render_template('admin_manage_booking.html', 
+                                             booking=booking,
+                                             form=form,
+                                             stats=stats)
+                    
+                    # Create duplicate booking with modified fields
+                    duplicate_booking = create_booking_with_defaults(
+                        name=booking.name,  # Keep original name
+                        event_type=booking.event_type,
+                        gender=booking.gender,
+                        format=booking.format,
+                        scoring=booking.scoring or None,  # Handle empty scoring
+                        booking_date=duplicate_date,  # Use new date
+                        session=int(duplicate_session),  # Use new session
+                        rink_count=booking.rink_count,
+                        vs=duplicate_opposition if duplicate_opposition else booking.vs,  # Use new opposition or keep original
+                        home_away=duplicate_venue if duplicate_venue else booking.home_away,  # Use new venue or keep original
+                        organizer_id=booking.organizer_id,
+                        has_pool=booking.has_pool,
+                        series_id=booking.series_id if hasattr(booking, 'series_id') and booking.series_id else None
                     )
-                    db.session.add(duplicate_pool)
+                    
+                    # Add to database and commit
+                    db.session.add(duplicate_booking)
                     db.session.commit()
+                    
+                    # Create pool if needed
+                    if booking.has_pool:
+                        from app.models import Pool
+                        new_pool = Pool(booking_id=duplicate_booking.id, is_open=True)
+                        db.session.add(new_pool)
+                        db.session.commit()
+                    
+                    # Audit log the duplication
+                    from app.audit import audit_log_create
+                    audit_log_create('Booking', duplicate_booking.id, 
+                                   f'Duplicated booking: {duplicate_booking.name} for {duplicate_date}')
+                    
+                    flash(f'Successfully created duplicate event for {duplicate_date}!', 'success')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
+                        
+                except Exception as e:
+                    current_app.logger.error(f"Error creating duplicate booking: {str(e)}")
+                    flash('An error occurred while creating the duplicate event.', 'error')
                 
-                audit_log_create('Booking', duplicate_booking.id, 
-                               f'Duplicated booking: {duplicate_booking.name} from booking {booking.id}')
-                
-                flash(f'Event duplicated successfully! New event created for {duplicate_booking.booking_date}', 'success')
-                return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
+                # Return after handling duplicate to prevent further form processing
+                return render_template('admin_manage_booking.html', 
+                                     booking=booking,
+                                     form=form,
+                                     stats=stats)
+                    
+            # Debug: Log form submission details
+            current_app.logger.info(f"POST request received for booking {booking_id}")
+            current_app.logger.info(f"Form data - duplicate: {form.duplicate.data}")
+            current_app.logger.info(f"Form data - submit: {form.submit.data}")
+            current_app.logger.info(f"Form data - existing_series: '{form.existing_series.data}'")
+            current_app.logger.info(f"Form data - series_id: '{form.series_id.data}'")
+            current_app.logger.info(f"Form data - create_series: {form.create_series.data}")
+            
+            if not form.validate_on_submit():
+                current_app.logger.warning(f"Form validation failed: {form.errors}")
+                flash('Form validation failed. Please check your inputs.', 'error')
+            
+            if form.validate_on_submit():
+                # Check which button was clicked
+                current_app.logger.info("Form validation passed - checking which button was clicked")
+                if form.duplicate.data:
+                    # Handle duplication/series creation
+                    duplicate_booking = create_booking_with_defaults(
+                        name=form.name.data,
+                        event_type=form.event_type.data,
+                        gender=form.gender.data,
+                        format=form.format.data,
+                        scoring=form.scoring.data,
+                        booking_date=form.booking_date.data,
+                        session=form.session.data,
+                        rink_count=form.rink_count.data,
+                        vs=form.vs.data,
+                        home_away=form.home_away.data,
+                        organizer_id=booking.organizer_id,
+                        has_pool=form.has_pool.data,
+                        series_id=booking.series_id if hasattr(booking, 'series_id') else None
+                    )
+                    
+                    # If creating a series, generate series_id if needed
+                    if form.create_series.data and not duplicate_booking.series_id:
+                        import uuid
+                        series_id = str(uuid.uuid4())
+                        # Update both original and duplicate with series_id
+                        booking.series_id = series_id
+                        duplicate_booking.series_id = series_id
+                    
+                    db.session.add(duplicate_booking)
+                    db.session.commit()
+                    
+                    # Create pool for duplicate if original has pool
+                    if form.has_pool.data and booking.pool:
+                        from app.models import Pool
+                        duplicate_pool = Pool(
+                            booking_id=duplicate_booking.id,
+                            is_open=True,
+                            max_players=booking.pool.max_players
+                        )
+                        db.session.add(duplicate_pool)
+                        db.session.commit()
+                    
+                    from app.audit import audit_log_create
+                    audit_log_create('Booking', duplicate_booking.id, 
+                                   f'Duplicated booking: {duplicate_booking.name} from booking {booking.id}')
+                    
+                    flash(f'Event duplicated successfully! New event created for {duplicate_booking.booking_date}', 'success')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
             
             else:
                 # Handle regular update
@@ -1048,6 +1181,13 @@ def admin_manage_booking(booking_id):
                     changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
                     booking.home_away = form.home_away.data
                 
+                # Handle series changes from existing_series dropdown
+                if form.existing_series.data and form.existing_series.data != booking.series_id:
+                    current_app.logger.info(f"Series change detected: {booking.series_id} -> {form.existing_series.data}")
+                    changes['series_id'] = {'old': booking.series_id, 'new': form.existing_series.data}
+                    booking.series_id = form.existing_series.data
+                    current_app.logger.info(f"Successfully updated booking {booking.id} series_id to {form.existing_series.data}")
+                
                 # Handle pool creation/deletion
                 current_has_pool = booking.pool is not None
                 if current_has_pool != form.has_pool.data:
@@ -1066,6 +1206,7 @@ def admin_manage_booking(booking_id):
                 
                 # Audit log changes
                 if changes:
+                    from app.audit import audit_log_update
                     audit_log_update('Booking', booking.id, 
                                    f'Updated booking: {booking.name}', changes)
                 
@@ -1078,8 +1219,11 @@ def admin_manage_booking(booking_id):
                              stats=stats)
                              
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         current_app.logger.error(f"Error managing booking {booking_id}: {str(e)}")
-        flash('An error occurred while managing the booking.', 'error')
+        current_app.logger.error(f"Full traceback: {error_details}")
+        flash(f'An error occurred while managing the booking: {str(e)}', 'error')
         return redirect(url_for('bookings.admin_list_bookings'))
 
 

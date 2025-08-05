@@ -230,10 +230,13 @@ class BookingManagementForm(FlaskForm):
     series_id = HiddenField('Series ID')
     create_series = BooleanField('Create as Series (multiple dates)', default=False)
     series_name = StringField('Series Name', validators=[Optional(), Length(max=256)])
+    existing_series = SelectField('Add to Existing Series', 
+                                choices=[('', 'Select a series...')], 
+                                validators=[Optional()])
     
     # Form Actions
     submit = SubmitField('Save Event')
-    duplicate = SubmitField('Duplicate to New Date')
+    duplicate = SubmitField('Duplicate')
     
     def __init__(self, *args, **kwargs):
         try:

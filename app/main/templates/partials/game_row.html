@@ -1,0 +1,209 @@
+{% if item.type == 'pool_registration' %}
+    {% set registration = item.data %}
+    {% set booking = registration.pool.booking %}
+    <tr class="{{ row_class }}">
+        <td>
+            <strong>
+                {{ booking.name }}
+                {% if booking.vs %} vs {{ booking.vs }}{% endif %}
+                {% if booking.home_away %} ({{ booking.home_away|title }}){% endif %}
+                {% if booking.booking_date %} - {{ booking.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+            </strong>
+        </td>
+        <td>
+            <span class="tag is-link">Pool Event</span>
+        </td>
+        <td>
+            {% if registration.pool.is_open %}
+                <span class="tag is-success">
+                    <span class="icon">
+                        <i class="fas fa-door-open"></i>
+                    </span>
+                    <span>Open ({{ registration.pool.registrations | length }})</span>
+                </span>
+            {% else %}
+                <span class="tag is-warning">
+                    <span class="icon">
+                        <i class="fas fa-door-closed"></i>
+                    </span>
+                    <span>Closed ({{ registration.pool.registrations | length }})</span>
+                </span>
+            {% endif %}
+        </td>
+        <td>
+            <span class="tag is-info">
+                <span class="icon">
+                    <i class="fas fa-user-check"></i>
+                </span>
+                <span>Registered</span>
+            </span>
+        </td>
+        <td>
+            <small class="has-text-grey">
+                Awaiting team selection by event manager
+            </small>
+        </td>
+    </tr>
+{% else %}
+    {% if item.type == 'assignment' %}
+        {% set assignment = item.data %}
+        {% set booking = assignment.team.booking %}
+    {% else %}
+        {% set invitation = item.data %}
+        {% set booking = invitation.team.booking %}
+    {% endif %}
+    
+    <tr class="{{ row_class }}">
+        <td>
+            <strong>
+                {{ booking.name }}
+                {% if booking.vs %} vs {{ booking.vs }}{% endif %}
+                {% if booking.home_away %} ({{ booking.home_away|title }}){% endif %}
+                {% if booking.booking_date %} - {{ booking.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+            </strong>
+        </td>
+        <td>
+            {% if item.type == 'assignment' %}
+                <span class="tag is-primary">Team Game</span>
+            {% else %}
+                <span class="tag is-info">Roll-Up</span>
+            {% endif %}
+        </td>
+        <td>
+            {% if item.type == 'assignment' %}
+                <strong>{{ assignment.team.team_name }}</strong><br>
+                <small>{{ assignment.position }}</small>
+            {% else %}
+                <strong>{{ invitation.team.booking.organizer.firstname }} {{ invitation.team.booking.organizer.lastname }}</strong><br>
+                <small>Organizer</small>
+            {% endif %}
+        </td>
+        <td>
+            {% if item.type == 'assignment' %}
+                {% if assignment.availability_status == 'pending' %}
+                    <span class="tag is-warning">
+                        <span class="icon">
+                            <i class="fas fa-clock"></i>
+                        </span>
+                        <span>Pending</span>
+                    </span>
+                {% elif assignment.availability_status == 'available' %}
+                    <span class="tag is-success">
+                        <span class="icon">
+                            <i class="fas fa-check"></i>
+                        </span>
+                        <span>Confirmed</span>
+                    </span>
+                {% elif assignment.availability_status == 'unavailable' %}
+                    <span class="tag is-danger">
+                        <span class="icon">
+                            <i class="fas fa-times"></i>
+                        </span>
+                        <span>Unavailable</span>
+                    </span>
+                {% else %}
+                    <span class="tag is-light">
+                        <span class="icon">
+                            <i class="fas fa-question"></i>
+                        </span>
+                        <span>No Response</span>
+                    </span>
+                {% endif %}
+            {% else %}
+                {% if invitation.availability_status == 'pending' %}
+                    <span class="tag is-warning">
+                        <span class="icon">
+                            <i class="fas fa-clock"></i>
+                        </span>
+                        <span>Pending</span>
+                    </span>
+                {% elif invitation.availability_status == 'available' %}
+                    <span class="tag is-success">
+                        <span class="icon">
+                            <i class="fas fa-check"></i>
+                        </span>
+                        <span>Confirmed</span>
+                    </span>
+                {% else %}
+                    <span class="tag is-light">
+                        <span class="icon">
+                            <i class="fas fa-question"></i>
+                        </span>
+                        <span>No Response</span>
+                    </span>
+                {% endif %}
+            {% endif %}
+        </td>
+        <td>
+            {% if item.type == 'assignment' and assignment.availability_status == 'pending' %}
+                <!-- Pending confirmation actions -->
+                <div class="buttons are-small">
+                    <form method="POST" style="display: inline;">
+                        {{ csrf_form.hidden_tag() }}
+                        <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
+                        <input type="hidden" name="action" value="confirm_available">
+                        <button type="submit" class="button is-small is-success" 
+                                onclick="return confirm('Confirm your availability for this game? You will not be able to change this once confirmed.')">
+                            <span class="icon">
+                                <i class="fas fa-check"></i>
+                            </span>
+                            <span>Available</span>
+                        </button>
+                    </form>
+                    <form method="POST" style="display: inline;">
+                        {{ csrf_form.hidden_tag() }}
+                        <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
+                        <input type="hidden" name="action" value="confirm_unavailable">
+                        <button type="submit" class="button is-small is-danger" 
+                                onclick="return confirm('Confirm you are unavailable for this game? You will not be able to change this once confirmed.')">
+                            <span class="icon">
+                                <i class="fas fa-times"></i>
+                            </span>
+                            <span>Unavailable</span>
+                        </button>
+                    </form>
+                </div>
+            {% elif item.type == 'rollup' and invitation.availability_status == 'pending' %}
+                <!-- Rollup invitation actions -->
+                <div class="buttons are-small">
+                    <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='accept') }}" 
+                       class="button is-small is-success"
+                       onclick="return confirm('Accept this roll-up invitation?')">
+                        <span class="icon">
+                            <i class="fas fa-check"></i>
+                        </span>
+                        <span>Accept</span>
+                    </a>
+                    <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='decline') }}" 
+                       class="button is-small is-danger"
+                       onclick="return confirm('Decline this roll-up invitation?')">
+                        <span class="icon">
+                            <i class="fas fa-times"></i>
+                        </span>
+                        <span>Decline</span>
+                    </a>
+                </div>
+            {% elif item.type == 'rollup' and invitation.team.booking.organizer_id == current_user.id and invitation.availability_status == 'available' %}
+                <!-- Rollup management for organizer -->
+                <a href="{{ url_for('rollups.manage_rollup', booking_id=invitation.team.booking.id) }}" 
+                   class="button is-small is-primary">
+                    <span class="icon">
+                        <i class="fas fa-cog"></i>
+                    </span>
+                    <span>Manage</span>
+                </a>
+            {% else %}
+                <!-- Default actions for confirmed/completed games -->
+                <small class="has-text-grey">
+                    {% if item.type == 'pool_registration' %}
+                        Awaiting team selection
+                    {% elif booking.booking_date < today %}
+                        Game completed
+                    {% else %}
+                        Contact event organizer to make changes
+                    {% endif %}
+                </small>
+            {% endif %}
+        </td>
+    </tr>
+{% endif %}

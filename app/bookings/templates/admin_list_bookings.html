@@ -41,8 +41,10 @@
         </div>
     </div>
 
+    <!-- Regular Events Section -->
+    {% if regular_bookings or series_groups %}
     <div class="box">
-        {% if bookings %}
+        <h3 class="title is-5">Events</h3>
         <div class="table-container">
             <table class="table is-fullwidth is-striped is-hoverable">
                 <thead>
@@ -56,53 +58,81 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for booking in bookings %}
-                    <tr>
-                        <td>
-                            <strong>{{ booking.name }}</strong>
-                            {% if booking.vs %}
-                            <br><small class="has-text-grey">vs {{ booking.vs }}</small>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="tag is-light">{{ booking.get_event_type_name() }}</span>
-                        </td>
-                        <td>{{ booking.booking_date.strftime('%d %b %Y') }}</td>
-                        <td>
-                            {% set stats = booking_stats[booking.id] %}
-                            {{ stats.total_teams }} teams
-                        </td>
-                        <td>
-                            {% if stats.has_pool %}
-                            <span class="tag is-info">{{ stats.pool_members }} registered</span>
-                            {% else %}
-                            <span class="tag is-light">No Pool</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="buttons">
-                                <a href="{{ url_for('bookings.admin_manage_booking', booking_id=booking.id) }}" 
-                                   class="button is-small is-primary">
-                                    <span class="icon">
-                                        <i class="fas fa-edit"></i>
-                                    </span>
-                                    <span>Manage</span>
-                                </a>
-                                <a href="{{ url_for('bookings.admin_edit_booking', booking_id=booking.id) }}" 
-                                   class="button is-small is-info">
-                                    <span class="icon">
-                                        <i class="fas fa-calendar"></i>
-                                    </span>
-                                    <span>Booking</span>
-                                </a>
-                            </div>
+                    <!-- Regular Bookings -->
+                    {% for booking in regular_bookings %}
+                    {% set indent = false %}
+                    {% set show_series_info = false %}
+                    {% set row_class = "" %}
+                    {% include 'partials/booking_row.html' with context %}
+                    {% endfor %}
+                    
+                    <!-- Series Groups -->
+                    {% for series_name, series_bookings in series_groups.items() %}
+                    <tr class="has-background-info-light series-header" style="cursor: pointer;" onclick="toggleSeries('series-{{ loop.index }}')">
+                        <td colspan="6">
+                            <strong class="has-text-info">
+                                <span class="icon">
+                                    <i class="fas fa-chevron-down" id="icon-series-{{ loop.index }}"></i>
+                                </span>
+                                <span class="icon">
+                                    <i class="fas fa-copy"></i>
+                                </span>
+                                {{ series_name }} ({{ series_bookings|length }} events)
+                            </strong>
                         </td>
                     </tr>
+                    <tbody id="series-{{ loop.index }}" class="series-content">
+                        {% for booking in series_bookings %}
+                        {% set indent = true %}
+                        {% set show_series_info = false %}
+                        {% set row_class = "has-background-light" %}
+                        {% include 'partials/booking_row.html' with context %}
+                        {% endfor %}
+                    </tbody>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
+    </div>
+    {% endif %}
+    
+    <!-- Roll-ups Section -->
+    {% if rollup_bookings %}
+    <div class="box">
+        <h3 class="title is-5">
+            <span class="icon">
+                <i class="fas fa-users"></i>
+            </span>
+            <span>Roll-up Sessions</span>
+        </h3>
+        <div class="table-container">
+            <table class="table is-fullwidth is-striped is-hoverable">
+                <thead>
+                    <tr>
+                        <th>Event Name</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Teams</th>
+                        <th>Pool</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in rollup_bookings %}
+                    {% set indent = false %}
+                    {% set show_series_info = false %}
+                    {% set row_class = "" %}
+                    {% include 'partials/booking_row.html' with context %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- No Events Message -->
+    {% if not regular_bookings and not series_groups and not rollup_bookings %}
+    <div class="box">
         <div class="has-text-centered">
             <p class="title is-4 has-text-grey-light">No Events Found</p>
             <p class="subtitle is-6 has-text-grey">
@@ -115,8 +145,8 @@
                 {% endif %}
             </p>
         </div>
-        {% endif %}
     </div>
+    {% endif %}
 </div>
 
 <script>
@@ -130,5 +160,34 @@ function filterEvents() {
     }
     window.location.href = url.toString();
 }
+
+function toggleSeries(seriesId) {
+    const seriesContent = document.getElementById(seriesId);
+    const icon = document.getElementById('icon-' + seriesId);
+    
+    if (seriesContent.style.display === 'none') {
+        seriesContent.style.display = '';
+        icon.classList.remove('fa-chevron-right');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        seriesContent.style.display = 'none';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-right');
+    }
+}
+
+// Initialize series as collapsed on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const seriesContents = document.querySelectorAll('.series-content');
+    seriesContents.forEach(function(content) {
+        content.style.display = 'none';
+    });
+    
+    const seriesIcons = document.querySelectorAll('[id^="icon-series-"]');
+    seriesIcons.forEach(function(icon) {
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-right');
+    });
+});
 </script>
 {% endblock %}

@@ -191,21 +191,15 @@
                     <div class="tab-content" data-content="series">
                         {{ form.series_id }}
                         
-                        {% if booking.series_id %}
-                        <div class="notification is-info">
-                            <p><strong>This event is part of a series</strong></p>
-                            <p>Series ID: {{ booking.series_id }}</p>
-                        </div>
-                        {% endif %}
                         
                         <div class="field">
                             <div class="control">
                                 <label class="checkbox">
                                     {{ form.create_series }}
-                                    Create as Series (multiple dates)
+                                    Series Booking
                                 </label>
                             </div>
-                            <p class="help">Enable this to create multiple events with the same details but different dates</p>
+                            <p class="help">This booking is part of a series with multiple dates</p>
                         </div>
                         
                         <div class="field">
@@ -217,6 +211,21 @@
                                 <p class="help is-danger">{{ error }}</p>
                             {% endfor %}
                             <p class="help">Optional: Give this series a descriptive name</p>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="field">
+                            <label class="label">{{ form.existing_series.label }}</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    {{ form.existing_series }}
+                                </div>
+                            </div>
+                            {% for error in form.existing_series.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                            <p class="help">Add this booking to an existing series</p>
                         </div>
                         
                         <div class="notification is-warning">
@@ -233,7 +242,12 @@
                             {{ form.submit(class="button is-primary") }}
                         </div>
                         <div class="control">
-                            {{ form.duplicate(class="button is-info") }}
+                            <button type="button" class="button is-info" onclick="openDuplicateModal()">
+                                <span class="icon">
+                                    <i class="fas fa-copy"></i>
+                                </span>
+                                <span>Duplicate</span>
+                            </button>
                         </div>
                         <div class="control">
                             <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
@@ -303,6 +317,80 @@
     </div>
 </div>
 
+<!-- Duplicate Modal -->
+<div class="modal" id="duplicateModal">
+    <div class="modal-background" onclick="closeDuplicateModal()"></div>
+    <div class="modal-content">
+        <div class="box">
+            <h3 class="title is-4">Duplicate Event</h3>
+            <p class="subtitle is-6">Modify the details for the duplicate event</p>
+            
+            <form id="duplicateForm" method="POST">
+                {{ form.hidden_tag() }}
+                <input type="hidden" name="action" value="duplicate">
+                
+                <div class="field">
+                    <label class="label">Event Date</label>
+                    <div class="control">
+                        <input type="date" name="duplicate_date" id="duplicate_date" class="input" required 
+                               value="{{ booking.booking_date.strftime('%Y-%m-%d') if booking.booking_date }}">
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label class="label">Session</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            <select name="duplicate_session" id="duplicate_session" required>
+                                {% for key, value in config.get('DAILY_SESSIONS', {}).items() %}
+                                <option value="{{ key }}" {% if key == booking.session %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label class="label">Venue</label>
+                    <div class="control">
+                        <div class="select is-fullwidth">
+                            <select name="duplicate_venue" id="duplicate_venue">
+                                <option value="">Select venue...</option>
+                                {% for key, value in config.get('HOME_AWAY_OPTIONS', {}).items() %}
+                                <option value="{{ value }}" {% if value == booking.home_away %}selected{% endif %}>{{ key }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="field">
+                    <label class="label">Opposition Team</label>
+                    <div class="control">
+                        <input type="text" name="duplicate_opposition" id="duplicate_opposition" class="input" 
+                               value="{{ booking.vs if booking.vs }}" placeholder="Enter opposition team name">
+                    </div>
+                </div>
+                
+                <div class="field is-grouped">
+                    <div class="control">
+                        <button type="submit" class="button is-primary">
+                            <span class="icon">
+                                <i class="fas fa-copy"></i>
+                            </span>
+                            <span>Create Duplicate</span>
+                        </button>
+                    </div>
+                    <div class="control">
+                        <button type="button" class="button" onclick="closeDuplicateModal()">Cancel</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    <button class="modal-close is-large" onclick="closeDuplicateModal()"></button>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Tab switching functionality
@@ -325,6 +413,59 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Handle series dropdown selection
+    const existingSeriesDropdown = document.getElementById('existing_series');
+    const createSeriesCheckbox = document.getElementById('create_series');
+    const seriesIdField = document.getElementById('series_id');
+    const seriesNameField = document.getElementById('series_name');
+    
+    if (existingSeriesDropdown && createSeriesCheckbox) {
+        existingSeriesDropdown.addEventListener('change', function() {
+            if (this.value) {
+                // A series was selected
+                const selectedSeriesId = this.value;
+                const selectedSeriesName = this.options[this.selectedIndex].text;
+                
+                // Check the Series Booking checkbox
+                createSeriesCheckbox.checked = true;
+                
+                // Update the hidden series_id field
+                if (seriesIdField) {
+                    seriesIdField.value = selectedSeriesId;
+                }
+                
+                // Update the series_name field
+                if (seriesNameField) {
+                    seriesNameField.value = selectedSeriesName;
+                }
+                
+                console.log('Series selected:', selectedSeriesId, selectedSeriesName);
+            } else {
+                // No series selected - clear everything
+                createSeriesCheckbox.checked = false;
+                
+                if (seriesIdField) {
+                    seriesIdField.value = '';
+                }
+                
+                if (seriesNameField) {
+                    seriesNameField.value = '';
+                }
+                
+                console.log('Series selection cleared');
+            }
+        });
+    }
 });
+
+// Modal functions
+function openDuplicateModal() {
+    document.getElementById('duplicateModal').classList.add('is-active');
+}
+
+function closeDuplicateModal() {
+    document.getElementById('duplicateModal').classList.remove('is-active');
+}
 </script>
 {% endblock %}
