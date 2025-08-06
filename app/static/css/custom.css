@@ -147,4 +147,88 @@
     color: hsl(204, 86%, 53%);
 }
 
+/* Drag and Drop Styles for Team Management */
+.player-card {
+    cursor: move;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.player-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.position-slot.drag-over {
+    border-color: #23d160 !important;
+    background-color: #f0fff4 !important;
+}
+
+.player-card.dragging {
+    opacity: 0.5;
+    transform: rotate(3deg);
+}
+
+.remove-player {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+/* Mobile-friendly drag and drop */
+@media screen and (max-width: 768px) {
+    .player-card {
+        touch-action: none;
+        min-height: 60px;
+    }
+    
+    .position-slot {
+        min-height: 80px;
+    }
+    
+    .pool-members {
+        max-height: 50vh !important;
+    }
+    
+    .team-container {
+        margin-bottom: 1rem !important;
+    }
+}
+
+/* Scrollbar styling for pool members */
+.pool-members {
+    scrollbar-width: thin;
+    scrollbar-color: #dbdbdb transparent;
+}
+
+.pool-members::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pool-members::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.pool-members::-webkit-scrollbar-thumb {
+    background-color: #dbdbdb;
+    border-radius: 3px;
+}
+
+.pool-members::-webkit-scrollbar-thumb:hover {
+    background-color: #b5b5b5;
+}
+
+/* Finalized team styling */
+.team-container[data-finalized="true"] .position-slot {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.team-container[data-finalized="true"] .player-card {
+    cursor: not-allowed !important;
+}
+
+.team-container[data-finalized="true"] .remove-player {
+    display: none !important;
+}
 

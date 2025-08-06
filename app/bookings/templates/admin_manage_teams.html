@@ -3,75 +3,152 @@
 
 {% block title %}Manage Teams - Booking #{{ booking.id }}{% endblock %}
 
-{% block page_header %}
-<h1 class="title">Manage Teams</h1>
-<h2 class="subtitle">Booking #{{ booking.id }} - {{ booking.booking_date }} Session {{ booking.session }}</h2>
-{% endblock %}
-
 {% block content %}
 <div class="columns">
     <div class="column is-full">
-        <div class="box">
-            <h3 class="title is-4">Booking Details</h3>
-            <div class="content">
-                <p><strong>Date:</strong> {{ booking.booking_date }}</p>
-                <p><strong>Session:</strong> {{ booking.session }}</p>
-                <p><strong>Rink Count:</strong> {{ booking.rink_count }}</p>
-                {% if booking.vs %}
-                <p><strong>Versus:</strong> {{ booking.vs }}</p>
+        <h1 class="title">Manage Teams</h1>
+        <h2 class="subtitle">{{ booking | booking_details | safe }}</h2>
+
+        <div class="columns is-desktop">
+            <!-- Teams Column -->
+            <div class="column is-7">
+                {% if teams %}
+                <div class="box">
+                    <h3 class="title is-4">Teams ({{ teams|length }})</h3>
+                    <p class="subtitle is-6">Drag players from the right into team positions</p>
+                    
+                    {% for team in teams %}
+                    <div class="box is-small team-container mb-4 {% if team.is_finalized() %}has-background-grey-lighter{% endif %}" data-team-id="{{ team.id }}" data-finalized="{{ 'true' if team.is_finalized() else 'false' }}">
+                        <div class="level is-mobile mb-2">
+                            <div class="level-left">
+                                <h4 class="title is-6 mb-0">
+                                    {{ team.team_name }}
+                                    {% if team.is_finalized() %}
+                                    <span class="icon has-text-success">
+                                        <i class="fas fa-lock"></i>
+                                    </span>
+                                    {% endif %}
+                                </h4>
+                            </div>
+                            <div class="level-right">
+                                {% set filled_positions = team.members|length %}
+                                {% set total_positions = positions|length %}
+                                {% if team.is_finalized() %}
+                                <span class="tag is-success">
+                                    <span class="icon is-small">
+                                        <i class="fas fa-check"></i>
+                                    </span>
+                                    <span>Finalized</span>
+                                </span>
+                                {% else %}
+                                <span class="tag {% if filled_positions == total_positions %}is-success{% elif filled_positions > 0 %}is-warning{% else %}is-light{% endif %}">
+                                    {{ filled_positions }}/{{ total_positions }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Compact Position Layout -->
+                        <div class="columns is-multiline is-mobile team-positions">
+                            {% for position in positions %}
+                            {% set team_member = team.members|selectattr('position', 'equalto', position)|first %}
+                            <div class="column is-half-mobile is-one-third-tablet">
+                                <div class="position-slot" data-position="{{ position }}" data-team-id="{{ team.id }}">
+                                    <div class="has-background-primary has-text-white has-text-centered py-1 px-2 mb-2 is-size-7 has-text-weight-semibold">
+                                        {{ position }}
+                                    </div>
+                                    <div class="player-slot {% if team_member %}occupied{% else %}empty{% endif %}">
+                                        {% if team_member %}
+                                        <div class="notification is-light p-2 player-card" draggable="true" data-member-id="{{ team_member.member.id }}" data-team-member-id="{{ team_member.id }}">
+                                            <button class="delete is-small remove-player" data-team-member-id="{{ team_member.id }}"></button>
+                                            <p class="is-size-7 has-text-weight-semibold mb-1">{{ team_member.member.firstname }} {{ team_member.member.lastname }}</p>
+                                            <span class="tag is-small {% if team_member.availability_status == 'available' %}is-success{% elif team_member.availability_status == 'unavailable' %}is-danger{% else %}is-warning{% endif %}">
+                                                {{ team_member.availability_status|title }}
+                                            </span>
+                                        </div>
+                                        {% else %}
+                                        <div class="notification has-background-light has-text-grey has-text-centered p-2 empty-slot">
+                                            <p class="is-size-7">Drop here</p>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Compact Team Actions -->
+                        <div class="has-text-centered mt-2">
+                            {% if team.is_finalized() %}
+                            <div class="notification is-success is-light is-small p-2 mb-2">
+                                <strong>Team Locked</strong> - No changes allowed
+                            </div>
+                            <form method="POST" style="display: inline;">
+                                {{ csrf_form.hidden_tag() }}
+                                <input type="hidden" name="action" value="unfinalize_team">
+                                <input type="hidden" name="team_id" value="{{ team.id }}">
+                                <button class="button is-warning is-small">
+                                    <span class="icon is-small">
+                                        <i class="fas fa-unlock"></i>
+                                    </span>
+                                    <span>Unlock</span>
+                                </button>
+                            </form>
+                            {% elif filled_positions == total_positions %}
+                            <form method="POST" style="display: inline;">
+                                {{ csrf_form.hidden_tag() }}
+                                <input type="hidden" name="action" value="finalize_team">
+                                <input type="hidden" name="team_id" value="{{ team.id }}">
+                                <button class="button is-success is-small">
+                                    <span class="icon is-small">
+                                        <i class="fas fa-lock"></i>
+                                    </span>
+                                    <span>Finalize</span>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="box">
+                    <p class="has-text-grey">No teams created for this booking yet.</p>
+                </div>
                 {% endif %}
-                <p><strong>Organizer:</strong> {{ booking.organizer.firstname }} {{ booking.organizer.lastname }}</p>
+            </div>
+            
+            <!-- Pool Members Column -->
+            <div class="column is-5">
+                {% if available_members %}
+                <div class="box pool-container">
+                    <h3 class="title is-4">Pool Players ({{ available_members|length }})</h3>
+                    <p class="subtitle is-6">Drag to teams ←</p>
+                    
+                    <div class="pool-members" style="max-height: 70vh; overflow-y: auto;">
+                        {% for member in available_members %}
+                        <div class="notification has-background-info-light p-3 mb-2 player-card pool-player" draggable="true" data-member-id="{{ member.id }}">
+                            <div class="level is-mobile">
+                                <div class="level-left">
+                                    <div>
+                                        <p class="has-text-weight-semibold">{{ member.firstname }} {{ member.lastname }}</p>
+                                        <p class="is-size-7 has-text-grey">Member #{{ member.id }}</p>
+                                    </div>
+                                </div>
+                                <div class="level-right">
+                                    <span class="icon has-text-info">
+                                        <i class="fas fa-grip-vertical"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
-        {% if teams %}
-        <div class="box">
-            <h3 class="title is-4">Teams ({{ teams|length }})</h3>
-            {% for team in teams %}
-            <div class="box">
-                <h4 class="title is-5">{{ team.team_name }}</h4>
-                {% if team.members %}
-                <table class="table is-fullwidth">
-                    <thead>
-                        <tr>
-                            <th>Player</th>
-                            <th>Position</th>
-                            <th>Substitute</th>
-                            <th>Availability</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for member in team.members %}
-                        <tr>
-                            <td>{{ member.member.firstname }} {{ member.member.lastname }}</td>
-                            <td>{{ member.position }}</td>
-                            <td>
-                                {% if member.is_substitute %}
-                                <span class="tag is-warning">Yes</span>
-                                {% else %}
-                                <span class="tag">No</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="tag {% if member.availability_status == 'available' %}is-success{% elif member.availability_status == 'unavailable' %}is-danger{% else %}is-warning{% endif %}">
-                                    {{ member.availability_status|title }}
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <p class="has-text-grey">No members assigned to this team.</p>
-                {% endif %}
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="box">
-            <p class="has-text-grey">No teams created for this booking yet.</p>
-        </div>
-        {% endif %}
 
         <div class="box">
             <h3 class="title is-4">Add Team</h3>
@@ -96,4 +173,170 @@
         </div>
     </div>
 </div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let draggedElement = null;
+    let draggedMemberId = null;
+    let draggedFromTeam = null;
+
+    // Make pool players draggable
+    document.querySelectorAll('.pool-player').forEach(player => {
+        player.addEventListener('dragstart', function(e) {
+            draggedElement = this;
+            draggedMemberId = this.dataset.memberId;
+            draggedFromTeam = null;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        player.addEventListener('dragend', function(e) {
+            this.classList.remove('dragging');
+        });
+    });
+
+    // Make team players draggable - updated selector for new layout
+    document.querySelectorAll('.team-container .player-card').forEach(player => {
+        player.addEventListener('dragstart', function(e) {
+            draggedElement = this;
+            draggedMemberId = this.dataset.memberId;
+            draggedFromTeam = this.closest('.team-container').dataset.teamId;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        player.addEventListener('dragend', function(e) {
+            this.classList.remove('dragging');
+        });
+    });
+
+    // Also handle newly added players (delegation)
+    document.addEventListener('dragstart', function(e) {
+        if (e.target.classList.contains('player-card')) {
+            draggedElement = e.target;
+            draggedMemberId = e.target.dataset.memberId;
+            draggedFromTeam = e.target.closest('.team-container')?.dataset.teamId || null;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+    });
+
+    document.addEventListener('dragend', function(e) {
+        if (e.target.classList.contains('player-card')) {
+            e.target.classList.remove('dragging');
+        }
+    });
+
+    // Make position slots droppable
+    document.querySelectorAll('.position-slot').forEach(slot => {
+        slot.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+        });
+
+        slot.addEventListener('dragleave', function(e) {
+            this.classList.remove('drag-over');
+        });
+
+        slot.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+
+            if (!draggedElement || !draggedMemberId) return;
+
+            const teamId = this.dataset.teamId;
+            const position = this.dataset.position;
+            const playerSlot = this.querySelector('.player-slot');
+            const teamContainer = this.closest('.team-container');
+
+            // Check if team is finalized
+            if (teamContainer && teamContainer.dataset.finalized === 'true') {
+                alert('This team is finalized and cannot be modified!');
+                return;
+            }
+
+            // Check if position is already occupied
+            if (playerSlot.classList.contains('occupied')) {
+                alert('This position is already occupied!');
+                return;
+            }
+
+            // Send AJAX request to assign player
+            assignPlayerToTeam(draggedMemberId, teamId, position, draggedFromTeam);
+        });
+    });
+
+    // Handle remove player buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-player')) {
+            e.preventDefault();
+            const teamMemberId = e.target.dataset.teamMemberId;
+            removePlayerFromTeam(teamMemberId);
+        }
+    });
+
+    function assignPlayerToTeam(memberId, teamId, position, fromTeamId = null) {
+        const formData = new FormData();
+        formData.append('action', 'assign_player');
+        formData.append('member_id', memberId);
+        formData.append('team_id', teamId);
+        formData.append('position', position);
+        if (fromTeamId) {
+            formData.append('from_team_id', fromTeamId);
+        }
+
+        // Add CSRF token
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        formData.append('csrf_token', csrfToken);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload(); // Refresh to show updated teams
+            } else {
+                alert(data.message || 'Error assigning player');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error assigning player');
+        });
+    }
+
+    function removePlayerFromTeam(teamMemberId) {
+        if (!confirm('Remove this player from the team?')) return;
+
+        const formData = new FormData();
+        formData.append('action', 'remove_player');
+        formData.append('team_member_id', teamMemberId);
+
+        // Add CSRF token
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        formData.append('csrf_token', csrfToken);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload(); // Refresh to show updated teams
+            } else {
+                alert(data.message || 'Error removing player');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error removing player');
+        });
+    }
+});
+</script>
 {% endblock %}

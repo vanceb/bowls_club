@@ -159,6 +159,7 @@ def get_bookings_range(start_date, end_date):
                 booking_info['event_name'] = booking.name
                 booking_info['event_type'] = booking.event_type
                 booking_info['vs'] = booking.vs
+                booking_info['home_away'] = booking.home_away
             
             bookings_by_date[date_str][session].append(booking_info)
         
@@ -627,13 +628,13 @@ def admin_manage_teams(booking_id):
             flash('You do not have permission to manage teams for this booking.', 'error')
             return redirect(url_for('bookings.bookings'))
         
-        from app.models import BookingTeam, BookingTeamMember
+        from app.models import Team, TeamMember
         
         # Get existing teams for this booking
         teams = db.session.scalars(
-            sa.select(BookingTeam)
-            .where(BookingTeam.booking_id == booking_id)
-            .order_by(BookingTeam.team_name)
+            sa.select(Team)
+            .where(Team.booking_id == booking_id)
+            .order_by(Team.team_name)
         ).all()
         
         # Handle POST request for team management
@@ -649,19 +650,220 @@ def admin_manage_teams(booking_id):
             if action == 'add_team':
                 team_name = request.form.get('team_name')
                 if team_name:
-                    new_team = BookingTeam(
+                    new_team = Team(
                         booking_id=booking_id,
                         team_name=team_name,
-                        event_team_id=booking.event.teams[0].id if booking.event and booking.event.teams else None
+                        created_by=current_user.id
                     )
                     db.session.add(new_team)
                     db.session.commit()
                     
-                    audit_log_create('BookingTeam', new_team.id, 
+                    audit_log_create('Team', new_team.id, 
                                    f'Added team {team_name} to booking {booking_id}')
                     flash(f'Team "{team_name}" added successfully.', 'success')
                 else:
                     flash('Team name is required.', 'error')
+            
+            elif action == 'add_player':
+                team_id = request.form.get('team_id')
+                member_id = request.form.get('member_id')
+                position = request.form.get('position')
+                
+                if team_id and member_id and position:
+                    team = db.session.get(Team, int(team_id))
+                    member = db.session.get(Member, int(member_id))
+                    
+                    if team and member and team.booking_id == booking_id:
+                        # Check if member is already in this team
+                        existing = db.session.scalar(
+                            sa.select(TeamMember).where(
+                                TeamMember.team_id == team.id,
+                                TeamMember.member_id == member.id
+                            )
+                        )
+                        
+                        if not existing:
+                            team_member = TeamMember(
+                                team_id=team.id,
+                                member_id=member.id,
+                                position=position,
+                                availability_status='pending'
+                            )
+                            db.session.add(team_member)
+                            db.session.commit()
+                            
+                            audit_log_create('TeamMember', team_member.id,
+                                           f'Added {member.firstname} {member.lastname} to team {team.team_name} as {position}')
+                            flash(f'{member.firstname} {member.lastname} added to {team.team_name} as {position}.', 'success')
+                        else:
+                            flash(f'{member.firstname} {member.lastname} is already in {team.team_name}.', 'error')
+                    else:
+                        flash('Invalid team or member selection.', 'error')
+                else:
+                    flash('Team, member, and position are required.', 'error')
+            
+            elif action == 'assign_player':
+                # Handle drag-and-drop player assignment via AJAX
+                team_id = request.form.get('team_id')
+                member_id = request.form.get('member_id')
+                position = request.form.get('position')
+                from_team_id = request.form.get('from_team_id')
+                
+                try:
+                    if team_id and member_id and position:
+                        team = db.session.get(Team, int(team_id))
+                        member = db.session.get(Member, int(member_id))
+                        
+                        if team and member and team.booking_id == booking_id:
+                            # Check if team is finalized (locked)
+                            if team.is_finalized():
+                                return jsonify({'success': False, 'message': 'Team is finalized and cannot be modified'})
+                            
+                            # Check if position is already occupied
+                            existing_in_position = db.session.scalar(
+                                sa.select(TeamMember).where(
+                                    TeamMember.team_id == team.id,
+                                    TeamMember.position == position
+                                )
+                            )
+                            
+                            if existing_in_position:
+                                return jsonify({'success': False, 'message': 'Position already occupied'})
+                            
+                            # If moving from another team, remove from there first
+                            if from_team_id:
+                                existing_assignment = db.session.scalar(
+                                    sa.select(TeamMember).where(
+                                        TeamMember.team_id == int(from_team_id),
+                                        TeamMember.member_id == member.id
+                                    )
+                                )
+                                if existing_assignment:
+                                    db.session.delete(existing_assignment)
+                            
+                            # Check if member is already in this team (different position)
+                            existing_in_team = db.session.scalar(
+                                sa.select(TeamMember).where(
+                                    TeamMember.team_id == team.id,
+                                    TeamMember.member_id == member.id
+                                )
+                            )
+                            
+                            if existing_in_team:
+                                # Update position
+                                existing_in_team.position = position
+                                db.session.commit()
+                                
+                                audit_log_update('TeamMember', existing_in_team.id,
+                                               f'Updated {member.firstname} {member.lastname} position to {position} in team {team.team_name}')
+                            else:
+                                # Create new assignment
+                                team_member = TeamMember(
+                                    team_id=team.id,
+                                    member_id=member.id,
+                                    position=position,
+                                    availability_status='pending'
+                                )
+                                db.session.add(team_member)
+                                db.session.commit()
+                                
+                                audit_log_create('TeamMember', team_member.id,
+                                               f'Assigned {member.firstname} {member.lastname} to team {team.team_name} as {position}')
+                            
+                            return jsonify({'success': True, 'message': 'Player assigned successfully'})
+                        else:
+                            return jsonify({'success': False, 'message': 'Invalid team or member'})
+                    else:
+                        return jsonify({'success': False, 'message': 'Missing required parameters'})
+                        
+                except Exception as e:
+                    current_app.logger.error(f"Error assigning player: {str(e)}")
+                    return jsonify({'success': False, 'message': 'Server error'})
+            
+            elif action == 'remove_player':
+                # Handle player removal via AJAX
+                team_member_id = request.form.get('team_member_id')
+                
+                try:
+                    if team_member_id:
+                        team_member = db.session.get(TeamMember, int(team_member_id))
+                        
+                        if team_member and team_member.team.booking_id == booking_id:
+                            # Check if team is finalized (locked)
+                            if team_member.team.is_finalized():
+                                return jsonify({'success': False, 'message': 'Team is finalized and cannot be modified'})
+                            
+                            member_name = f"{team_member.member.firstname} {team_member.member.lastname}"
+                            team_name = team_member.team.team_name
+                            position = team_member.position
+                            
+                            db.session.delete(team_member)
+                            db.session.commit()
+                            
+                            audit_log_delete('TeamMember', int(team_member_id),
+                                           f'Removed {member_name} from {position} in team {team_name}')
+                            
+                            return jsonify({'success': True, 'message': 'Player removed successfully'})
+                        else:
+                            return jsonify({'success': False, 'message': 'Invalid team member'})
+                    else:
+                        return jsonify({'success': False, 'message': 'Team member ID required'})
+                        
+                except Exception as e:
+                    current_app.logger.error(f"Error removing player: {str(e)}")
+                    return jsonify({'success': False, 'message': 'Server error'})
+            
+            elif action == 'finalize_team':
+                # Handle team finalization - lock team from changes
+                team_id = request.form.get('team_id')
+                
+                if team_id:
+                    team = db.session.get(Team, int(team_id))
+                    
+                    if team and team.booking_id == booking_id:
+                        # Check if team is complete
+                        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+                        required_positions = team_positions.get(booking.format, ['Player'])
+                        
+                        if len(team.members) == len(required_positions):
+                            # Finalize the team (lock it)
+                            if team.finalize_team():
+                                db.session.commit()
+                                
+                                audit_log_update('Team', team.id,
+                                               f'Finalized team {team.team_name} - locked from changes')
+                                
+                                flash(f'Team "{team.team_name}" has been finalized and locked! No further changes can be made.', 'success')
+                            else:
+                                flash(f'Team "{team.team_name}" is already finalized.', 'info')
+                        else:
+                            flash(f'Team "{team.team_name}" is not complete. Need {len(required_positions)} players but only has {len(team.members)}.', 'error')
+                    else:
+                        flash('Invalid team selection.', 'error')
+                else:
+                    flash('Team ID is required.', 'error')
+            
+            elif action == 'unfinalize_team':
+                # Handle team unfinalizing - unlock team for changes
+                team_id = request.form.get('team_id')
+                
+                if team_id:
+                    team = db.session.get(Team, int(team_id))
+                    
+                    if team and team.booking_id == booking_id:
+                        if team.unfinalize_team():
+                            db.session.commit()
+                            
+                            audit_log_update('Team', team.id,
+                                           f'Unfinalized team {team.team_name} - unlocked for changes')
+                            
+                            flash(f'Team "{team.team_name}" has been unlocked for changes.', 'success')
+                        else:
+                            flash(f'Team "{team.team_name}" is not finalized.', 'info')
+                    else:
+                        flash('Invalid team selection.', 'error')
+                else:
+                    flash('Team ID is required.', 'error')
             
             elif action == 'substitute_player':
                 import json
@@ -671,7 +873,7 @@ def admin_manage_teams(booking_id):
                 reason = request.form.get('reason', 'No reason provided')
                 
                 if booking_team_member_id and new_member_id:
-                    booking_team_member = db.session.get(BookingTeamMember, int(booking_team_member_id))
+                    booking_team_member = db.session.get(TeamMember, int(booking_team_member_id))
                     new_member = db.session.get(Member, int(new_member_id))
                     
                     if booking_team_member and new_member:
@@ -707,7 +909,7 @@ def admin_manage_teams(booking_id):
                         db.session.commit()
                         
                         # Audit log the substitution
-                        audit_log_update('BookingTeamMember', booking_team_member.id, 
+                        audit_log_update('TeamMember', booking_team_member.id, 
                                        f'Substituted {original_player_name} with {substitute_player_name} for {position}',
                                        {'original_member_id': original_member_id, 'new_member_id': new_member.id, 'reason': reason})
                         
@@ -725,18 +927,18 @@ def admin_manage_teams(booking_id):
         
         # Get available members for substitutions 
         available_members = []
-        if booking.event and booking.event.has_pool_enabled():
+        if booking.has_pool_enabled():
             # Get all pool members (all registrations are active)
             from app.models import PoolRegistration
             available_members = db.session.scalars(
                 sa.select(Member)
                 .join(PoolRegistration, Member.id == PoolRegistration.member_id)
-                .where(PoolRegistration.pool_id == booking.event.pool.id)
+                .where(PoolRegistration.pool_id == booking.pool.id)
                 .order_by(Member.firstname, Member.lastname)
             ).all()
         else:
             # Fallback: get active members not already in the booking teams
-            current_member_ids = {member.member_id for team in teams for member in team.booking_team_members}
+            current_member_ids = {member.member_id for team in teams for member in team.members}
             available_members = db.session.scalars(
                 sa.select(Member)
                 .where(Member.status.in_(['Full', 'Social', 'Life']))
@@ -744,14 +946,19 @@ def admin_manage_teams(booking_id):
                 .order_by(Member.firstname, Member.lastname)
             ).all()
         
+        # Get team positions based on booking format
+        team_positions = current_app.config.get('TEAM_POSITIONS', {})
+        positions = team_positions.get(booking.format, ['Player'])
+        
         # Create CSRF form for template
         csrf_form = FlaskForm()
         
-        return render_template('admin/manage_teams.html', 
+        return render_template('admin_manage_teams.html', 
                              booking=booking,
                              teams=teams,
                              session_name=session_name,
                              available_members=available_members,
+                             positions=positions,
                              csrf_form=csrf_form)
         
     except Exception as e:
@@ -1081,6 +1288,7 @@ def admin_manage_booking(booking_id):
             current_app.logger.info(f"Form data - existing_series: '{form.existing_series.data}'")
             current_app.logger.info(f"Form data - series_id: '{form.series_id.data}'")
             current_app.logger.info(f"Form data - create_series: {form.create_series.data}")
+            current_app.logger.info(f"Form data - has_pool: {form.has_pool.data}")
             
             if not form.validate_on_submit():
                 current_app.logger.warning(f"Form validation failed: {form.errors}")
@@ -1089,129 +1297,149 @@ def admin_manage_booking(booking_id):
             if form.validate_on_submit():
                 # Check which button was clicked
                 current_app.logger.info("Form validation passed - checking which button was clicked")
-                if form.duplicate.data:
-                    # Handle duplication/series creation
-                    duplicate_booking = create_booking_with_defaults(
-                        name=form.name.data,
-                        event_type=form.event_type.data,
-                        gender=form.gender.data,
-                        format=form.format.data,
-                        scoring=form.scoring.data,
-                        booking_date=form.booking_date.data,
-                        session=form.session.data,
-                        rink_count=form.rink_count.data,
-                        vs=form.vs.data,
-                        home_away=form.home_away.data,
-                        organizer_id=booking.organizer_id,
-                        has_pool=form.has_pool.data,
-                        series_id=booking.series_id if hasattr(booking, 'series_id') else None
-                    )
+                try:
+                    current_app.logger.info(f"About to check form.duplicate.data: {form.duplicate.data}")
+                    if form.duplicate.data:
+                        # Handle duplication/series creation
+                        current_app.logger.info("Handling duplication")
+                        duplicate_booking = create_booking_with_defaults(
+                            name=form.name.data,
+                            event_type=form.event_type.data,
+                            gender=form.gender.data,
+                            format=form.format.data,
+                            scoring=form.scoring.data,
+                            booking_date=form.booking_date.data,
+                            session=form.session.data,
+                            rink_count=form.rink_count.data,
+                            vs=form.vs.data,
+                            home_away=form.home_away.data,
+                            organizer_id=booking.organizer_id,
+                            has_pool=form.has_pool.data,
+                            series_id=booking.series_id if hasattr(booking, 'series_id') else None
+                        )
+                        
+                        # If creating a series, generate series_id if needed
+                        if form.create_series.data and not duplicate_booking.series_id:
+                            import uuid
+                            series_id = str(uuid.uuid4())
+                            # Update both original and duplicate with series_id
+                            booking.series_id = series_id
+                            duplicate_booking.series_id = series_id
+                        
+                        db.session.add(duplicate_booking)
+                        db.session.commit()
+                        
+                        # Create pool for duplicate if original has pool
+                        if form.has_pool.data and booking.pool:
+                            from app.models import Pool
+                            duplicate_pool = Pool(
+                                booking_id=duplicate_booking.id,
+                                is_open=True,
+                                max_players=booking.pool.max_players
+                            )
+                            db.session.add(duplicate_pool)
+                            db.session.commit()
+                        
+                        from app.audit import audit_log_create
+                        audit_log_create('Booking', duplicate_booking.id, 
+                                       f'Duplicated booking: {duplicate_booking.name} from booking {booking.id}')
+                        
+                        flash(f'Event duplicated successfully! New event created for {duplicate_booking.booking_date}', 'success')
+                        return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
+                
+                except Exception as e:
+                    current_app.logger.error(f"Error in duplication handling: {str(e)}")
+                    db.session.rollback()
+                    flash('An error occurred while processing the form.', 'error')
                     
-                    # If creating a series, generate series_id if needed
-                    if form.create_series.data and not duplicate_booking.series_id:
-                        import uuid
-                        series_id = str(uuid.uuid4())
-                        # Update both original and duplicate with series_id
-                        booking.series_id = series_id
-                        duplicate_booking.series_id = series_id
+                else:
+                    # Handle regular update
+                    current_app.logger.info("Handling regular update (not duplicate)")
+                    changes = {}
+                
+                    # Track all changes
+                    if booking.name != form.name.data:
+                        changes['name'] = {'old': booking.name, 'new': form.name.data}
+                        booking.name = form.name.data
+                        
+                    if booking.event_type != form.event_type.data:
+                        changes['event_type'] = {'old': booking.event_type, 'new': form.event_type.data}
+                        booking.event_type = form.event_type.data
+                        
+                    if booking.gender != form.gender.data:
+                        changes['gender'] = {'old': booking.gender, 'new': form.gender.data}
+                        booking.gender = form.gender.data
+                        
+                    if booking.format != form.format.data:
+                        changes['format'] = {'old': booking.format, 'new': form.format.data}
+                        booking.format = form.format.data
+                        
+                    if booking.scoring != form.scoring.data:
+                        changes['scoring'] = {'old': booking.scoring, 'new': form.scoring.data}
+                        booking.scoring = form.scoring.data
+                        
+                    if booking.booking_date != form.booking_date.data:
+                        changes['booking_date'] = {'old': booking.booking_date.isoformat(), 'new': form.booking_date.data.isoformat()}
+                        booking.booking_date = form.booking_date.data
                     
-                    db.session.add(duplicate_booking)
+                    if booking.session != form.session.data:
+                        changes['session'] = {'old': booking.session, 'new': form.session.data}
+                        booking.session = form.session.data
+                        
+                    if booking.rink_count != form.rink_count.data:
+                        changes['rink_count'] = {'old': booking.rink_count, 'new': form.rink_count.data}
+                        booking.rink_count = form.rink_count.data
+                        
+                    if booking.vs != form.vs.data:
+                        changes['vs'] = {'old': booking.vs, 'new': form.vs.data}
+                        booking.vs = form.vs.data
+                        
+                    if booking.home_away != form.home_away.data:
+                        changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
+                        booking.home_away = form.home_away.data
+                    
+                    # Handle series changes from existing_series dropdown
+                    if form.existing_series.data and form.existing_series.data != booking.series_id:
+                        current_app.logger.info(f"Series change detected: {booking.series_id} -> {form.existing_series.data}")
+                        changes['series_id'] = {'old': booking.series_id, 'new': form.existing_series.data}
+                        booking.series_id = form.existing_series.data
+                        current_app.logger.info(f"Successfully updated booking {booking.id} series_id to {form.existing_series.data}")
+                    
+                    # Handle pool creation/deletion
+                    current_has_pool = booking.pool is not None
+                    current_app.logger.info(f"Pool status check - booking.id: {booking.id}, current_has_pool: {current_has_pool}, form.has_pool.data: {form.has_pool.data}")
+                    
+                    if current_has_pool != form.has_pool.data:
+                        if form.has_pool.data and not current_has_pool:
+                            # Create new pool
+                            from app.models import Pool
+                            new_pool = Pool(booking_id=booking.id, is_open=True)
+                            db.session.add(new_pool)
+                            booking.has_pool = True
+                            changes['pool'] = {'old': 'None', 'new': 'Created'}
+                            current_app.logger.info(f"Created new pool for booking {booking.id}")
+                        elif not form.has_pool.data and current_has_pool:
+                            # Delete existing pool
+                            db.session.delete(booking.pool)
+                            booking.has_pool = False
+                            changes['pool'] = {'old': 'Exists', 'new': 'Deleted'}
+                            current_app.logger.info(f"Deleted pool for booking {booking.id}")
+                    
                     db.session.commit()
                     
-                    # Create pool for duplicate if original has pool
-                    if form.has_pool.data and booking.pool:
-                        from app.models import Pool
-                        duplicate_pool = Pool(
-                            booking_id=duplicate_booking.id,
-                            is_open=True,
-                            max_players=booking.pool.max_players
-                        )
-                        db.session.add(duplicate_pool)
-                        db.session.commit()
+                    # Verify pool creation after commit
+                    db.session.refresh(booking)
+                    pool_after_commit = booking.pool is not None
+                    current_app.logger.info(f"After commit - booking.id: {booking.id}, pool exists: {pool_after_commit}, booking.has_pool: {booking.has_pool}")
                     
-                    from app.audit import audit_log_create
-                    audit_log_create('Booking', duplicate_booking.id, 
-                                   f'Duplicated booking: {duplicate_booking.name} from booking {booking.id}')
+                    # Audit log changes
+                    if changes:
+                        from app.audit import audit_log_update
+                        audit_log_update('Booking', booking.id, 
+                                       f'Updated booking: {booking.name}', changes)
                     
-                    flash(f'Event duplicated successfully! New event created for {duplicate_booking.booking_date}', 'success')
-                    return redirect(url_for('bookings.admin_manage_booking', booking_id=duplicate_booking.id))
-            
-            else:
-                # Handle regular update
-                changes = {}
-                
-                # Track all changes
-                if booking.name != form.name.data:
-                    changes['name'] = {'old': booking.name, 'new': form.name.data}
-                    booking.name = form.name.data
-                    
-                if booking.event_type != form.event_type.data:
-                    changes['event_type'] = {'old': booking.event_type, 'new': form.event_type.data}
-                    booking.event_type = form.event_type.data
-                    
-                if booking.gender != form.gender.data:
-                    changes['gender'] = {'old': booking.gender, 'new': form.gender.data}
-                    booking.gender = form.gender.data
-                    
-                if booking.format != form.format.data:
-                    changes['format'] = {'old': booking.format, 'new': form.format.data}
-                    booking.format = form.format.data
-                    
-                if booking.scoring != form.scoring.data:
-                    changes['scoring'] = {'old': booking.scoring, 'new': form.scoring.data}
-                    booking.scoring = form.scoring.data
-                    
-                if booking.booking_date != form.booking_date.data:
-                    changes['booking_date'] = {'old': booking.booking_date.isoformat(), 'new': form.booking_date.data.isoformat()}
-                    booking.booking_date = form.booking_date.data
-                    
-                if booking.session != form.session.data:
-                    changes['session'] = {'old': booking.session, 'new': form.session.data}
-                    booking.session = form.session.data
-                    
-                if booking.rink_count != form.rink_count.data:
-                    changes['rink_count'] = {'old': booking.rink_count, 'new': form.rink_count.data}
-                    booking.rink_count = form.rink_count.data
-                    
-                if booking.vs != form.vs.data:
-                    changes['vs'] = {'old': booking.vs, 'new': form.vs.data}
-                    booking.vs = form.vs.data
-                    
-                if booking.home_away != form.home_away.data:
-                    changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
-                    booking.home_away = form.home_away.data
-                
-                # Handle series changes from existing_series dropdown
-                if form.existing_series.data and form.existing_series.data != booking.series_id:
-                    current_app.logger.info(f"Series change detected: {booking.series_id} -> {form.existing_series.data}")
-                    changes['series_id'] = {'old': booking.series_id, 'new': form.existing_series.data}
-                    booking.series_id = form.existing_series.data
-                    current_app.logger.info(f"Successfully updated booking {booking.id} series_id to {form.existing_series.data}")
-                
-                # Handle pool creation/deletion
-                current_has_pool = booking.pool is not None
-                if current_has_pool != form.has_pool.data:
-                    if form.has_pool.data and not current_has_pool:
-                        # Create new pool
-                        from app.models import Pool
-                        new_pool = Pool(booking_id=booking.id, is_open=True)
-                        db.session.add(new_pool)
-                        changes['pool'] = {'old': 'None', 'new': 'Created'}
-                    elif not form.has_pool.data and current_has_pool:
-                        # Delete existing pool
-                        db.session.delete(booking.pool)
-                        changes['pool'] = {'old': 'Exists', 'new': 'Deleted'}
-                
-                db.session.commit()
-                
-                # Audit log changes
-                if changes:
-                    from app.audit import audit_log_update
-                    audit_log_update('Booking', booking.id, 
-                                   f'Updated booking: {booking.name}', changes)
-                
-                flash('Event updated successfully!', 'success')
-                return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    flash('Event updated successfully!', 'success')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
         
         return render_template('admin_manage_booking.html', 
                              booking=booking,

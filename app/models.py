@@ -456,6 +456,8 @@ class Team(db.Model):
     team_name: so.Mapped[str] = so.mapped_column(sa.String(100), nullable=False)
     created_by: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
     booking_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('bookings.id'), nullable=False)  # Required booking association
+    status: so.Mapped[str] = so.mapped_column(sa.String(20), default='draft', nullable=False)  # 'draft', 'finalized'
+    finalized_at: so.Mapped[Optional[datetime]] = so.mapped_column(sa.DateTime, nullable=True)  # When team was finalized
     substitution_log: so.Mapped[Optional[str]] = so.mapped_column(sa.Text, nullable=True)  # JSON log of substitutions
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -470,6 +472,30 @@ class Team(db.Model):
     def get_available_positions(self):
         """Get the list of standard team positions"""
         return ['Lead', 'Second', 'Third', 'Skip', 'Player']
+    
+    def is_finalized(self):
+        """Check if the team is finalized"""
+        return self.status == 'finalized'
+    
+    def can_be_modified(self):
+        """Check if the team can be modified (not finalized)"""
+        return self.status == 'draft'
+    
+    def finalize_team(self):
+        """Finalize the team (lock it from changes)"""
+        if self.status == 'draft':
+            self.status = 'finalized'
+            self.finalized_at = datetime.utcnow()
+            return True
+        return False
+    
+    def unfinalize_team(self):
+        """Unfinalize the team (allow changes again)"""
+        if self.status == 'finalized':
+            self.status = 'draft'
+            self.finalized_at = None
+            return True
+        return False
 
 
 class TeamMember(db.Model):
