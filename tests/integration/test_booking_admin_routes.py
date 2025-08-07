@@ -3,7 +3,7 @@ Integration tests for booking admin routes.
 """
 import pytest
 from datetime import date, timedelta
-from app.models import Member, Booking, Event
+from app.models import Member, Booking
 
 
 @pytest.mark.integration
@@ -41,6 +41,10 @@ class TestBookingAdminRoutes:
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
+            name='Test Admin Booking',
+            event_type=1,
+            gender=4,
+            format=5,
             organizer_id=member.id,
             priority='High',
             vs='Test Opposition',
@@ -142,22 +146,16 @@ class TestBookingAdminRoutes:
         team management, even though the route documentation says it should be accessible.
         See: https://github.com/vanceb/bowls_club/issues/18
         """
-        # Create event for booking
-        event = Event(
-            name='Test Event',
-            event_type=1,  # Social  
-            format=2,  # Pairs
-            gender=3  # Mixed
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
             organizer_id=test_member.id,
-            event_id=event.id
+            event_type=1,  # Social
+            format=2,  # Pairs
+            gender=3  # Mixed
         )
         db_session.add(booking)
         db_session.commit()
@@ -178,22 +176,16 @@ class TestBookingAdminRoutes:
         db_session.add(organizer)
         db_session.commit()
         
-        # Create event for booking
-        event = Event(
-            name='Admin Test Event',
-            event_type=2,  # Competition
-            format=3,  # Triples
-            gender=1  # Gents
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Admin Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
             organizer_id=organizer.id,
-            event_id=event.id
+            event_type=2,  # Competition
+            format=3,  # Triples
+            gender=1  # Gents
         )
         db_session.add(booking)
         db_session.commit()
@@ -222,22 +214,16 @@ class TestBookingAdminRoutes:
         db_session.add_all([organizer, player1, player2])
         db_session.commit()
         
-        # Create event for booking (Pairs format)
-        event = Event(
-            name='Pairs Event',
-            event_type=1,  # Social
-            format=2,  # Pairs
-            gender=3  # Mixed
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Pairs Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=1,
             organizer_id=organizer.id,
-            event_id=event.id
+            event_type=1,  # Social
+            format=2,  # Pairs
+            gender=3  # Mixed
         )
         db_session.add(booking)
         db_session.commit()
@@ -274,22 +260,16 @@ class TestBookingAdminRoutes:
         db_session.add_all([organizer, player])
         db_session.commit()
         
-        # Create event and booking
-        event = Event(
-            name='Test Event',
-            event_type=1,
-            format=2,  # Pairs
-            gender=3
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=1,
             organizer_id=organizer.id,
-            event_id=event.id
+            event_type=1,
+            format=2,  # Pairs
+            gender=3
         )
         db_session.add(booking)
         db_session.commit()

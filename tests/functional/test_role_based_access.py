@@ -8,7 +8,7 @@ without modifying application code.
 import pytest
 from flask import url_for
 from app import create_app, db
-from app.models import Member, Role, Event, Pool, Booking, Post
+from app.models import Member, Role, Pool, Booking, Post
 
 
 class TestAdminAccess:
@@ -315,17 +315,19 @@ class TestEventSpecificManagerAccess:
     
     def test_event_specific_manager_cannot_manage_other_events(self, client, test_member, test_event, db_session):
         """Test event-specific manager cannot manage unassigned events."""
-        # Don't assign user to this event
-        from datetime import datetime, timedelta
-        other_event = Event(
+        # Don't assign user to this booking/event
+        from datetime import date, timedelta
+        other_booking = Booking(
             name='Other Event',
-            event_date=datetime.now() + timedelta(days=14),
+            booking_date=date.today() + timedelta(days=14),
+            session=1,
+            rink_count=2,
             event_type=1,
             gender=1,
             format=1,
             has_pool=False
         )
-        db_session.add(other_event)
+        db_session.add(other_booking)
         db_session.commit()
         
         with client.session_transaction() as sess:

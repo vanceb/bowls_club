@@ -258,16 +258,39 @@ def my_games():
         ).all()
         
         # Get pool registrations for current user (events they registered interest in)
-        pool_registrations = db.session.scalars(
-            sa.select(PoolRegistration)
-            .join(PoolRegistration.pool)
-            .join(Pool.booking)
-            .where(
-                PoolRegistration.member_id == current_user.id,
-                PoolRegistration.status == 'registered'
-            )
-            .order_by(Booking.booking_date)
-        ).all()
+        # Exclude pool registrations where user has already been assigned to a team for that booking
+        assigned_booking_ids = {assignment.team.booking_id for assignment in assignments}
+        assigned_booking_ids.update({invitation.team.booking_id for invitation in roll_up_invitations})
+        
+        current_app.logger.info(f"User {current_user.id} has team assignments for bookings: {assigned_booking_ids}")
+        
+        # Only show pool registrations for bookings where user is NOT already in a team
+        if assigned_booking_ids:
+            pool_registrations = db.session.scalars(
+                sa.select(PoolRegistration)
+                .join(PoolRegistration.pool)
+                .join(Pool.booking)
+                .where(
+                    PoolRegistration.member_id == current_user.id,
+                    PoolRegistration.status == 'registered',
+                    ~Pool.booking_id.in_(assigned_booking_ids)  # Exclude bookings where user is already assigned to a team
+                )
+                .order_by(Booking.booking_date)
+            ).all()
+        else:
+            # No team assignments, show all pool registrations
+            pool_registrations = db.session.scalars(
+                sa.select(PoolRegistration)
+                .join(PoolRegistration.pool)
+                .join(Pool.booking)
+                .where(
+                    PoolRegistration.member_id == current_user.id,
+                    PoolRegistration.status == 'registered'
+                )
+                .order_by(Booking.booking_date)
+            ).all()
+        
+        current_app.logger.info(f"User {current_user.id} has {len(pool_registrations)} pool registrations after filtering")
         
         # Create CSRF form for POST actions
         csrf_form = FlaskForm()
@@ -637,6 +660,41 @@ def admin_manage_teams(booking_id):
             .order_by(Team.team_name)
         ).all()
         
+        # Auto-create teams if none exist - create one team per rink
+        if not teams and request.method == 'GET':
+            rink_count = booking.rink_count
+            current_app.logger.info(f"Auto-creating {rink_count} teams for booking {booking_id} (rink count: {rink_count})")
+            
+            for i in range(1, rink_count + 1):
+                team_name = f"Rink {i}"
+                new_team = Team(
+                    booking_id=booking_id,
+                    team_name=team_name,
+                    created_by=current_user.id
+                )
+                db.session.add(new_team)
+            
+            try:
+                db.session.commit()
+                
+                # Audit log the auto-creation
+                audit_log_bulk_operation('BULK_CREATE', 'Team', rink_count, 
+                                       f'Auto-created {rink_count} teams for booking {booking_id} based on rink count')
+                
+                # Refresh teams list after creation
+                teams = db.session.scalars(
+                    sa.select(Team)
+                    .where(Team.booking_id == booking_id)
+                    .order_by(Team.team_name)
+                ).all()
+                
+                flash(f'Automatically created {rink_count} teams based on rink count.', 'success')
+                
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error auto-creating teams for booking {booking_id}: {str(e)}")
+                flash('Error creating initial teams. You can add them manually.', 'error')
+        
         # Handle POST request for team management
         if request.method == 'POST':
             csrf_form = FlaskForm()
@@ -925,10 +983,13 @@ def admin_manage_teams(booking_id):
         sessions = current_app.config.get('DAILY_SESSIONS', {})
         session_name = sessions.get(booking.session, 'Unknown Session')
         
+        # Get assigned member IDs for visual feedback
+        assigned_member_ids = {member.member_id for team in teams for member in team.members}
+        
         # Get available members for substitutions 
         available_members = []
         if booking.has_pool_enabled():
-            # Get all pool members (all registrations are active)
+            # Get all pool members (show all so user can see everyone, even if assigned)
             from app.models import PoolRegistration
             available_members = db.session.scalars(
                 sa.select(Member)
@@ -938,11 +999,10 @@ def admin_manage_teams(booking_id):
             ).all()
         else:
             # Fallback: get active members not already in the booking teams
-            current_member_ids = {member.member_id for team in teams for member in team.members}
             available_members = db.session.scalars(
                 sa.select(Member)
                 .where(Member.status.in_(['Full', 'Social', 'Life']))
-                .where(~Member.id.in_(current_member_ids))
+                .where(~Member.id.in_(assigned_member_ids))
                 .order_by(Member.firstname, Member.lastname)
             ).all()
         
@@ -958,6 +1018,7 @@ def admin_manage_teams(booking_id):
                              teams=teams,
                              session_name=session_name,
                              available_members=available_members,
+                             assigned_member_ids=assigned_member_ids,
                              positions=positions,
                              csrf_form=csrf_form)
         

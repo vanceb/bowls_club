@@ -127,17 +127,22 @@
                     
                     <div class="pool-members" style="max-height: 70vh; overflow-y: auto;">
                         {% for member in available_members %}
-                        <div class="notification has-background-info-light p-3 mb-2 player-card pool-player" draggable="true" data-member-id="{{ member.id }}">
+                        {% set is_assigned = member.id in assigned_member_ids %}
+                        <div class="notification p-3 mb-2 player-card pool-player {% if is_assigned %}has-background-grey-light player-assigned{% else %}has-background-info-light{% endif %}" draggable="{% if not is_assigned %}true{% else %}false{% endif %}" data-member-id="{{ member.id }}" data-assigned="{{ 'true' if is_assigned else 'false' }}">
                             <div class="level is-mobile">
                                 <div class="level-left">
                                     <div>
-                                        <p class="has-text-weight-semibold">{{ member.firstname }} {{ member.lastname }}</p>
-                                        <p class="is-size-7 has-text-grey">Member #{{ member.id }}</p>
+                                        <p class="has-text-weight-semibold {% if is_assigned %}has-text-grey{% endif %}">{{ member.firstname }} {{ member.lastname }}</p>
+                                        <p class="is-size-7 has-text-grey">Member #{{ member.id }}{% if is_assigned %} - Already Assigned{% endif %}</p>
                                     </div>
                                 </div>
                                 <div class="level-right">
-                                    <span class="icon has-text-info">
+                                    <span class="icon {% if is_assigned %}has-text-grey{% else %}has-text-info{% endif %}">
+                                        {% if is_assigned %}
+                                        <i class="fas fa-check"></i>
+                                        {% else %}
                                         <i class="fas fa-grip-vertical"></i>
+                                        {% endif %}
                                     </span>
                                 </div>
                             </div>
@@ -181,9 +186,15 @@ document.addEventListener('DOMContentLoaded', function() {
     let draggedMemberId = null;
     let draggedFromTeam = null;
 
-    // Make pool players draggable
+    // Make pool players draggable (but not if already assigned)
     document.querySelectorAll('.pool-player').forEach(player => {
         player.addEventListener('dragstart', function(e) {
+            // Prevent dragging if player is already assigned
+            if (this.dataset.assigned === 'true') {
+                e.preventDefault();
+                return false;
+            }
+            
             draggedElement = this;
             draggedMemberId = this.dataset.memberId;
             draggedFromTeam = null;

@@ -159,22 +159,40 @@ def upcoming_events():
         # Get today's date
         today = date.today()
         
+        # Get booking IDs where user has team assignments (same logic as My Games page)
+        from app.models import TeamMember, Team
+        assigned_booking_ids = set()
+        
+        user_assignments = db.session.scalars(
+            sa.select(TeamMember)
+            .join(TeamMember.team)
+            .join(Team.booking)
+            .where(TeamMember.member_id == current_user.id)
+        ).all()
+        
+        assigned_booking_ids = {assignment.team.booking_id for assignment in user_assignments}
+        current_app.logger.info(f"Upcoming events: User {current_user.id} has team assignments for bookings: {assigned_booking_ids}")
+        
         # Get ALL bookings (events) that have pools enabled - this is the registration interface
         # Users should see all events they can potentially register for
-        all_bookings = db.session.scalars(
-            sa.select(Booking)
-            .where(
-                sa.or_(
-                    Booking.has_pool == True,  # Bookings marked as having pools
-                    sa.exists().where(  # OR bookings that actually have pool records
-                        sa.and_(
-                            Pool.booking_id == Booking.id
-                        )
+        # BUT exclude bookings where user is already assigned to a team
+        query = sa.select(Booking).where(
+            sa.or_(
+                Booking.has_pool == True,  # Bookings marked as having pools
+                sa.exists().where(  # OR bookings that actually have pool records
+                    sa.and_(
+                        Pool.booking_id == Booking.id
                     )
                 )
             )
-            .order_by(Booking.booking_date.asc())  # Order by booking date, not created_at
-        ).all()
+        )
+        
+        # Exclude bookings where user is already in a team
+        if assigned_booking_ids:
+            query = query.where(~Booking.id.in_(assigned_booking_ids))
+        
+        all_bookings = db.session.scalars(query.order_by(Booking.booking_date.asc())).all()
+        current_app.logger.info(f"Upcoming events: Found {len(all_bookings)} bookings after filtering team assignments")
         
         # For each booking, get the user's registration status and management permissions
         events_data = []

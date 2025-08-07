@@ -10,7 +10,7 @@ Tests verify that:
 """
 import pytest
 from datetime import date, timedelta
-from app.models import Member, Role, Event, Pool, PoolRegistration, Booking
+from app.models import Member, Role, Pool, PoolRegistration, Booking
 
 
 @pytest.fixture
@@ -76,29 +76,41 @@ def regular_member(db_session):
 
 @pytest.fixture
 def test_events(db_session):
-    """Create test events."""
-    event1 = Event(
+    """Create test bookings (events)."""
+    event1 = Booking(
         name='Test Event 1',
+        booking_date=date.today() + timedelta(days=7),
+        session=1,
+        rink_count=2,
         event_type=1,  # Social
         gender=4,      # Open
         format=5,      # Fours - 2 Wood
-        has_pool=False
+        has_pool=False,
+        booking_type='event'
     )
     
-    event2 = Event(
-        name='Test Event 2', 
+    event2 = Booking(
+        name='Test Event 2',
+        booking_date=date.today() + timedelta(days=14),
+        session=1,
+        rink_count=2,
         event_type=2,  # Competition
         gender=1,      # Men
         format=3,      # Pairs
-        has_pool=True
+        has_pool=True,
+        booking_type='event'
     )
     
-    event3 = Event(
+    event3 = Booking(
         name='Test Event 3',
+        booking_date=date.today() + timedelta(days=21),
+        session=1,
+        rink_count=1,
         event_type=1,  # Social
         gender=2,      # Women
         format=1,      # Singles
-        has_pool=False
+        has_pool=False,
+        booking_type='event'
     )
     
     db_session.add_all([event1, event2, event3])
@@ -113,8 +125,8 @@ def assigned_events(db_session, test_events, specific_event_manager):
     event1, event2, event3 = test_events
     
     # Assign specific_event_manager to event1 and event2
-    event1.event_managers.append(specific_event_manager)
-    event2.event_managers.append(specific_event_manager)
+    event1.booking_managers.append(specific_event_manager)
+    event2.booking_managers.append(specific_event_manager)
     # event3 is NOT assigned
     
     db_session.commit()
@@ -126,7 +138,7 @@ def test_pool(db_session, test_events):
     """Create a pool for event2."""
     event2 = test_events[1]  # Second event has has_pool=True
     pool = Pool(
-        event_id=event2.id,
+        booking_id=event2.id,
         is_open=True,
         max_players=16
     )
@@ -153,21 +165,10 @@ def test_bookings(db_session, test_events):
     """Create test bookings for events."""
     event1, event2, event3 = test_events
     
-    booking1 = Booking(
-        event_id=event1.id,
-        booking_date=date.today() + timedelta(days=7),
-        session=1,  # Morning
-        rink_count=1,
-        booking_type='home'
-    )
-    
-    booking2 = Booking(
-        event_id=event2.id,
-        booking_date=date.today() + timedelta(days=14),
-        session=2,  # Afternoon
-        rink_count=2,
-        booking_type='home'
-    )
+    # Since Event model is removed, these are just the same booking objects
+    # We don't need separate booking entities as bookings ARE the events now
+    booking1 = event1  # Direct reference to the booking (which is now the event)
+    booking2 = event2  # Direct reference to the booking (which is now the event)
     
     db_session.add_all([booking1, booking2])
     db_session.commit()
@@ -345,7 +346,7 @@ class TestEventBookingPermissions:
         for booking in [booking1, booking2]:
             response = global_manager_client.get(f'/bookings/admin/edit/{booking.id}')
             assert response.status_code == 200
-            assert b'Edit Booking' in response.data or booking.event.name.encode() in response.data
+            assert b'Edit Booking' in response.data or booking.name.encode() in response.data
 
 
 @pytest.mark.integration

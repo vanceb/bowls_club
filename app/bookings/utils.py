@@ -85,6 +85,62 @@ def create_booking_with_defaults(name: str, **kwargs) -> Booking:
     return Booking(**booking_data)
 
 
+def format_booking_details(booking: Booking, include_date: bool = True, rollup_include_date: bool = None) -> str:
+    """
+    Generate consistent booking details string for display across the application.
+    
+    Format: 
+    - Regular events: "Event Name vs Opposition (🏠 Home) - Sep 03, 2025"
+    - Roll-ups: "Creator Name - 04 Aug 2025 - 10:00am - 1:00pm"
+    
+    Args:
+        booking: Booking instance
+        include_date: Whether to include the booking date for regular events (default: True)
+        rollup_include_date: Whether to include date for roll-ups (defaults to include_date if None)
+        
+    Returns:
+        Formatted booking details string with HTML for icons
+    """
+    from flask import current_app
+    
+    # Handle roll-ups differently
+    if booking.booking_type == 'rollup':
+        details = f"{booking.organizer.firstname} {booking.organizer.lastname}"
+        
+        # Use rollup_include_date if specified, otherwise fall back to include_date
+        show_rollup_date = rollup_include_date if rollup_include_date is not None else include_date
+        
+        if show_rollup_date and booking.booking_date:
+            details += f" - {booking.booking_date.strftime('%d %b %Y')}"
+        
+        # Add session time
+        sessions = current_app.config.get('DAILY_SESSIONS', {})
+        session_time = sessions.get(booking.session, f'Session {booking.session}')
+        details += f" - {session_time}"
+        
+        return details
+    
+    # Regular event formatting
+    # Start with event name
+    details = booking.name
+    
+    # Add opposition if present
+    if booking.vs:
+        details += f" vs {booking.vs}"
+    
+    # Add venue with icon if present
+    if booking.home_away:
+        is_away = booking.home_away == 'away'
+        icon = '<i class="fas fa-plane"></i>' if is_away else '<i class="fas fa-home"></i>'
+        details += f" ({icon} {booking.home_away.title()})"
+    
+    # Add date if requested
+    if include_date and booking.booking_date:
+        details += f" - {booking.booking_date.strftime('%b %d, %Y')}"
+    
+    return details
+
+
 def get_bookings_by_type(booking_type: Optional[str] = None) -> list[Booking]:
     """
     Get bookings filtered by type.

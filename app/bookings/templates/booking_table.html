@@ -157,53 +157,67 @@
                 const sessionNum = parseInt(sessionId);
                 const sessionBookings = bookings[date] && bookings[date][sessionNum] ? bookings[date][sessionNum] : [];
                 
-                // Calculate total rinks booked from individual bookings
-                const bookedCount = sessionBookings.reduce((total, booking) => total + booking.rink_count, 0);
+                // Calculate total rinks booked from individual bookings (exclude away matches)
+                const bookedCount = sessionBookings.reduce((total, booking) => {
+                    // Only count rinks for home matches or matches with no home_away designation
+                    if (booking.home_away === 'away') {
+                        return total; // Don't count away matches towards rink usage
+                    }
+                    return total + booking.rink_count;
+                }, 0);
                 const availableRinks = totalRinks - bookedCount;
                 
                 let cellClass = '';
                 let cellContent = '';
                 
-                if (bookedCount === 0) {
+                if (sessionBookings.length === 0) {
+                    // No bookings at all
                     cellContent = `${totalRinks} Rinks available`;
                     cellClass = 'has-background-light';
                 } else {
                     // Build detailed booking lines
                     const bookingLines = sessionBookings.map(booking => {
                         let line = '';
+                        const isAway = booking.home_away === 'away';
+                        const awayStyle = isAway ? 'style="opacity: 0.6; color: #888;"' : '';
                         
                         // Handle roll-up vs event bookings
                         if (booking.booking_type === 'rollup') {
-                            line = `<span class="tag is-info is-small">Roll-Up</span> ${booking.organizer}`;
+                            line = `<span class="tag is-info is-small">Roll-Up</span> <span ${awayStyle}>${booking.organizer}</span>`;
                             
                             // Add player count
                             if (booking.player_count !== undefined) {
-                                line += ` (${booking.player_count} players)`;
+                                line += ` <span ${awayStyle}>(${booking.player_count} players)</span>`;
                             }
                             
                             // Add notes if available
                             if (booking.organizer_notes) {
-                                line += `<br><small class="has-text-grey">${booking.organizer_notes}</small>`;
+                                line += `<br><small class="has-text-grey" ${awayStyle}>${booking.organizer_notes}</small>`;
                             }
                         } else {
                             // Regular event booking with event type prefix
                             const eventTypePrefix = getEventTypePrefix(booking.event_type);
                             
                             if (booking.event_name) {
-                                line = `${eventTypePrefix} ${booking.event_name}`;
+                                line = `${eventTypePrefix} <span ${awayStyle}>${booking.event_name}</span>`;
                             } else {
-                                line = `${eventTypePrefix} Booking`;
+                                line = `${eventTypePrefix} <span ${awayStyle}>Booking</span>`;
                             }
                             
                             // Add opposition if available
                             if (booking.vs) {
-                                line += ` vs ${booking.vs}`;
+                                line += ` <span ${awayStyle}>vs ${booking.vs}</span>`;
+                            }
+                            
+                            // Add away indicator
+                            if (isAway) {
+                                line += ` <span style="color: #888;"><i class="fas fa-plane"></i> Away</span>`;
                             }
                         }
                         
-                        // Add rink count if more than 1
-                        if (booking.rink_count > 1) {
-                            line += ` (${booking.rink_count} rinks)`;
+                        // Add rink count if more than 1 and not an away game
+                        if (booking.rink_count > 1 && !isAway) {
+                            line += ` <span ${awayStyle}>(${booking.rink_count} rinks)</span>`;
                         }
                         
                         return line;

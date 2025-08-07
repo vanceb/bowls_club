@@ -5,7 +5,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from datetime import date, timedelta
 from app import db
-from app.models import Member, Role, Booking, Event
+from app.models import Member, Role, Booking, Team, Pool
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -36,6 +36,7 @@ class MemberFactory(SQLAlchemyModelFactory):
     is_admin = False
     share_email = True
     share_phone = True
+    joined_date = factory.Faker('date_this_decade')
     
     @factory.post_generation
     def password(obj, create, extracted, **kwargs):
@@ -69,21 +70,32 @@ class PendingMemberFactory(MemberFactory):
     status = 'Pending'
 
 
-class EventFactory(SQLAlchemyModelFactory):
-    """Factory for creating Event instances."""
+# EventFactory removed - Event model no longer exists in booking-centric architecture
+
+class PoolFactory(SQLAlchemyModelFactory):
+    """Factory for creating Pool instances."""
     
     class Meta:
-        model = Event
+        model = Pool
         sqlalchemy_session = db.session
         sqlalchemy_session_persistence = 'commit'
     
-    name = factory.Sequence(lambda n: f'Test Event {n}')
-    event_type = 1  # Social
-    format = 2  # Pairs
-    gender = 3  # Mixed
+    name = factory.Sequence(lambda n: f'Test Pool {n}')
+    format = 'Pairs'
+    gender = 'Mixed'
+    capacity = 8
 
 
-# EventTeamFactory removed - teams are now created from pools via bookings
+class TeamFactory(SQLAlchemyModelFactory):
+    """Factory for creating Team instances."""
+    
+    class Meta:
+        model = Team
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    name = factory.Sequence(lambda n: f'Test Team {n}')
+    booking = factory.SubFactory('tests.fixtures.factories.BookingFactory')  # Full path to avoid circular imports
 
 
 class BookingFactory(SQLAlchemyModelFactory):
@@ -94,6 +106,7 @@ class BookingFactory(SQLAlchemyModelFactory):
         sqlalchemy_session = db.session
         sqlalchemy_session_persistence = 'commit'
     
+    name = factory.Sequence(lambda n: f'Test Booking {n}')
     booking_date = factory.LazyFunction(lambda: date.today() + timedelta(days=5))
     session = 1
     rink_count = 2
@@ -101,6 +114,9 @@ class BookingFactory(SQLAlchemyModelFactory):
     booking_type = 'event'
     home_away = 'home'
     priority = 'Medium'
+    event_type = 1  # Integer for event type
+    gender = 4  # Default to "Open" 
+    format = 5  # Default to "Fours - 2 Wood"
 
 
 class RollUpBookingFactory(BookingFactory):
@@ -114,7 +130,11 @@ class RollUpBookingFactory(BookingFactory):
 class EventBookingFactory(BookingFactory):
     """Factory for creating event Booking instances."""
     
-    event = factory.SubFactory(EventFactory)
+    booking_type = 'event'
     vs = factory.Faker('company')
+    name = factory.Sequence(lambda n: f'Test Event {n}')
+    event_type = 1  # Social
+    format = 2  # Pairs
+    gender = 3  # Mixed
 
 

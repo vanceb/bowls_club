@@ -4,7 +4,7 @@ Integration tests for booking API routes.
 import pytest
 import json
 from datetime import date, timedelta
-from app.models import Member, Booking, Event
+from app.models import Member, Booking
 
 
 @pytest.mark.integration
@@ -77,21 +77,16 @@ class TestBookingAPIRoutes:
         db_session.add(member)
         db_session.commit()
         
-        event = Event(
-            name='Test Championship',
-            event_type=2,  # Competition
-            format=3,  # Triples
-            gender=1  # Gents
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Test Championship',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=3,
             organizer_id=member.id,
-            event_id=event.id,
+            event_type=2,  # Competition
+            format=3,  # Triples
+            gender=1,  # Gents
             vs='Championship Opponents'
         )
         db_session.add(booking)

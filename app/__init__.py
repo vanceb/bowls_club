@@ -134,6 +134,12 @@ def register_template_context_processors(app):
 def register_template_filters(app):
     """Register custom template filters"""
     
+    @app.template_filter('booking_details')
+    def booking_details_filter(booking, include_date=True, rollup_include_date=None):
+        """Template filter for consistent booking details formatting"""
+        from app.bookings.utils import format_booking_details
+        return format_booking_details(booking, include_date, rollup_include_date)
+    
     @app.template_filter('from_json')
     def from_json_filter(json_str):
         """Convert JSON string to Python object"""
@@ -235,7 +241,6 @@ def register_routes(app):
     from app.teams import bp as teams_bp
     from app.pools import bp as pools_bp
     from app.api import bp as api_bp
-    from app.admin import bp as admin_bp
     from app.rollups import bp as rollups_bp
     
     app.register_blueprint(main_bp)
@@ -246,7 +251,6 @@ def register_routes(app):
     app.register_blueprint(pools_bp, url_prefix='/pools')
     app.register_blueprint(rollups_bp, url_prefix='/rollups')
     app.register_blueprint(api_bp)
-    app.register_blueprint(admin_bp)
     
     # Register error handlers
     from app.errors import register_error_handlers

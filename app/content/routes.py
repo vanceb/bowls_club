@@ -15,10 +15,7 @@ from app.content.utils import (
     get_secure_policy_page_path, get_secure_archive_path, parse_metadata_from_markdown,
     find_orphaned_policy_pages, recover_orphaned_policy_page
 )
-from app.routes import role_required
-
-# Admin decorator
-from app.admin.routes import admin_required
+from app.routes import role_required, admin_required
 from app.forms import FlaskForm
 
 @bp.route('/admin/write_post', methods=['GET', 'POST'])

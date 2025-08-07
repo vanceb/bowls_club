@@ -4,7 +4,7 @@ Integration tests for team management routes.
 import pytest
 import json
 from datetime import date, timedelta, datetime
-from app.models import Member, Booking, Team, TeamMember, Event
+from app.models import Member, Booking, Team, TeamMember
 
 
 @pytest.mark.integration
@@ -34,6 +34,10 @@ class TestTeamRoutes:
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
+            name='Test Team Creation Booking',
+            event_type=1,
+            gender=4,
+            format=5,
             organizer_id=1,
             booking_type='event'
         )
@@ -54,6 +58,10 @@ class TestTeamRoutes:
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
+            name='Test Team Post Booking',
+            event_type=1,
+            gender=4,
+            format=5,
             organizer_id=1,
             booking_type='event'
         )
@@ -889,23 +897,17 @@ class TestTeamIntegration:
     
     def test_team_creation_with_event_format_positions(self, admin_client, db_session, test_member):
         """Test team creation uses event format for position assignment."""
-        # Create event with specific format using correct model fields
-        event = Event(
-            name='Triples Competition',
-            event_type=1,  # Competition type
-            format=3,      # Triples format (integer ID)
-            gender=4       # Open gender
-        )
-        db_session.add(event)
-        db_session.flush()
-        
+        # Create booking with specific format using booking-centric architecture
         booking = Booking(
+            name='Triples Competition',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
             organizer_id=1,
             booking_type='event',
-            event_id=event.id
+            event_type=1,  # Competition type
+            format=3,      # Triples format (integer ID)
+            gender=4       # Open gender
         )
         db_session.add(booking)
         

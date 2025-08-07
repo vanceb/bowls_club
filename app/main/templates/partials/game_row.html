@@ -1,13 +1,11 @@
 {% if item.type == 'pool_registration' %}
     {% set registration = item.data %}
     {% set booking = registration.pool.booking %}
-    <tr class="{{ row_class }}">
+    {% set is_away = booking.home_away == 'away' %}
+    <tr class="{{ row_class }}" style="{{ 'opacity: 0.7;' if is_away else '' }}">
         <td>
             <strong>
-                {{ booking.name }}
-                {% if booking.vs %} vs {{ booking.vs }}{% endif %}
-                {% if booking.home_away %} ({{ booking.home_away|title }}){% endif %}
-                {% if booking.booking_date %} - {{ booking.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+                {{ booking|booking_details|safe }}
             </strong>
         </td>
         <td>
@@ -52,14 +50,12 @@
         {% set invitation = item.data %}
         {% set booking = invitation.team.booking %}
     {% endif %}
+    {% set is_away = booking.home_away == 'away' %}
     
-    <tr class="{{ row_class }}">
+    <tr class="{{ row_class }}" style="{{ 'opacity: 0.7;' if is_away else '' }}">
         <td>
             <strong>
-                {{ booking.name }}
-                {% if booking.vs %} vs {{ booking.vs }}{% endif %}
-                {% if booking.home_away %} ({{ booking.home_away|title }}){% endif %}
-                {% if booking.booking_date %} - {{ booking.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+                {{ booking|booking_details|safe }}
             </strong>
         </td>
         <td>

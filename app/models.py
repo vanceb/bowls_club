@@ -176,10 +176,8 @@ class Pool(db.Model):
     @property
     def pool_name(self):
         """Get a descriptive name for the pool"""
-        if self.event:
-            return f"{self.event.name} Pool"
-        elif self.booking:
-            return f"Booking {self.booking.id} Pool ({self.booking.booking_date})"
+        if self.booking:
+            return f"{self.booking.name} Pool"
         return "Unknown Pool"
 
     def close_pool(self):

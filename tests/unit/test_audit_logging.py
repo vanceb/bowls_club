@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 from unittest.mock import patch, MagicMock
 from app import create_app, db
-from app.models import Member, Event, Pool, PoolRegistration, Booking, Role, Post
+from app.models import Member, Pool, PoolRegistration, Booking, Role, Post
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete, 
     audit_log_authentication, audit_log_security_event,

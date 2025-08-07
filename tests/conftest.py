@@ -5,7 +5,7 @@ import pytest
 import tempfile
 import os
 from app import create_app, db
-from app.models import Member, Role
+from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
 
 # Set environment variables for testing
 os.environ['SECRET_KEY'] = 'test-secret-key-for-testing-only'
@@ -153,55 +153,40 @@ def admin_client(client, admin_member):
 
 
 @pytest.fixture
-def test_event(db_session):
-    """Create a test event."""
-    from datetime import datetime, timedelta
-    event = Event(
-        name='Test Event',
-        event_date=datetime.now() + timedelta(days=7),
+def test_booking(db_session):
+    """Create a test booking."""
+    from datetime import datetime, timedelta, date
+    booking = Booking(
+        booking_date=date.today() + timedelta(days=1),
+        session=1,
+        rink_count=2,
+        name='Test Booking',
         event_type=1,
-        gender=1,
-        format=1,
-        has_pool=False
+        gender=4,
+        format=5
     )
-    db_session.add(event)
+    db_session.add(booking)
     db_session.commit()
-    return event
+    return booking
 
 
 @pytest.fixture
-def test_event_with_pool(db_session, test_event):
-    """Create a test event with pool."""
-    pool = Pool(event_id=test_event.id, is_open=True)
-    test_event.has_pool = True
-    db_session.add(pool)
-    db_session.commit()
-    test_event.pool = pool
-    return test_event
-
-
-@pytest.fixture
-def test_pool(db_session, test_event):
+def test_pool(db_session, test_booking):
     """Create a test pool."""
-    pool = Pool(event_id=test_event.id, is_open=True)
+    pool = Pool(booking_id=test_booking.id, is_open=True)
     db_session.add(pool)
     db_session.commit()
     return pool
 
 
 @pytest.fixture
-def test_booking(db_session, test_event):
-    """Create a test booking."""
-    from datetime import datetime, timedelta
-    booking = Booking(
-        date=datetime.now() + timedelta(days=1),
-        time_slot='Morning',
-        event_id=test_event.id,
-        status='Open'
-    )
-    db_session.add(booking)
+def test_booking_with_pool(db_session, test_booking):
+    """Create a test booking with pool."""
+    pool = Pool(booking_id=test_booking.id, is_open=True)
+    db_session.add(pool)
     db_session.commit()
-    return booking
+    test_booking.pool = pool
+    return test_booking
 
 
 @pytest.fixture

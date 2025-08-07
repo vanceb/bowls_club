@@ -1,11 +1,9 @@
 {% set event = event_info.event %}
+{% set is_away = event.home_away == 'away' %}
 <tr class="{{ row_class }}">
     <td>
         <strong>
-            {{ event.name }}
-            {% if event.vs %} vs {{ event.vs }}{% endif %}
-            {% if event.home_away %} ({{ event.home_away|title }}){% endif %}
-            {% if event.booking_date %} - {{ event.booking_date.strftime('%b %d, %Y') }}{% else %} - No Booking Date Set{% endif %}
+            {{ event|booking_details|safe }}
         </strong>
     </td>
     <td>

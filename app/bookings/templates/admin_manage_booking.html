@@ -10,10 +10,8 @@
 
 {% block content %}
 <div class="container">
-    <div class="columns">
-        <div class="column is-8">
-            <div class="box">
-                <h3 class="title is-4">Event Details</h3>
+    <div class="box">
+        <h3 class="title is-4">Event Details</h3>
                 
                 <form method="POST">
                     {{ form.hidden_tag() }}
@@ -250,6 +248,15 @@
                             </button>
                         </div>
                         <div class="control">
+                            <a href="{{ url_for('bookings.admin_manage_teams', booking_id=booking.id) }}" 
+                               class="button is-success">
+                                <span class="icon">
+                                    <i class="fas fa-users"></i>
+                                </span>
+                                <span>Manage Teams</span>
+                            </a>
+                        </div>
+                        <div class="control">
                             <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
                                 <span class="icon">
                                     <i class="fas fa-arrow-left"></i>
@@ -259,61 +266,19 @@
                         </div>
                     </div>
                 </form>
-            </div>
-        </div>
-        
-        <div class="column is-4">
-            <div class="box">
-                <h3 class="title is-5">Event Statistics</h3>
-                
-                <div class="content">
-                    <dl>
-                        <dt><strong>Teams:</strong></dt>
-                        <dd>{{ stats.total_teams }} teams created</dd>
-                        
-                        <dt><strong>Date:</strong></dt>
-                        <dd>{{ booking.booking_date.strftime('%d %B %Y') }}</dd>
-                        
-                        {% if stats.has_pool %}
-                        <dt><strong>Pool Registration:</strong></dt>
-                        <dd>{{ stats.pool_members }} members registered</dd>
-                        {% else %}
-                        <dt><strong>Pool:</strong></dt>
-                        <dd>Pool registration not enabled</dd>
-                        {% endif %}
-                        
-                        <dt><strong>Type:</strong></dt>
-                        <dd>{{ booking.get_event_type_name() }}</dd>
-                        
-                        <dt><strong>Format:</strong></dt>
-                        <dd>{{ booking.get_format_name() }}</dd>
-                    </dl>
-                </div>
-                
-                <div class="buttons">
-                    <a href="{{ url_for('bookings.admin_manage_teams', booking_id=booking.id) }}" 
-                       class="button is-success is-fullwidth">
-                        <span class="icon">
-                            <i class="fas fa-users"></i>
-                        </span>
-                        <span>Manage Teams</span>
-                    </a>
-                </div>
                 
                 <hr>
                 
                 <form method="POST" action="{{ url_for('bookings.admin_delete_booking', booking_id=booking.id) }}" 
                       onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.');">
                     {{ form.hidden_tag() }}
-                    <button type="submit" class="button is-danger is-fullwidth">
+                    <button type="submit" class="button is-danger">
                         <span class="icon">
                             <i class="fas fa-trash"></i>
                         </span>
                         <span>Delete Event</span>
                     </button>
                 </form>
-            </div>
-        </div>
     </div>
 </div>
 

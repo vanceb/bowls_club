@@ -1,15 +1,15 @@
+{% set is_away = booking.home_away == 'away' %}
 <tr class="{{ row_class if row_class else '' }}">
     <td style="{{ 'padding-left: 2rem;' if indent else '' }}">
-        <strong>{{ booking.name }}</strong>
-        {% if booking.vs %}
-        <br><small class="has-text-grey">vs {{ booking.vs }}</small>
-        {% endif %}
+        <strong>
+            {{ booking|booking_details(true)|safe }}
+        </strong>
         {% if booking.series_id and show_series_info %}
         <br><small class="has-text-info">{{ booking.get_series_name() }}</small>
         {% endif %}
     </td>
     <td>
-        <span class="tag is-light">{{ booking.get_event_type_name() }}</span>
+        {{ booking.get_event_type_name() }}
     </td>
     <td>{{ booking.booking_date.strftime('%d %b %Y') }}</td>
     <td>

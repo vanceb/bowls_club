@@ -4,7 +4,7 @@ Integration tests for booking functionality across different components.
 import pytest
 import json
 from datetime import date, timedelta
-from app.models import Member, Booking, Event
+from app.models import Member, Booking
 
 
 @pytest.mark.integration
@@ -164,23 +164,16 @@ class TestBookingIntegration:
         db_session.add_all([organizer, lead, skip])
         db_session.commit()
         
-        # Create event
-        event = Event(
-            name='Integration Championship',
-            event_type=2,  # Competition
-            format=2,  # Pairs
-            gender=3  # Mixed
-        )
-        db_session.add(event)
-        db_session.commit()
-        
-        # Create booking for event
+        # Create booking (which includes all event information in booking-centric architecture)
         booking = Booking(
+            name='Integration Championship',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
             organizer_id=organizer.id,
-            event_id=event.id,
+            event_type=2,  # Competition
+            format=2,  # Pairs
+            gender=3,  # Mixed
             vs='Championship Opponents'
         )
         db_session.add(booking)
@@ -254,22 +247,16 @@ class TestBookingIntegration:
         
         test_date = date.today() + timedelta(days=4)
         
-        # Create event booking
-        event = Event(
-            name='Calendar Test Event',
-            event_type=1,  # Social
-            format=3,  # Triples
-            gender=2  # Ladies
-        )
-        db_session.add(event)
-        db_session.commit()
-        
+        # Create event booking (which includes all event information in booking-centric architecture)
         event_booking = Booking(
+            name='Calendar Test Event',
             booking_date=test_date,
             session=1,
             rink_count=3,
             organizer_id=event_organizer.id,
-            event_id=event.id,
+            event_type=1,  # Social
+            format=3,  # Triples
+            gender=2,  # Ladies
             vs='Calendar Opponents'
         )
         db_session.add(event_booking)

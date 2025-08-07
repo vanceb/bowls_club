@@ -202,16 +202,21 @@ def get_availability(selected_date, session_id):
         total_rinks = current_app.config.get('RINKS', 6)
         
         # Get existing bookings for this date and session
-        bookings = db.session.scalars(
-            sa.select(Booking)
-            .where(
-                Booking.booking_date == booking_date,
-                Booking.session == session_id
-            )
-        ).all()
+        query = sa.select(Booking).where(
+            Booking.booking_date == booking_date,
+            Booking.session == session_id
+        )
+        bookings = db.session.scalars(query).all()
         
-        # Calculate used rinks
-        used_rinks = sum(booking.rink_count for booking in bookings)
+        # Import home games filter utility
+        from app.bookings.utils import add_home_games_filter
+        
+        # Get bookings that use rinks (exclude away games)
+        home_bookings_query = add_home_games_filter(query)
+        home_bookings = db.session.scalars(home_bookings_query).all()
+        
+        # Calculate used rinks (only from home games)
+        used_rinks = sum(booking.rink_count for booking in home_bookings)
         available_rinks = total_rinks - used_rinks
         
         # Format booking details

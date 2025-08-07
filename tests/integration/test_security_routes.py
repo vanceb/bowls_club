@@ -320,21 +320,23 @@ class TestAccessControl:
         response = client.get(f'/events/manage/{test_event.id}')
         assert response.status_code == 200
         
-        # Create another event they don't manage
-        from datetime import datetime, timedelta
-        other_event = Event(
+        # Create another booking/event they don't manage
+        from datetime import date, timedelta
+        other_booking = Booking(
             name='Other Event',
-            event_date=datetime.now() + timedelta(days=14),
+            booking_date=date.today() + timedelta(days=14),
+            session=1,
+            rink_count=2,
             event_type=1,
             gender=1,
             format=1,
             has_pool=False
         )
-        db_session.add(other_event)
+        db_session.add(other_booking)
         db_session.commit()
         
         # Should NOT access other event
-        response = client.get(f'/events/manage/{other_event.id}')
+        response = client.get(f'/events/manage/{other_booking.id}')
         assert response.status_code in [403, 302]
 
 
