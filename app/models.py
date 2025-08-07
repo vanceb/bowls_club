@@ -418,6 +418,37 @@ class Booking(db.Model):
             return f"{self.name} (Series)"
         return self.name
 
+    # Pool Strategy Methods (new functionality)
+    def get_pool_strategy(self) -> str:
+        """Get the pool strategy for this booking based on its event type"""
+        from app.bookings.utils import get_pool_strategy_for_booking
+        return get_pool_strategy_for_booking(self)
+    
+    def get_effective_pool(self):
+        """Get the effective pool for this booking, considering pool strategy"""
+        from app.bookings.utils import get_effective_pool_for_booking
+        return get_effective_pool_for_booking(self)
+    
+    def has_effective_pool(self) -> bool:
+        """Check if this booking has an effective pool (own or shared)"""
+        return self.get_effective_pool() is not None
+    
+    def get_effective_pool_member_count(self) -> int:
+        """Get the number of members registered in the effective pool"""
+        effective_pool = self.get_effective_pool()
+        if not effective_pool:
+            return 0
+        return len(effective_pool.registrations)
+    
+    def is_primary_booking_in_series(self) -> bool:
+        """Check if this is the primary (first) booking in its series"""
+        if not self.series_id:
+            return True  # Single bookings are their own primary
+        
+        from app.bookings.utils import get_primary_booking_in_series
+        primary = get_primary_booking_in_series(self.series_id)
+        return primary and primary.id == self.id
+
 
 class PolicyPage(db.Model):
     __tablename__ = 'policy_pages'

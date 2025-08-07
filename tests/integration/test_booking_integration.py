@@ -357,3 +357,253 @@ class TestBookingIntegration:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['success'] is True
+
+
+@pytest.mark.integration
+class TestPoolStrategyIntegration:
+    """Integration tests for pool strategy functionality across booking scenarios."""
+    
+    def test_booking_strategy_pool_creation(self, app, db_session):
+        """Test that 'booking' strategy creates separate pools for each booking."""
+        with app.app_context():
+            from app.models import Pool
+            from tests.fixtures.factories import BookingFactory, PoolFactory
+            
+            # Create original booking with pool (Social event = 'booking' strategy)
+            original = BookingFactory(event_type=1, has_pool=True, series_id='test-series')
+            original_pool = PoolFactory(booking_id=original.id)
+            db_session.commit()
+            original.pool = original_pool
+            
+            # Simulate duplication logic 
+            from app.bookings.utils import should_create_pool_for_duplication
+            duplicate = BookingFactory(event_type=1, series_id='test-series')
+            db_session.commit()
+            
+            should_create, reason = should_create_pool_for_duplication(original, duplicate)
+            assert should_create is True
+            assert "'booking'" in reason
+            
+            # Create new pool for duplicate (simulating duplication logic)
+            if should_create:
+                duplicate_pool = PoolFactory(booking_id=duplicate.id)
+                db_session.commit()
+                duplicate.pool = duplicate_pool
+            
+            # Verify each booking has its own pool
+            assert original.pool.id != duplicate.pool.id
+            assert original.get_effective_pool().id == original.pool.id
+            assert duplicate.get_effective_pool().id == duplicate.pool.id
+    
+    def test_event_strategy_pool_sharing(self, app, db_session):
+        """Test that 'event' strategy shares pools across bookings in a series."""
+        with app.app_context():
+            from app.models import Pool
+            from tests.fixtures.factories import BookingFactory, PoolFactory
+            
+            # Create primary booking with pool (Competition event = 'event' strategy)
+            primary = BookingFactory(
+                event_type=2, 
+                has_pool=True, 
+                series_id='competition-series',
+                booking_date=date.today() + timedelta(days=3)  # Earlier date
+            )
+            primary_pool = PoolFactory(booking_id=primary.id)
+            db_session.commit()
+            primary.pool = primary_pool
+            
+            # Create secondary booking in same series (later date)
+            secondary = BookingFactory(
+                event_type=2,
+                series_id='competition-series', 
+                booking_date=date.today() + timedelta(days=7)  # Later date
+            )
+            db_session.commit()
+            
+            # Verify pool sharing logic
+            from app.bookings.utils import should_create_pool_for_duplication
+            should_create, reason = should_create_pool_for_duplication(primary, secondary)
+            assert should_create is False
+            assert "'event'" in reason
+            
+            # Verify secondary booking gets primary's pool
+            assert secondary.get_effective_pool().id == primary_pool.id
+            assert secondary.has_effective_pool() is True
+            assert primary.is_primary_booking_in_series() is True
+            assert secondary.is_primary_booking_in_series() is False
+    
+    def test_none_strategy_no_pool_creation(self, app, db_session):
+        """Test that 'none' strategy prevents pool creation for duplicates."""
+        with app.app_context():
+            from app.models import Pool
+            from tests.fixtures.factories import BookingFactory, PoolFactory
+            
+            # Create original rollup booking with pool (Roll Up event = 'none' strategy)
+            original = BookingFactory(event_type=5, has_pool=True, series_id='rollup-series')
+            original_pool = PoolFactory(booking_id=original.id)
+            db_session.commit()
+            original.pool = original_pool
+            
+            # Simulate duplication
+            duplicate = BookingFactory(event_type=5, series_id='rollup-series')
+            db_session.commit()
+            
+            from app.bookings.utils import should_create_pool_for_duplication
+            should_create, reason = should_create_pool_for_duplication(original, duplicate)
+            assert should_create is False
+            assert "'none'" in reason
+            
+            # Verify duplicate has no effective pool
+            assert duplicate.get_effective_pool() is None
+            assert duplicate.has_effective_pool() is False
+    
+    def test_mixed_event_types_in_series(self, app, db_session):
+        """Test behavior when series contains bookings of different event types."""
+        with app.app_context():
+            from app.models import Pool
+            from tests.fixtures.factories import BookingFactory, PoolFactory
+            
+            # Create bookings with different strategies in same series
+            # This shouldn't normally happen but tests edge case handling
+            
+            # Competition booking (event strategy) 
+            competition_booking = BookingFactory(
+                event_type=2,  # Competition = 'event' 
+                series_id='mixed-series',
+                booking_date=date.today() + timedelta(days=3)
+            )
+            competition_pool = PoolFactory(booking_id=competition_booking.id)
+            db_session.commit()
+            competition_booking.pool = competition_pool
+            
+            # Social booking (booking strategy) in same series
+            social_booking = BookingFactory(
+                event_type=1,  # Social = 'booking'
+                series_id='mixed-series', 
+                booking_date=date.today() + timedelta(days=5)
+            )
+            db_session.commit()
+            
+            # Each booking should use its own strategy
+            assert competition_booking.get_pool_strategy() == 'event'
+            assert social_booking.get_pool_strategy() == 'booking'
+            
+            # Competition booking (primary) should have own pool
+            assert competition_booking.get_effective_pool().id == competition_pool.id
+            
+            # Social booking should not share (booking strategy overrides series)
+            assert social_booking.get_effective_pool() is None
+            assert social_booking.has_effective_pool() is False
+    
+    def test_pool_member_count_across_strategies(self, app, db_session):
+        """Test pool member counting works correctly for different strategies."""
+        with app.app_context():
+            from app.models import Pool, PoolRegistration
+            from tests.fixtures.factories import BookingFactory, PoolFactory, MemberFactory
+            
+            # Create primary booking with pool and members
+            primary = BookingFactory(
+                event_type=2,  # Competition = 'event' strategy
+                series_id='member-count-series',
+                booking_date=date.today() + timedelta(days=3)
+            )
+            pool = PoolFactory(booking_id=primary.id)
+            
+            # Add members to pool
+            members = [MemberFactory() for _ in range(5)]
+            registrations = [
+                PoolRegistration(pool_id=pool.id, member_id=member.id) 
+                for member in members
+            ]
+            db_session.add_all(registrations)
+            db_session.commit()
+            
+            primary.pool = pool
+            
+            # Create secondary booking in same series
+            secondary = BookingFactory(
+                event_type=2,
+                series_id='member-count-series',
+                booking_date=date.today() + timedelta(days=7)
+            )
+            db_session.commit()
+            
+            # Both bookings should report same member count
+            assert primary.get_effective_pool_member_count() == 5
+            assert secondary.get_effective_pool_member_count() == 5
+            
+            # Verify they're using the same pool
+            assert primary.get_effective_pool().id == secondary.get_effective_pool().id
+    
+    def test_series_primary_booking_selection(self, app, db_session):
+        """Test that primary booking selection works correctly across different dates."""
+        with app.app_context():
+            from tests.fixtures.factories import BookingFactory
+            
+            series_id = 'primary-selection-series'
+            
+            # Create bookings on different dates (not in chronological order)
+            booking_middle = BookingFactory(
+                series_id=series_id,
+                booking_date=date.today() + timedelta(days=5)
+            )
+            booking_latest = BookingFactory(
+                series_id=series_id,
+                booking_date=date.today() + timedelta(days=10)
+            )
+            booking_earliest = BookingFactory(
+                series_id=series_id,
+                booking_date=date.today() + timedelta(days=2)
+            )
+            db_session.commit()
+            
+            # Earliest booking should be primary
+            assert booking_earliest.is_primary_booking_in_series() is True
+            assert booking_middle.is_primary_booking_in_series() is False
+            assert booking_latest.is_primary_booking_in_series() is False
+            
+            # Verify primary booking retrieval
+            from app.bookings.utils import get_primary_booking_in_series
+            primary = get_primary_booking_in_series(series_id)
+            assert primary.id == booking_earliest.id
+    
+    def test_edge_case_empty_series_handling(self, app, db_session):
+        """Test handling of edge cases with empty or invalid series."""
+        with app.app_context():
+            from tests.fixtures.factories import BookingFactory
+            from app.bookings.utils import get_primary_booking_in_series, get_effective_pool_for_booking
+            
+            # Test booking with no series_id
+            standalone_booking = BookingFactory(series_id=None)
+            db_session.commit()
+            
+            assert standalone_booking.is_primary_booking_in_series() is True
+            assert get_effective_pool_for_booking(standalone_booking) is None
+            
+            # Test non-existent series
+            assert get_primary_booking_in_series('nonexistent-series') is None
+            assert get_primary_booking_in_series('') is None
+            assert get_primary_booking_in_series(None) is None
+    
+    def test_unknown_event_type_default_handling(self, app, db_session):
+        """Test that unknown event types default to 'booking' strategy."""
+        with app.app_context():
+            from app.models import Pool
+            from tests.fixtures.factories import BookingFactory, PoolFactory
+            
+            # Create booking with unknown event type
+            original = BookingFactory(event_type=999, has_pool=True)  # Unknown type
+            pool = PoolFactory(booking_id=original.id)
+            db_session.commit()
+            original.pool = pool
+            
+            # Should default to 'booking' strategy
+            assert original.get_pool_strategy() == 'booking'
+            
+            # Duplication should create new pool (booking strategy behavior)
+            duplicate = BookingFactory(event_type=999)
+            db_session.commit()
+            
+            from app.bookings.utils import should_create_pool_for_duplication
+            should_create, reason = should_create_pool_for_duplication(original, duplicate)
+            assert should_create is True

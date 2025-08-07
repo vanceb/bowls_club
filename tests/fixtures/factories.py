@@ -80,10 +80,9 @@ class PoolFactory(SQLAlchemyModelFactory):
         sqlalchemy_session = db.session
         sqlalchemy_session_persistence = 'commit'
     
-    name = factory.Sequence(lambda n: f'Test Pool {n}')
-    format = 'Pairs'
-    gender = 'Mixed'
-    capacity = 8
+    booking_id = factory.LazyAttribute(lambda obj: BookingFactory().id)
+    is_open = True
+    max_players = 8
 
 
 class TeamFactory(SQLAlchemyModelFactory):

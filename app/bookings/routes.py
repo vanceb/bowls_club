@@ -1317,12 +1317,20 @@ def admin_manage_booking(booking_id):
                     db.session.add(duplicate_booking)
                     db.session.commit()
                     
-                    # Create pool if needed
-                    if booking.has_pool:
+                    # Create pool based on EVENT_POOL_STRATEGY
+                    from app.bookings.utils import should_create_pool_for_duplication
+                    should_create, reason = should_create_pool_for_duplication(booking, duplicate_booking)
+                    
+                    if should_create:
                         from app.models import Pool
                         new_pool = Pool(booking_id=duplicate_booking.id, is_open=True)
+                        if booking.pool:
+                            new_pool.max_players = booking.pool.max_players
                         db.session.add(new_pool)
                         db.session.commit()
+                        current_app.logger.info(f"Created new pool for duplicate booking {duplicate_booking.id}: {reason}")
+                    else:
+                        current_app.logger.info(f"No pool created for duplicate booking {duplicate_booking.id}: {reason}")
                     
                     # Audit log the duplication
                     from app.audit import audit_log_create
@@ -1390,16 +1398,22 @@ def admin_manage_booking(booking_id):
                         db.session.add(duplicate_booking)
                         db.session.commit()
                         
-                        # Create pool for duplicate if original has pool
-                        if form.has_pool.data and booking.pool:
+                        # Create pool for duplicate based on EVENT_POOL_STRATEGY
+                        from app.bookings.utils import should_create_pool_for_duplication
+                        should_create, reason = should_create_pool_for_duplication(booking, duplicate_booking)
+                        
+                        if should_create and form.has_pool.data:
                             from app.models import Pool
                             duplicate_pool = Pool(
                                 booking_id=duplicate_booking.id,
                                 is_open=True,
-                                max_players=booking.pool.max_players
+                                max_players=booking.pool.max_players if booking.pool else None
                             )
                             db.session.add(duplicate_pool)
                             db.session.commit()
+                            current_app.logger.info(f"Created new pool for duplicate booking {duplicate_booking.id}: {reason}")
+                        else:
+                            current_app.logger.info(f"No pool created for duplicate booking {duplicate_booking.id}: {reason}")
                         
                         from app.audit import audit_log_create
                         audit_log_create('Booking', duplicate_booking.id, 

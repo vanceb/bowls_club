@@ -159,6 +159,112 @@ def get_bookings_by_type(booking_type: Optional[str] = None) -> list[Booking]:
     return db.session.scalars(query).all()
 
 
+# Pool Strategy Functions
+
+def get_pool_strategy_for_booking(booking: Booking) -> str:
+    """
+    Get the pool strategy for a booking based on its event type.
+    
+    Args:
+        booking: Booking instance
+        
+    Returns:
+        Pool strategy: 'booking', 'event', or 'none'
+    """
+    event_pool_strategy = current_app.config.get('EVENT_POOL_STRATEGY', {})
+    return event_pool_strategy.get(booking.event_type, 'booking')
+
+
+def get_primary_booking_in_series(series_id: str) -> Optional[Booking]:
+    """
+    Get the primary booking in a series (earliest by date).
+    The primary booking is the one that owns the shared pool for 'event' strategy.
+    
+    Args:
+        series_id: The series ID to search for
+        
+    Returns:
+        Primary Booking instance or None if series not found
+    """
+    if not series_id:
+        return None
+        
+    return db.session.scalar(
+        sa.select(Booking)
+        .where(Booking.series_id == series_id)
+        .order_by(Booking.booking_date.asc(), Booking.id.asc())
+        .limit(1)
+    )
+
+
+def should_create_pool_for_duplication(original_booking: Booking, duplicate_booking: Booking) -> tuple[bool, Optional[str]]:
+    """
+    Determine whether to create a new pool for a duplicated booking based on EVENT_POOL_STRATEGY.
+    
+    Args:
+        original_booking: The booking being duplicated
+        duplicate_booking: The new duplicate booking
+        
+    Returns:
+        Tuple of (should_create_new_pool, reason)
+        - should_create_new_pool: True if a new pool should be created
+        - reason: String explaining the decision for logging
+    """
+    # If original doesn't have a pool, no pool needed
+    if not original_booking.has_pool or not original_booking.pool:
+        return False, "Original booking has no pool"
+    
+    strategy = get_pool_strategy_for_booking(original_booking)
+    
+    if strategy == 'none':
+        return False, f"Strategy '{strategy}' - no pool should be created"
+    
+    elif strategy == 'booking':
+        return True, f"Strategy '{strategy}' - create new pool per booking"
+    
+    elif strategy == 'event':
+        # For event strategy, don't create new pool - will reference primary booking's pool
+        return False, f"Strategy '{strategy}' - will share pool with primary booking in series"
+    
+    else:
+        # Unknown strategy, default to booking-level
+        current_app.logger.warning(f"Unknown pool strategy '{strategy}' for event type {original_booking.event_type}, defaulting to 'booking'")
+        return True, f"Unknown strategy '{strategy}' - defaulting to create new pool"
+
+
+def get_effective_pool_for_booking(booking: Booking) -> Optional['Pool']:
+    """
+    Get the effective pool for a booking, considering pool strategy.
+    For 'event' strategy, this may return the primary booking's pool.
+    
+    Args:
+        booking: The booking to get the pool for
+        
+    Returns:
+        Pool instance or None
+    """
+    # If booking has its own pool, return it
+    if booking.pool:
+        return booking.pool
+    
+    # If no series, no shared pool possible
+    if not booking.series_id:
+        return None
+    
+    strategy = get_pool_strategy_for_booking(booking)
+    
+    # Only 'event' strategy allows sharing pools
+    if strategy != 'event':
+        return None
+    
+    # Find the primary booking in the series
+    primary_booking = get_primary_booking_in_series(booking.series_id)
+    if primary_booking and primary_booking.id != booking.id:
+        return primary_booking.pool
+    
+    return None
+
+
 # Legacy function for backward compatibility - will be removed
 def can_user_manage_event(user: Member, event_or_booking) -> bool:
     """

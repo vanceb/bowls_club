@@ -10,6 +10,7 @@ from flask import url_for
 from unittest.mock import patch
 from app import create_app, db
 from app.models import Member, Pool, PoolRegistration, Booking, Role
+from tests.fixtures.factories import MemberFactory
 
 
 class TestPoolManagement:
