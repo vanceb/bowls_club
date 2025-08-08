@@ -227,16 +227,10 @@ def manage_pool(pool_id):
         registration_form = PoolRegistrationForm()
         
         # Pre-populate registration form with available members
-        if pool.event:
-            # For event pools, show all active members
-            available_members = db.session.scalars(
-                sa.select(Member).where(Member.status == 'Active')
-            ).all()
-        else:
-            # For booking pools, show all active members
-            available_members = db.session.scalars(
-                sa.select(Member).where(Member.status == 'Active')
-            ).all()
+        # All pools are now booking-based, show all active members
+        available_members = db.session.scalars(
+            sa.select(Member).where(Member.status == 'Active')
+        ).all()
         
         registration_form.member_id.choices = [
             (member.id, f"{member.firstname} {member.lastname}")

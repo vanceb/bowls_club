@@ -214,14 +214,12 @@
             <div class="box">
                 <h3 class="title is-4">Associated With</h3>
                 <div class="content">
-                    {% if pool.event %}
-                    <p><strong>Event:</strong> {{ pool.event.name }}</p>
-                    <p><strong>Type:</strong> {{ pool.event.get_event_type_name() }}</p>
-                    <p><strong>Format:</strong> {{ pool.event.get_format_name() }}</p>
-                    <p><strong>Gender:</strong> {{ pool.event.get_gender_name() }}</p>
-                    {% if pool.event.scoring %}
-                    <p><strong>Scoring:</strong> {{ pool.event.scoring }}</p>
-                    {% endif %}
+                    {% if pool.booking %}
+                    <p><strong>Booking:</strong> {{ pool.booking.name }}</p>
+                    <p><strong>Date:</strong> {{ pool.booking.booking_date.strftime('%B %d, %Y') }}</p>
+                    <p><strong>Type:</strong> {{ pool.booking.get_event_type_name() }}</p>
+                    <p><strong>Format:</strong> {{ pool.booking.get_format_name() }}</p>
+                    <p><strong>Gender:</strong> {{ pool.booking.get_gender_name() }}</p>
                     <div class="field">
                         <a href="{{ url_for('bookings.admin_manage_booking', booking_id=pool.booking.id) }}" class="button is-info is-small">
                             <span class="icon">
@@ -230,7 +228,7 @@
                             <span>Manage Booking</span>
                         </a>
                     </div>
-                    {% elif pool.booking %}
+                    {% else %}
                     <p><strong>Booking Date:</strong> {{ pool.booking.booking_date }}</p>
                     <p><strong>Session:</strong> {{ pool.booking.session }}</p>
                     <p><strong>Type:</strong> {{ pool.booking.booking_type.title() }}</p>
