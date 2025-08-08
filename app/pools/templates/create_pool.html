@@ -91,7 +91,7 @@
                         </div>
                         <div class="control">
                             {% if pool_type == 'event' %}
-                            <a href="{{ url_for('events.manage_event', event_id=event.id) }}" class="button is-light">
+                            <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
                             {% else %}
                             <a href="{{ url_for('bookings.bookings') }}" class="button is-light">
                             {% endif %}

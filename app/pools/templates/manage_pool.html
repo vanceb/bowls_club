@@ -223,11 +223,11 @@
                     <p><strong>Scoring:</strong> {{ pool.event.scoring }}</p>
                     {% endif %}
                     <div class="field">
-                        <a href="{{ url_for('events.manage_event', event_id=pool.event.id) }}" class="button is-info is-small">
+                        <a href="{{ url_for('bookings.admin_manage_booking', booking_id=pool.booking.id) }}" class="button is-info is-small">
                             <span class="icon">
                                 <i class="fas fa-calendar-alt"></i>
                             </span>
-                            <span>Manage Event</span>
+                            <span>Manage Booking</span>
                         </a>
                     </div>
                     {% elif pool.booking %}
