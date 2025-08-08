@@ -138,8 +138,7 @@
                         {{ csrf_form.hidden_tag() }}
                         <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
                         <input type="hidden" name="action" value="confirm_available">
-                        <button type="submit" class="button is-small is-success" 
-                                onclick="return confirm('Confirm your availability for this game? You will not be able to change this once confirmed.')">
+                        <button type="submit" class="button is-small is-success">
                             <span class="icon">
                                 <i class="fas fa-check"></i>
                             </span>
@@ -150,8 +149,7 @@
                         {{ csrf_form.hidden_tag() }}
                         <input type="hidden" name="assignment_id" value="{{ assignment.id }}">
                         <input type="hidden" name="action" value="confirm_unavailable">
-                        <button type="submit" class="button is-small is-danger" 
-                                onclick="return confirm('Confirm you are unavailable for this game? You will not be able to change this once confirmed.')">
+                        <button type="submit" class="button is-small is-danger">
                             <span class="icon">
                                 <i class="fas fa-times"></i>
                             </span>
@@ -163,16 +161,14 @@
                 <!-- Rollup invitation actions -->
                 <div class="buttons are-small">
                     <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='accept') }}" 
-                       class="button is-small is-success"
-                       onclick="return confirm('Accept this roll-up invitation?')">
+                       class="button is-small is-success">
                         <span class="icon">
                             <i class="fas fa-check"></i>
                         </span>
                         <span>Accept</span>
                     </a>
                     <a href="{{ url_for('rollups.respond_to_rollup', booking_id=invitation.team.booking.id, action='decline') }}" 
-                       class="button is-small is-danger"
-                       onclick="return confirm('Decline this roll-up invitation?')">
+                       class="button is-small is-danger">
                         <span class="icon">
                             <i class="fas fa-times"></i>
                         </span>
