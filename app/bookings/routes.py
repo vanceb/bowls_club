@@ -977,6 +977,104 @@ def admin_manage_teams(booking_id):
                 else:
                     flash('Missing required information for substitution.', 'error')
             
+            elif action == 'add_to_pool':
+                # Handle adding a player to the pool
+                member_id = request.form.get('member_id')
+                
+                if member_id:
+                    try:
+                        member = db.session.get(Member, int(member_id))
+                        if not member:
+                            flash('Invalid member selected.', 'error')
+                        else:
+                            # Get the effective pool (own or shared)
+                            effective_pool = booking.get_effective_pool()
+                            
+                            if not effective_pool:
+                                # Check if this booking is part of a series with event strategy
+                                if booking.series_id:
+                                    # Get the series parent (first booking in series)
+                                    series_parent = db.session.scalar(
+                                        sa.select(Booking)
+                                        .where(Booking.series_id == booking.series_id)
+                                        .order_by(Booking.booking_date.asc())
+                                        .limit(1)
+                                    )
+                                    
+                                    if series_parent and series_parent.pool:
+                                        # Use the series parent's pool
+                                        effective_pool = series_parent.pool
+                                    elif series_parent and not series_parent.pool:
+                                        # Create a pool for the series parent
+                                        from app.models import Pool
+                                        new_pool = Pool(
+                                            pool_name=f"Series Pool for {booking.get_series_name()}",
+                                            booking_id=series_parent.id,
+                                            pool_type='event',  # Series pools are event strategy
+                                            is_open=True,
+                                            created_at=datetime.utcnow()
+                                        )
+                                        db.session.add(new_pool)
+                                        db.session.flush()  # Get pool ID
+                                        effective_pool = new_pool
+                                        
+                                        audit_log_create('Pool', effective_pool.id,
+                                                       f'Created series pool for {booking.get_series_name()}')
+                                    else:
+                                        flash('Could not find series parent booking.', 'error')
+                                        return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
+                                else:
+                                    # Create a pool for this individual booking
+                                    from app.models import Pool
+                                    new_pool = Pool(
+                                        pool_name=f"Pool for {booking.name}",
+                                        booking_id=booking.id,
+                                        pool_type='booking',
+                                        is_open=True,
+                                        created_at=datetime.utcnow()
+                                    )
+                                    db.session.add(new_pool)
+                                    db.session.flush()  # Get pool ID
+                                    effective_pool = new_pool
+                                    
+                                    audit_log_create('Pool', effective_pool.id,
+                                                   f'Created pool for booking {booking.name}')
+                            
+                            # Check if member is already registered in this pool
+                            from app.models import PoolRegistration
+                            existing_registration = db.session.scalar(
+                                sa.select(PoolRegistration).where(
+                                    PoolRegistration.pool_id == effective_pool.id,
+                                    PoolRegistration.member_id == member.id
+                                )
+                            )
+                            
+                            if existing_registration:
+                                flash(f'{member.firstname} {member.lastname} is already in this pool.', 'info')
+                            else:
+                                # Add member to the pool
+                                registration = PoolRegistration(
+                                    pool_id=effective_pool.id,
+                                    member_id=member.id,
+                                    status='registered',
+                                    registered_at=datetime.utcnow()
+                                )
+                                db.session.add(registration)
+                                db.session.commit()
+                                
+                                audit_log_create('PoolRegistration', registration.id,
+                                               f'Added {member.firstname} {member.lastname} to pool {effective_pool.pool_name}')
+                                
+                                flash(f'{member.firstname} {member.lastname} has been added to the pool successfully!', 'success')
+                    
+                    except ValueError:
+                        flash('Invalid member ID.', 'error')
+                    except Exception as e:
+                        current_app.logger.error(f"Error adding member to pool: {str(e)}")
+                        flash('An error occurred while adding the player to the pool.', 'error')
+                else:
+                    flash('Member ID is required.', 'error')
+            
             return redirect(url_for('bookings.admin_manage_teams', booking_id=booking_id))
         
         # Get session name
@@ -988,13 +1086,14 @@ def admin_manage_teams(booking_id):
         
         # Get available members for substitutions 
         available_members = []
-        if booking.has_pool_enabled():
-            # Get all pool members (show all so user can see everyone, even if assigned)
+        effective_pool = booking.get_effective_pool()
+        if effective_pool:
+            # Get all effective pool members (own or shared pool)
             from app.models import PoolRegistration
             available_members = db.session.scalars(
                 sa.select(Member)
                 .join(PoolRegistration, Member.id == PoolRegistration.member_id)
-                .where(PoolRegistration.pool_id == booking.pool.id)
+                .where(PoolRegistration.pool_id == effective_pool.id)
                 .order_by(Member.firstname, Member.lastname)
             ).all()
         else:
@@ -1060,15 +1159,22 @@ def admin_list_bookings():
                 except:
                     total_teams = 0
                 
-                # Safely calculate pool statistics
+                # Check for effective pool (own or shared)
+                effective_pool = booking.get_effective_pool()
+                has_own_pool = booking.pool is not None
+                has_shared_pool = effective_pool is not None and not has_own_pool
+                
+                # Safely calculate pool statistics using effective pool
                 try:
-                    pool_members = len(booking.pool.registrations) if booking.pool and hasattr(booking.pool, 'registrations') else 0
+                    pool_members = len(effective_pool.registrations) if effective_pool and hasattr(effective_pool, 'registrations') else 0
                 except:
                     pool_members = 0
                 
                 booking_stats[booking.id] = {
                     'total_teams': total_teams,
-                    'has_pool': booking.pool is not None,
+                    'has_pool': effective_pool is not None,
+                    'has_own_pool': has_own_pool,
+                    'has_shared_pool': has_shared_pool,
                     'pool_members': pool_members,
                     'pool_selected': 0,  # Simplified for now
                     'pool_available': pool_members,
@@ -1078,6 +1184,8 @@ def admin_list_bookings():
                 booking_stats[booking.id] = {
                     'total_teams': 0,
                     'has_pool': False,
+                    'has_own_pool': False,
+                    'has_shared_pool': False,
                     'pool_members': 0,
                     'pool_selected': 0,
                     'pool_available': 0,
@@ -1269,7 +1377,6 @@ def admin_manage_booking(booking_id):
             form.vs.data = booking.vs
             form.home_away.data = booking.home_away
             form.series_id.data = booking.series_id if hasattr(booking, 'series_id') else None
-            form.create_series.data = booking.series_id is not None
             form.series_name.data = booking.get_series_name() if booking.series_id else None
         
         if request.method == 'POST':
@@ -1356,7 +1463,8 @@ def admin_manage_booking(booking_id):
             current_app.logger.info(f"Form data - submit: {form.submit.data}")
             current_app.logger.info(f"Form data - existing_series: '{form.existing_series.data}'")
             current_app.logger.info(f"Form data - series_id: '{form.series_id.data}'")
-            current_app.logger.info(f"Form data - create_series: {form.create_series.data}")
+            current_app.logger.info(f"Form data - series_action: '{form.series_action.data}'")
+            current_app.logger.info(f"Form data - series_name: '{form.series_name.data}'")
             current_app.logger.info(f"Form data - has_pool: {form.has_pool.data}")
             
             if not form.validate_on_submit():
@@ -1387,13 +1495,8 @@ def admin_manage_booking(booking_id):
                             series_id=booking.series_id if hasattr(booking, 'series_id') else None
                         )
                         
-                        # If creating a series, generate series_id if needed
-                        if form.create_series.data and not duplicate_booking.series_id:
-                            import uuid
-                            series_id = str(uuid.uuid4())
-                            # Update both original and duplicate with series_id
-                            booking.series_id = series_id
-                            duplicate_booking.series_id = series_id
+                        # Preserve series relationship for duplicates
+                        # The series_id is already copied from the original booking
                         
                         db.session.add(duplicate_booking)
                         db.session.commit()
@@ -1473,12 +1576,39 @@ def admin_manage_booking(booking_id):
                         changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
                         booking.home_away = form.home_away.data
                     
-                    # Handle series changes from existing_series dropdown
-                    if form.existing_series.data and form.existing_series.data != booking.series_id:
-                        current_app.logger.info(f"Series change detected: {booking.series_id} -> {form.existing_series.data}")
-                        changes['series_id'] = {'old': booking.series_id, 'new': form.existing_series.data}
-                        booking.series_id = form.existing_series.data
-                        current_app.logger.info(f"Successfully updated booking {booking.id} series_id to {form.existing_series.data}")
+                    # Handle series changes based on action selection
+                    series_action = form.series_action.data
+                    current_app.logger.info(f"Processing series action: {series_action}")
+                    
+                    if series_action == 'remove_series':
+                        # Remove from any series
+                        if booking.series_id:
+                            changes['series_id'] = {'old': booking.series_id, 'new': None}
+                            booking.series_id = None
+                            current_app.logger.info(f"Removed booking {booking.id} from series")
+                            
+                    elif series_action == 'create_new':
+                        # Create new series with this booking
+                        if form.series_name.data:
+                            # Generate new series_id if this booking doesn't have one
+                            if not booking.series_id:
+                                import uuid
+                                new_series_id = str(uuid.uuid4())
+                                changes['series_id'] = {'old': booking.series_id, 'new': new_series_id}
+                                booking.series_id = new_series_id
+                                current_app.logger.info(f"Created new series {new_series_id} for booking {booking.id}")
+                            # Series name is just metadata, not stored separately
+                            
+                    elif series_action == 'join_existing':
+                        # Join existing series
+                        if form.existing_series.data and form.existing_series.data != booking.series_id:
+                            changes['series_id'] = {'old': booking.series_id, 'new': form.existing_series.data}
+                            booking.series_id = form.existing_series.data
+                            current_app.logger.info(f"Added booking {booking.id} to existing series {form.existing_series.data}")
+                            
+                    elif series_action == 'no_change':
+                        # Do nothing - keep current series configuration
+                        current_app.logger.info(f"No change requested for series configuration of booking {booking.id}")
                     
                     # Handle pool creation/deletion
                     current_has_pool = booking.pool is not None

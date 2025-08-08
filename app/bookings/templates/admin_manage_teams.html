@@ -122,7 +122,23 @@
             <div class="column is-5">
                 {% if available_members %}
                 <div class="box pool-container">
-                    <h3 class="title is-4">Pool Players ({{ available_members|length }})</h3>
+                    <div class="level">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <h3 class="title is-4">Pool Players ({{ available_members|length }})</h3>
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                <button type="button" class="button is-success is-small" onclick="openAddPlayerModal()">
+                                    <span class="icon">
+                                        <i class="fas fa-user-plus"></i>
+                                    </span>
+                                    <span>Add Player</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <p class="subtitle is-6">Drag to teams ←</p>
                     
                     <div class="pool-members" style="max-height: 70vh; overflow-y: auto;">
@@ -179,6 +195,38 @@
     </div>
 </div>
 
+<!-- Hidden form for adding players to pool -->
+<form method="POST" id="add-player-form" style="display: none;">
+    {{ csrf_form.hidden_tag() }}
+    <input type="hidden" name="action" value="add_to_pool">
+    <input type="hidden" name="member_id" id="member-id-input">
+</form>
+
+<!-- Modal for adding players to pool -->
+<div class="modal" id="add-player-modal">
+    <div class="modal-background" onclick="closeAddPlayerModal()"></div>
+    <div class="modal-card">
+        <header class="modal-card-head">
+            <p class="modal-card-title">Add Player to Pool</p>
+            <button class="delete" onclick="closeAddPlayerModal()"></button>
+        </header>
+        <section class="modal-card-body">
+            <div class="field">
+                <label class="label">Search Members</label>
+                <div class="control">
+                    <input class="input" type="text" id="member-search" placeholder="Type member name to search...">
+                </div>
+            </div>
+            
+            <div id="member-search-results" class="content">
+                <p class="has-text-grey">Start typing to search for members...</p>
+            </div>
+        </section>
+        <footer class="modal-card-foot">
+            <button class="button" onclick="closeAddPlayerModal()">Cancel</button>
+        </footer>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -348,6 +396,91 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Error removing player');
         });
     }
+    
+    // Modal functions for adding players to pool
+    window.openAddPlayerModal = function() {
+        document.getElementById('add-player-modal').classList.add('is-active');
+        document.getElementById('member-search').focus();
+    };
+
+    window.closeAddPlayerModal = function() {
+        document.getElementById('add-player-modal').classList.remove('is-active');
+        document.getElementById('member-search').value = '';
+        document.getElementById('member-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+    };
+
+    window.addPlayerToPool = function(memberId) {
+        document.getElementById('member-id-input').value = memberId;
+        document.getElementById('add-player-form').submit();
+    };
+
+    // Member search functionality
+    let searchTimeout;
+    document.getElementById('member-search').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            document.getElementById('member-search-results').innerHTML = '<p class="has-text-grey">Start typing to search for members...</p>';
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const resultsDiv = document.getElementById('member-search-results');
+                    
+                    if (data.success && data.members.length > 0) {
+                        // Get list of current pool member IDs to exclude them
+                        const currentPoolMemberIds = {{ available_members | map(attribute='id') | list | tojson }};
+                        
+                        // Filter out members who are already in the pool
+                        const availableMembers = data.members.filter(member => !currentPoolMemberIds.includes(member.id));
+                        
+                        if (availableMembers.length > 0) {
+                            let html = '<div class="columns is-multiline">';
+                            availableMembers.forEach(member => {
+                                html += `
+                                    <div class="column is-half">
+                                        <div class="box is-clickable" onclick="addPlayerToPool(${member.id})" style="cursor: pointer;">
+                                            <div class="media">
+                                                <div class="media-content">
+                                                    <p class="has-text-weight-semibold">${member.firstname} ${member.lastname}</p>
+                                                    <p class="is-size-7 has-text-grey">${member.status} Member</p>
+                                                </div>
+                                                <div class="media-right">
+                                                    <span class="icon has-text-success">
+                                                        <i class="fas fa-plus-circle"></i>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            html += '</div>';
+                            resultsDiv.innerHTML = html;
+                        } else {
+                            resultsDiv.innerHTML = '<p class="has-text-grey">All matching members are already in this pool.</p>';
+                        }
+                    } else {
+                        resultsDiv.innerHTML = '<p class="has-text-grey">No members found matching your search.</p>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching members:', error);
+                    document.getElementById('member-search-results').innerHTML = '<p class="has-text-danger">Error searching members. Please try again.</p>';
+                });
+        }, 300);
+    });
+
+    // Handle ESC key to close modal
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeAddPlayerModal();
+        }
+    });
 });
 </script>
 {% endblock %}
