@@ -135,6 +135,10 @@ class Config:
         6: 'event',    # Other - default to event-level
     }
     
+    # Rate Limiting Configuration
+    RATE_LIMIT_PER_DAY = "1000 per day"
+    RATE_LIMIT_PER_HOUR = "500 per hour"
+    
     # Roll-up booking configuration
     ROLLUP_ADVANCE_BOOKING_DAYS = 7  # How many days ahead users can book roll-ups
     ROLLUP_MAX_PLAYERS = 8  # Maximum players per roll-up (including organizer)

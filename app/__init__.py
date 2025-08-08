@@ -17,10 +17,7 @@ mail = Mail()
 migrate = Migrate()
 login = LoginManager()
 moment = Moment()
-limiter = Limiter(
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+limiter = Limiter(key_func=get_remote_address)
 
 
 def create_app(config_name='development'):
@@ -38,6 +35,12 @@ def create_app(config_name='development'):
     login.init_app(app)
     login.login_view = 'members.auth_login'
     moment.init_app(app)
+    
+    # Initialize limiter with configuration-based default limits
+    limiter._default_limits = [
+        app.config.get('RATE_LIMIT_PER_DAY', '1000 per day'),
+        app.config.get('RATE_LIMIT_PER_HOUR', '500 per hour')
+    ]
     limiter.init_app(app)
     
     # Configure logging
@@ -109,7 +112,8 @@ def register_template_context_processors(app):
         filtered_admin_menu = filter_admin_menu_by_roles(current_user)
         return dict(
             menu_items=app.config['MENU_ITEMS'],
-            filtered_admin_menu_items=filtered_admin_menu
+            filtered_admin_menu_items=filtered_admin_menu,
+            config=app.config
         )
 
     @app.context_processor
