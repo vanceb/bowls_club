@@ -1629,7 +1629,6 @@ def league_list():
         # Get all league bookings grouped by series
         league_bookings = db.session.scalars(
             sa.select(Booking)
-            .where(Booking.event_type == current_app.config.get('EVENT_TYPES', {}).get('League', 2))
             .where(Booking.series_id.isnot(None))
             .order_by(Booking.series_id, Booking.booking_date)
         ).all()
@@ -1659,13 +1658,13 @@ def league_list():
             if booking.teams:
                 series_groups[booking.series_id]['completed_games'] += 1
         
-        # Set next game for each series (after processing all bookings)
+        # After processing all bookings, find the next game for each series
+        today = date.today()
         for series_data in series_groups.values():
-            if not series_data['next_game']:
-                series_data['next_game'] = next(
-                    (b for b in series_data['bookings'] if b.booking_date >= date.today() and not b.teams), 
-                    None
-                )
+            # Find the earliest upcoming game
+            future_games = [b for b in series_data['bookings'] if b.booking_date >= today]
+            if future_games:
+                series_data['next_game'] = min(future_games, key=lambda x: x.booking_date)
         
         return render_template('league_list.html', 
                              series_groups=series_groups.values())
@@ -1850,7 +1849,7 @@ def league_manage(series_id):
         primary_booking = bookings[0]
         total_games = len(bookings)
         completed_games = sum(1 for b in bookings if b.teams)
-        next_game = next((b for b in bookings if b.booking_date >= date.today() and not b.teams), None)
+        next_game = next((b for b in bookings if b.booking_date >= date.today()), None)
         
         # Pool information
         pool_info = {
