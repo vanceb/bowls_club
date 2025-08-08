@@ -32,7 +32,7 @@
                 </td>
                 {% if show_booking_details %}
                 <td>
-                    <a href="{{ url_for('bookings.admin_edit_booking', booking_id=team.booking.id) }}">
+                    <a href="{{ url_for('bookings.admin_manage_booking', booking_id=team.booking.id) }}">
                         Booking #{{ team.booking.id }} - {{ team.booking.booking_date.strftime('%a %b %d') }}
                     </a>
                 </td>

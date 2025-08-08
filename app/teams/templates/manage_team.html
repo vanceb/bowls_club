@@ -16,7 +16,7 @@
             <div class="content">
                 <p><strong>Team Name:</strong> {{ team.team_name }}</p>
                 <p><strong>Associated Booking:</strong> 
-                    <a href="{{ url_for('bookings.admin_edit_booking', booking_id=team.booking.id) }}">
+                    <a href="{{ url_for('bookings.admin_manage_booking', booking_id=team.booking.id) }}">
                         Booking #{{ team.booking.id }} - {{ team.booking.booking_date.strftime('%A %b %d, %Y') }}
                     </a>
                 </p>
