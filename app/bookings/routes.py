@@ -1658,8 +1658,14 @@ def league_list():
             # Check if completed (has teams assigned)
             if booking.teams:
                 series_groups[booking.series_id]['completed_games'] += 1
-            elif not series_groups[booking.series_id]['next_game'] and booking.booking_date >= date.today():
-                series_groups[booking.series_id]['next_game'] = booking
+        
+        # Set next game for each series (after processing all bookings)
+        for series_data in series_groups.values():
+            if not series_data['next_game']:
+                series_data['next_game'] = next(
+                    (b for b in series_data['bookings'] if b.booking_date >= date.today() and not b.teams), 
+                    None
+                )
         
         return render_template('league_list.html', 
                              series_groups=series_groups.values())
