@@ -150,49 +150,8 @@ def get_pool_statistics(pool: Pool) -> Dict[str, Any]:
         }
 
 
-def create_pool_for_booking_with_event_id(event_id: int, max_players: Optional[int] = None, 
-                         auto_close_date: Optional[datetime] = None,
-                         is_open: bool = True) -> Pool:
-    """
-    Create a new pool associated with an event (via Booking model).
-    
-    Args:
-        event_id: The event ID to associate the pool with
-        max_players: Maximum number of players (None for unlimited)
-        auto_close_date: Date to automatically close the pool
-        is_open: Whether the pool starts open for registration
-        
-    Returns:
-        New Pool instance (not yet committed to database)
-    """
-    # Find or create a booking for this event
-    from app.models import Booking
-    import sqlalchemy as sa
-    
-    # Find existing booking for this event or create one
-    booking = db.session.scalar(
-        sa.select(Booking).where(Booking.event_id == event_id).limit(1)
-    )
-    
-    if not booking:
-        # Create a default booking for the event
-        booking = Booking(
-            event_id=event_id,
-            booking_type='Event Pool',
-            session='All Day'
-        )
-        db.session.add(booking)
-        db.session.flush()  # Get the ID
-    
-    pool = Pool(
-        event_id=None,
-        booking_id=booking.id,
-        is_open=is_open,
-        max_players=max_players,
-        auto_close_date=auto_close_date
-    )
-    
-    return pool
+# DEPRECATED: This function is no longer used since events were consolidated into bookings
+# Use create_pool_for_booking() instead
 
 
 def create_pool_for_booking(booking: Booking, max_players: Optional[int] = None,
@@ -211,7 +170,6 @@ def create_pool_for_booking(booking: Booking, max_players: Optional[int] = None,
         New Pool instance (not yet committed to database)
     """
     pool = Pool(
-        event_id=None,
         booking_id=booking.id,
         is_open=is_open,
         max_players=max_players,

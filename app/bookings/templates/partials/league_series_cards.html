@@ -1,0 +1,70 @@
+<div class="columns is-multiline">
+    {% for series in series_groups %}
+    <div class="column is-half">
+        <div class="card">
+            <div class="card-content">
+                <div class="media">
+                    <div class="media-content">
+                        <p class="title is-5">{{ series.series_name }}</p>
+                        <p class="subtitle is-6">
+                            {{ series.total_games }} games • 
+                            {{ series.completed_games }} completed
+                            {% if series.next_game %}
+                            • Next: {{ series.next_game.booking_date.strftime('%b %d') }}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="content">
+                    <div class="columns is-mobile">
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <p class="heading">Progress</p>
+                                <p class="title is-4">{{ series.completed_games }}/{{ series.total_games }}</p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="has-text-centered">
+                                <p class="heading">Pool Members</p>
+                                <p class="title is-4">
+                                    {% if series.primary_booking.pool %}
+                                    {{ series.primary_booking.pool.registrations|length }}
+                                    {% else %}
+                                    0
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <progress class="progress is-primary" 
+                              value="{{ series.completed_games }}" 
+                              max="{{ series.total_games }}">
+                        {{ ((series.completed_games / series.total_games) * 100)|round|int }}%
+                    </progress>
+                </div>
+                
+                <div class="buttons">
+                    <a href="{{ url_for('bookings.league_manage', series_id=series.series_id) }}" 
+                       class="button is-primary is-small">
+                        <span class="icon">
+                            <i class="fas fa-cog"></i>
+                        </span>
+                        <span>Manage League</span>
+                    </a>
+                    {% if series.primary_booking.pool %}
+                    <a href="{{ url_for('pools.manage_pool', pool_id=series.primary_booking.pool.id) }}" 
+                       class="button is-info is-small">
+                        <span class="icon">
+                            <i class="fas fa-users"></i>
+                        </span>
+                        <span>Pool</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>

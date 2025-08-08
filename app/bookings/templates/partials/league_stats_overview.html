@@ -1,0 +1,59 @@
+<div class="box">
+    <div class="columns">
+        <div class="column">
+            <div class="has-text-centered">
+                <p class="heading">Total Games</p>
+                <p class="title is-3">{{ league_stats.total_games }}</p>
+            </div>
+        </div>
+        <div class="column">
+            <div class="has-text-centered">
+                <p class="heading">Completed</p>
+                <p class="title is-3 has-text-success">{{ league_stats.completed_games }}</p>
+            </div>
+        </div>
+        <div class="column">
+            <div class="has-text-centered">
+                <p class="heading">Remaining</p>
+                <p class="title is-3 has-text-info">{{ league_stats.total_games - league_stats.completed_games }}</p>
+            </div>
+        </div>
+        <div class="column">
+            <div class="has-text-centered">
+                <p class="heading">Pool Members</p>
+                <p class="title is-3">
+                    {% if league_stats.pool_info.has_pool %}
+                    {{ league_stats.pool_info.pool_members }}
+                    {% else %}
+                    <span class="has-text-grey">No Pool</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="content">
+        <progress class="progress is-primary" 
+                  value="{{ league_stats.completed_games }}" 
+                  max="{{ league_stats.total_games }}">
+            {{ ((league_stats.completed_games / league_stats.total_games) * 100)|round|int }}%
+        </progress>
+        
+        {% if league_stats.next_game %}
+        <div class="notification is-info is-light">
+            <strong>Next Game:</strong> 
+            {{ league_stats.next_game.booking_date.strftime('%A, %B %d, %Y') }}
+            {% if league_stats.next_game.vs %}
+            vs {{ league_stats.next_game.vs }}
+            {% endif %}
+            <a href="{{ url_for('bookings.admin_manage_booking', booking_id=league_stats.next_game.id) }}" 
+               class="button is-small is-info is-pulled-right">
+                <span class="icon">
+                    <i class="fas fa-cog"></i>
+                </span>
+                <span>Manage</span>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>

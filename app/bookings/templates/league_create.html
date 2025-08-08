@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% set active_page = "bookings" %}
+
+{% block title %}Create League{% endblock %}
+
+{% block page_header %}
+<h1 class="title">Create New League</h1>
+<p class="subtitle">Step 1: League Details</p>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="columns">
+        <div class="column is-8 is-offset-2">
+            <div class="box">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="field">
+                        <label class="label">{{ form.league_name.label }}</label>
+                        <div class="control">
+                            {{ form.league_name(class="input", placeholder="e.g., Summer Pairs League 2024") }}
+                        </div>
+                        {% for error in form.league_name.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field">
+                        <label class="label">{{ form.format.label }}</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                {{ form.format() }}
+                            </div>
+                        </div>
+                        {% for error in form.format.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    {{ form.event_type() }}
+                    
+                    <div class="field">
+                        <label class="label">{{ form.gender.label }}</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                {{ form.gender() }}
+                            </div>
+                        </div>
+                        {% for error in form.gender.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="field is-grouped">
+                        <div class="control">
+                            <button type="submit" class="button is-primary">
+                                <span class="icon">
+                                    <i class="fas fa-arrow-right"></i>
+                                </span>
+                                <span>{{ form.submit.label.text }}</span>
+                            </button>
+                        </div>
+                        <div class="control">
+                            <a href="{{ url_for('bookings.league_list') }}" class="button is-light">
+                                <span class="icon">
+                                    <i class="fas fa-times"></i>
+                                </span>
+                                <span>Cancel</span>
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

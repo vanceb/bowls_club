@@ -1108,10 +1108,9 @@ def admin_list_bookings():
             if booking.booking_type == 'rollup':
                 rollup_bookings.append(booking)
             elif booking.series_id:
-                series_name = booking.get_series_name()
-                if series_name not in series_groups:
-                    series_groups[series_name] = []
-                series_groups[series_name].append(booking)
+                if booking.series_id not in series_groups:
+                    series_groups[booking.series_id] = []
+                series_groups[booking.series_id].append(booking)
             else:
                 regular_bookings.append(booking)
         
@@ -1614,3 +1613,261 @@ def admin_delete_booking(booking_id):
         current_app.logger.error(f"Error deleting booking {booking_id}: {str(e)}")
         flash('An error occurred while deleting the booking.', 'error')
         return redirect(url_for('bookings.admin_list_bookings'))
+
+
+# League Management Routes
+# Specialized interface for managing league series with simplified creation
+
+@bp.route('/league/')
+@login_required
+@role_required('Event Manager')
+def league_list():
+    """
+    List all league series with status overview
+    """
+    try:
+        # Get all league bookings grouped by series
+        league_bookings = db.session.scalars(
+            sa.select(Booking)
+            .where(Booking.event_type == current_app.config.get('EVENT_TYPES', {}).get('League', 2))
+            .where(Booking.series_id.isnot(None))
+            .order_by(Booking.series_id, Booking.booking_date)
+        ).all()
+        
+        # Group by series
+        series_groups = {}
+        for booking in league_bookings:
+            if booking.series_id not in series_groups:
+                series_groups[booking.series_id] = {
+                    'series_id': booking.series_id,
+                    'series_name': booking.get_series_name(),
+                    'bookings': [],
+                    'total_games': 0,
+                    'completed_games': 0,
+                    'next_game': None,
+                    'primary_booking': None
+                }
+            
+            series_groups[booking.series_id]['bookings'].append(booking)
+            series_groups[booking.series_id]['total_games'] += 1
+            
+            # Set primary booking (first in series)
+            if not series_groups[booking.series_id]['primary_booking']:
+                series_groups[booking.series_id]['primary_booking'] = booking
+            
+            # Check if completed (has teams assigned)
+            if booking.teams:
+                series_groups[booking.series_id]['completed_games'] += 1
+            elif not series_groups[booking.series_id]['next_game'] and booking.booking_date >= date.today():
+                series_groups[booking.series_id]['next_game'] = booking
+        
+        return render_template('league_list.html', 
+                             series_groups=series_groups.values())
+    
+    except Exception as e:
+        current_app.logger.error(f"Error in league_list: {str(e)}")
+        flash('An error occurred while loading leagues.', 'error')
+        return render_template('league_list.html', series_groups=[])
+
+
+@bp.route('/league/create', methods=['GET', 'POST'])
+@login_required
+@role_required('Event Manager')
+def league_create():
+    """
+    Two-step league creation: 1) Basic details, 2) Schedule table
+    """
+    try:
+        from app.bookings.forms import LeagueCreateForm
+        
+        form = LeagueCreateForm()
+        
+        if form.validate_on_submit():
+            # Store league details in session and redirect to scheduling
+            from flask import session
+            session['league_details'] = {
+                'league_name': form.league_name.data,
+                'format': form.format.data,
+                'event_type': form.event_type.data,
+                'gender': form.gender.data
+            }
+            return redirect(url_for('bookings.league_schedule'))
+        
+        return render_template('league_create.html', form=form)
+        
+    except Exception as e:
+        current_app.logger.error(f"Error in league_create: {str(e)}")
+        flash('An error occurred while creating league.', 'error')
+        return redirect(url_for('bookings.league_list'))
+
+
+@bp.route('/league/schedule', methods=['GET', 'POST'])
+@login_required
+@role_required('Event Manager')
+def league_schedule():
+    """
+    Schedule games for a new league using table interface
+    """
+    try:
+        from flask import session
+        from app.bookings.forms import LeagueScheduleForm
+        from app.bookings.utils import create_booking_with_defaults
+        import uuid
+        
+        # Check if we have league details from step 1
+        if 'league_details' not in session:
+            flash('Please start by creating a league.', 'error')
+            return redirect(url_for('bookings.league_create'))
+        
+        league_details = session['league_details']
+        form = LeagueScheduleForm()
+        
+        # Handle adding rows
+        if form.add_row.data:
+            form.games.append_entry()
+            return render_template('league_schedule.html', 
+                                 form=form, 
+                                 league_details=league_details,
+                                 sessions=current_app.config.get('DAILY_SESSIONS', {}))
+        
+        # Handle form submission
+        if form.create_all.data and form.validate_on_submit():
+            # Generate unique series ID
+            series_id = str(uuid.uuid4())[:8]
+            
+            # Create bookings for all scheduled games
+            bookings_created = []
+            for i, game_data in enumerate(form.games.data):
+                if game_data['date']:  # Only create if date is provided
+                    booking = create_booking_with_defaults(
+                        name=f"{league_details['league_name']} - Round {i+1}",
+                        booking_date=game_data['date'],
+                        session=game_data['session'],
+                        series_id=series_id,
+                        event_type=league_details['event_type'],
+                        format=league_details['format'],
+                        gender=league_details['gender'],
+                        vs=game_data.get('opponent', ''),
+                        home_away=game_data.get('venue', 'home'),
+                        has_pool=(i == 0),  # Only first booking gets pool
+                        series_commitment_required=True
+                    )
+                    
+                    db.session.add(booking)
+                    bookings_created.append(booking)
+            
+            if bookings_created:
+                db.session.commit()
+                
+                # Refresh bookings to ensure they have the latest data
+                for booking in bookings_created:
+                    db.session.refresh(booking)
+                
+                # Debug: Log series IDs to verify they're the same
+                current_app.logger.info(f"League created with series_id: {series_id}")
+                for i, booking in enumerate(bookings_created):
+                    current_app.logger.info(f"Booking {i+1}: {booking.name}, series_id: {booking.series_id}")
+                
+                # Create pool for the first booking (has_pool=True)
+                from app.pools.utils import create_pool_for_booking
+                first_booking = bookings_created[0]
+                if first_booking.has_pool:
+                    pool = create_pool_for_booking(first_booking, is_open=True)
+                    db.session.add(pool)
+                    db.session.commit()
+                    first_booking.pool = pool
+                
+                # Audit log bulk operation
+                audit_log_bulk_operation('LEAGUE_CREATE', 'Booking', len(bookings_created),
+                                       f'Created league: {league_details["league_name"]} with {len(bookings_created)} games')
+                
+                # Clear session data
+                session.pop('league_details', None)
+                
+                flash(f'League "{league_details["league_name"]}" created with {len(bookings_created)} games!', 'success')
+                return redirect(url_for('bookings.league_manage', series_id=series_id))
+            else:
+                flash('No games were scheduled. Please add at least one game date.', 'error')
+        
+        # Initialize with 5 empty rows if new form
+        if not form.games.data:
+            for _ in range(5):
+                form.games.append_entry()
+        
+        return render_template('league_schedule.html', 
+                             form=form, 
+                             league_details=league_details,
+                             sessions=current_app.config.get('DAILY_SESSIONS', {}))
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error in league_schedule: {str(e)}")
+        import traceback
+        current_app.logger.error(f"Full traceback: {traceback.format_exc()}")
+        flash(f'An error occurred while scheduling league games: {str(e)}', 'error')
+        
+        # Try to return to the form with what we have
+        try:
+            league_details = session.get('league_details', {})
+            form = LeagueScheduleForm()
+            if not form.games.data:
+                for _ in range(5):
+                    form.games.append_entry()
+            return render_template('league_schedule.html', 
+                                 form=form, 
+                                 league_details=league_details,
+                                 sessions=current_app.config.get('DAILY_SESSIONS', {}))
+        except:
+            return redirect(url_for('bookings.league_create'))
+
+
+@bp.route('/league/<series_id>/manage')
+@login_required
+@role_required('Event Manager')
+def league_manage(series_id):
+    """
+    League series dashboard and overview
+    """
+    try:
+        # Get all bookings in this league series
+        bookings = db.session.scalars(
+            sa.select(Booking)
+            .where(Booking.series_id == series_id)
+            .order_by(Booking.booking_date)
+        ).all()
+        
+        if not bookings:
+            flash('League not found.', 'error')
+            return redirect(url_for('bookings.league_list'))
+        
+        # Calculate league statistics
+        primary_booking = bookings[0]
+        total_games = len(bookings)
+        completed_games = sum(1 for b in bookings if b.teams)
+        next_game = next((b for b in bookings if b.booking_date >= date.today() and not b.teams), None)
+        
+        # Pool information
+        pool_info = {
+            'has_pool': primary_booking.pool is not None,
+            'pool_members': len(primary_booking.pool.registrations) if primary_booking.pool else 0
+        }
+        
+        league_stats = {
+            'series_name': primary_booking.get_series_name(),
+            'total_games': total_games,
+            'completed_games': completed_games,
+            'next_game': next_game,
+            'pool_info': pool_info
+        }
+        
+        return render_template('league_manage.html', 
+                             series_id=series_id,
+                             bookings=bookings,
+                             league_stats=league_stats,
+                             today=date.today(),
+                             sessions=current_app.config.get('DAILY_SESSIONS', {}))
+    
+    except Exception as e:
+        current_app.logger.error(f"Error in league_manage: {str(e)}")
+        flash('An error occurred while loading league.', 'error')
+        return redirect(url_for('bookings.league_list'))

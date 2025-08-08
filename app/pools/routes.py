@@ -19,7 +19,7 @@ from app.routes import role_required
 from app.pools.forms import PoolForm, PoolRegistrationForm
 from app.pools.utils import (
     can_user_manage_pool, get_pool_statistics,
-    create_pool_for_booking_with_event_id, create_pool_for_booking
+    create_pool_for_booking
 )
 from app.bookings.utils import can_user_manage_event
 from app.audit import (
@@ -107,27 +107,30 @@ def create_event_pool(event_id):
         form = PoolForm()
         
         if form.validate_on_submit():
-            pool = create_pool_for_booking_with_event_id(
-                event_id=event_id,
-                max_players=form.max_players.data,
-                auto_close_date=form.auto_close_date.data,
-                is_open=form.is_open.data
-            )
+            # TODO: This route needs to be updated for booking-centric system
+            flash('Pool creation via event ID is temporarily disabled. Please use booking management instead.', 'error')
+            return redirect(url_for('main.index'))
+            # pool = create_pool_for_booking_with_event_id(
+            #     event_id=event_id,
+            #     max_players=form.max_players.data,
+            #     auto_close_date=form.auto_close_date.data,
+            #     is_open=form.is_open.data
+            # )
+            # 
+            # db.session.add(pool)
+            # db.session.commit()
             
-            db.session.add(pool)
-            db.session.commit()
+            # # Audit log
+            # audit_log_create('Pool', pool.id,
+            #                f'Created event pool for event ID: {event_id}', 
+            #                {
+            #                    'event_id': event_id,
+            #                    'max_players': pool.max_players,
+            #                    'is_open': pool.is_open
+            #                })
             
-            # Audit log
-            audit_log_create('Pool', pool.id,
-                           f'Created event pool for event ID: {event_id}', 
-                           {
-                               'event_id': event_id,
-                               'max_players': pool.max_players,
-                               'is_open': pool.is_open
-                           })
-            
-            flash(f'Pool created successfully for event.', 'success')
-            return redirect(url_for('pools.manage_pool', pool_id=pool.id))
+            # flash(f'Pool created successfully for event.', 'success')
+            # return redirect(url_for('pools.manage_pool', pool_id=pool.id))
         
         return render_template('create_pool.html', 
                              form=form, 
@@ -471,18 +474,21 @@ def admin_create_event_pool(event_id):
             flash('This event already has pool registration enabled.', 'warning')
             return redirect(url_for('events.manage_event', event_id=event_id))
         
+        # TODO: This route needs to be updated for booking-centric system
+        flash('Pool creation via event ID is temporarily disabled. Please use booking management instead.', 'error')
+        return redirect(url_for('main.index'))
         # Create new pool via booking
-        new_pool = create_pool_for_booking_with_event_id(
-            event_id=event_id,
-            is_open=True
-        )
+        # new_pool = create_pool_for_booking_with_event_id(
+        #     event_id=event_id,
+        #     is_open=True
+        # )
         
-        db.session.add(new_pool)
-        db.session.commit()
-        
-        # Audit log
-        audit_log_create('Pool', new_pool.id, 
-                        f'Created pool for event ID: {event_id}')
+        # db.session.add(new_pool)
+        # db.session.commit()
+        # 
+        # # Audit log
+        # audit_log_create('Pool', new_pool.id, 
+        #                 f'Created pool for event ID: {event_id}')
         
         flash(f'Pool registration has been enabled for event.', 'success')
         return redirect(url_for('events.manage_event', event_id=event_id))

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set active_page = "bookings" %}
+
+{% block title %}Schedule League Games{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="title">{{ league_details['league_name'] }}</h1>
+    <p class="subtitle">Step 2: Schedule Games</p>
+    <div class="box">
+        <div class="content">
+            <h4 class="title is-5">League Details</h4>
+            <div class="columns">
+                <div class="column">
+                    <strong>Format:</strong> 
+                    {% for key, value in config.EVENT_FORMATS.items() %}
+                        {% if value == league_details['format'] %}{{ key }}{% endif %}
+                    {% endfor %}
+                </div>
+                <div class="column">
+                    <strong>Event Type:</strong> 
+                    {% for key, value in config.EVENT_TYPES.items() %}
+                        {% if value == league_details['event_type'] %}{{ key }}{% endif %}
+                    {% endfor %}
+                </div>
+                <div class="column">
+                    <strong>Gender:</strong> 
+                    {% for key, value in config.EVENT_GENDERS.items() %}
+                        {% if value == league_details['gender'] %}{{ key }}{% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" id="league-schedule-form">
+        {{ form.hidden_tag() }}
+        
+        {% include 'partials/league_schedule_table.html' %}
+        
+        <div class="field is-grouped">
+            <div class="control">
+                <button type="submit" name="create_all" value="true" class="button is-primary">
+                    <span class="icon">
+                        <i class="fas fa-check"></i>
+                    </span>
+                    <span>Create All Games</span>
+                </button>
+            </div>
+            <div class="control">
+                <button type="submit" name="add_row" value="true" class="button is-info">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Add Row</span>
+                </button>
+            </div>
+            <div class="control">
+                <a href="{{ url_for('bookings.league_create') }}" class="button is-light">
+                    <span class="icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span>Back</span>
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

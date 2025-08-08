@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active_page = "bookings" %}
+
+{% block title %}{{ league_stats.series_name }}{% endblock %}
+
+{% block page_header %}
+<h1 class="title">{{ league_stats.series_name }}</h1>
+<p class="subtitle">League Management Dashboard</p>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    {% include 'partials/league_stats_overview.html' %}
+    
+    <div class="box">
+        <div class="level">
+            <div class="level-left">
+                <div class="level-item">
+                    <h3 class="title is-4">League Games</h3>
+                </div>
+            </div>
+            <div class="level-right">
+                <div class="level-item">
+                    <div class="buttons">
+                        {% if league_stats.pool_info.has_pool %}
+                        <a href="{{ url_for('pools.manage_pool', pool_id=bookings[0].pool.id) }}" 
+                           class="button is-info is-small">
+                            <span class="icon">
+                                <i class="fas fa-users"></i>
+                            </span>
+                            <span>Manage Pool</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% include 'partials/league_games_table.html' %}
+    </div>
+    
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <a href="{{ url_for('bookings.league_list') }}" class="button is-light">
+                    <span class="icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span>Back to Leagues</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

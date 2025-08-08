@@ -1,0 +1,98 @@
+<div class="table-container">
+    <table class="table is-fullwidth is-hoverable">
+        <thead>
+            <tr>
+                <th>Round</th>
+                <th>Date</th>
+                <th>Session</th>
+                <th>Opponent</th>
+                <th>Venue</th>
+                <th>Teams</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for booking in bookings %}
+            {% set is_upcoming = booking.booking_date >= today %}
+            {% set has_teams = booking.teams|length > 0 %}
+            <tr class="{{ 'has-background-light' if not is_upcoming else '' }}">
+                <td>
+                    <strong>Round {{ loop.index }}</strong>
+                    {% if booking.notes %}
+                    <br><small class="has-text-grey">{{ booking.notes }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ booking.booking_date.strftime('%a %b %d, %Y') }}
+                </td>
+                <td>
+                    {% set session_name = sessions.get(booking.session, 'Session ' + booking.session|string) %}
+                    {{ session_name }}
+                </td>
+                <td>
+                    {% if booking.vs %}
+                    {{ booking.vs }}
+                    {% else %}
+                    <span class="has-text-grey">TBD</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if booking.home_away %}
+                    <span class="tag {% if booking.home_away == 'home' %}is-success{% elif booking.home_away == 'away' %}is-info{% else %}is-warning{% endif %}">
+                        {% if booking.home_away == 'home' %}
+                        <span class="icon"><i class="fas fa-home"></i></span>
+                        {% elif booking.home_away == 'away' %}
+                        <span class="icon"><i class="fas fa-plane"></i></span>
+                        {% else %}
+                        <span class="icon"><i class="fas fa-map-marker"></i></span>
+                        {% endif %}
+                        <span>{{ booking.home_away|title }}</span>
+                    </span>
+                    {% else %}
+                    <span class="tag is-light">Home</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if has_teams %}
+                    <span class="tag is-success">{{ booking.teams|length }} teams</span>
+                    {% else %}
+                    <span class="tag is-light">No teams</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if not is_upcoming %}
+                    <span class="tag is-dark">Completed</span>
+                    {% elif has_teams %}
+                    <span class="tag is-success">Ready</span>
+                    {% elif is_upcoming and loop.index == 1 %}
+                    <span class="tag is-warning">Setup Needed</span>
+                    {% else %}
+                    <span class="tag is-light">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="buttons are-small">
+                        <a href="{{ url_for('bookings.admin_manage_booking', booking_id=booking.id) }}" 
+                           class="button is-small is-primary">
+                            <span class="icon">
+                                <i class="fas fa-cog"></i>
+                            </span>
+                            <span>Manage</span>
+                        </a>
+                        {% if has_teams %}
+                        <a href="{{ url_for('bookings.admin_manage_teams', booking_id=booking.id) }}" 
+                           class="button is-small is-info">
+                            <span class="icon">
+                                <i class="fas fa-users"></i>
+                            </span>
+                            <span>Teams</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

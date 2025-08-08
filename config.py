@@ -55,6 +55,7 @@ class Config:
         {"name": "Manage Policy Pages", "link": "content.admin_manage_policy_pages"},
         None,
         # Event Management Section
+        {"name": "League Management", "link": "bookings.league_list", "roles": ["Event Manager"]},
         {"name": "Manage Events", "link": "bookings.admin_list_bookings", "roles": ["Event Manager"]},
     ]
 

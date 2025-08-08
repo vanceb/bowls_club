@@ -31,12 +31,20 @@
         </div>
         <div class="level-right">
             <div class="level-item">
-                <a href="{{ url_for('bookings.admin_create_booking') }}" class="button is-primary">
-                    <span class="icon">
-                        <i class="fas fa-plus"></i>
-                    </span>
-                    <span>Create Event</span>
-                </a>
+                <div class="buttons">
+                    <a href="{{ url_for('bookings.league_list') }}" class="button is-info">
+                        <span class="icon">
+                            <i class="fas fa-trophy"></i>
+                        </span>
+                        <span>League Management</span>
+                    </a>
+                    <a href="{{ url_for('bookings.admin_create_booking') }}" class="button is-primary">
+                        <span class="icon">
+                            <i class="fas fa-plus"></i>
+                        </span>
+                        <span>Create Event</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -67,7 +75,7 @@
                     {% endfor %}
                     
                     <!-- Series Groups -->
-                    {% for series_name, series_bookings in series_groups.items() %}
+                    {% for series_id, series_bookings in series_groups.items() %}
                     <tr class="has-background-info-light series-header" style="cursor: pointer;" onclick="toggleSeries('series-{{ loop.index }}')">
                         <td colspan="6">
                             <strong class="has-text-info">
@@ -77,7 +85,7 @@
                                 <span class="icon">
                                     <i class="fas fa-copy"></i>
                                 </span>
-                                {{ series_name }} ({{ series_bookings|length }} events)
+                                {{ series_bookings[0].get_series_name() }} ({{ series_bookings|length }} events)
                             </strong>
                         </td>
                     </tr>

@@ -1,0 +1,176 @@
+<div class="box">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <h4 class="title is-5">Schedule Games</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table class="table is-fullwidth is-hoverable">
+            <thead>
+                <tr>
+                    <th style="width: 5%">#</th>
+                    <th style="width: 20%">Date</th>
+                    <th style="width: 20%">Session</th>
+                    <th style="width: 15%">Venue</th>
+                    <th style="width: 20%">Opponent</th>
+                    <th style="width: 20%">Notes</th>
+                </tr>
+            </thead>
+            <tbody id="schedule-table-body">
+                {% for game in form.games %}
+                <tr class="schedule-row" data-row-index="{{ loop.index0 }}">
+                    <td class="has-text-centered">
+                        <strong>{{ loop.index }}</strong>
+                        {{ game.csrf_token }}
+                    </td>
+                    <td>
+                        {{ game.date(class="input is-small") }}
+                        {% for error in game.date.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {{ game.session(class="select is-small is-fullwidth") }}
+                        {% for error in game.session.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {{ game.venue(class="select is-small is-fullwidth") }}
+                        {% for error in game.venue.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {{ game.opponent(class="input is-small", placeholder="Opposition team") }}
+                        {% for error in game.opponent.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {{ game.notes(class="input is-small", placeholder="Notes") }}
+                        {% for error in game.notes.errors %}
+                            <p class="help is-danger">{{ error }}</p>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% for error in form.games.errors %}
+        <div class="notification is-danger">{{ error }}</div>
+    {% endfor %}
+</div>
+
+
+<script>
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing league schedule JavaScript...');
+    
+    // Auto-populate session when date is selected and show day of week
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    console.log('Found date inputs:', dateInputs.length);
+    
+    dateInputs.forEach((dateInput, index) => {
+        console.log(`Setting up date input ${index}:`, dateInput.name);
+        
+        dateInput.addEventListener('change', function() {
+            console.log('Date changed:', this.value);
+            console.log('Date input parent elements:', {
+                parentNode: this.parentNode?.tagName,
+                grandParent: this.parentNode?.parentNode?.tagName,
+                greatGrandParent: this.parentNode?.parentNode?.parentNode?.tagName
+            });
+            
+            if (this.value) {
+                try {
+                    const selectedDate = new Date(this.value);
+                    const dayOfWeek = selectedDate.getDay();
+                    
+                    // Show day of week as help text
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const dayName = dayNames[dayOfWeek];
+                    console.log('Day of week:', dayName);
+                    
+                    // Check if parentNode exists before trying to use it
+                    if (this.parentNode) {
+                        // Remove existing day indicator
+                        const existingIndicator = this.parentNode.querySelector('.day-indicator');
+                        if (existingIndicator) {
+                            existingIndicator.remove();
+                        }
+                        
+                        // Add day indicator
+                        const dayIndicator = document.createElement('p');
+                        dayIndicator.className = 'help is-info day-indicator';
+                        dayIndicator.textContent = dayName;
+                        this.parentNode.appendChild(dayIndicator);
+                    } else {
+                        console.warn('parentNode not found for date input');
+                    }
+                    
+                    // Auto-populate session when date is selected
+                    // Try multiple ways to find the session select
+                    let sessionSelect = null;
+                    
+                    // Method 1: Try to find the closest tr
+                    const row = this.closest('tr');
+                    if (row) {
+                        sessionSelect = row.querySelector('select');
+                        console.log('Found session select via tr:', !!sessionSelect);
+                    } else {
+                        console.log('No tr found, trying alternative methods');
+                        
+                        // Method 2: Look for any select in the same form
+                        const form = this.closest('form');
+                        if (form) {
+                            const allSelects = form.querySelectorAll('select');
+                            console.log('Found selects in form:', allSelects.length);
+                            
+                            // Find the select that contains session-related options
+                            for (let select of allSelects) {
+                                const options = Array.from(select.options);
+                                if (options.some(opt => opt.text.includes(':') || opt.text.includes('am') || opt.text.includes('pm'))) {
+                                    sessionSelect = select;
+                                    console.log('Found session select via form search:', !!sessionSelect);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (sessionSelect && (sessionSelect.value === '0' || sessionSelect.value === '')) {
+                        // Auto-select first available session if none selected
+                        if (sessionSelect.options.length > 1) {
+                            sessionSelect.selectedIndex = 1;
+                            console.log('Auto-selected session:', sessionSelect.value);
+                        }
+                    }
+                    
+                    // Convert JS day (0=Sunday) to our dropdown format (0=Monday)
+                    const dropdownDay = (dayOfWeek + 6) % 7;
+                    
+                    // Update pattern day in quick fill modal if it's open
+                    const patternDay = document.getElementById('pattern-day');
+                    const modal = document.getElementById('quick-fill-modal');
+                    if (patternDay && modal && modal.classList.contains('is-active')) {
+                        patternDay.value = dropdownDay;
+                        console.log('Updated pattern day to:', dropdownDay);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error in date change handler:', error);
+                }
+            }
+        });
+    });
+    
+    console.log('League schedule JavaScript initialization complete');
+});
+</script>

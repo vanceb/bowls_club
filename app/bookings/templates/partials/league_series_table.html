@@ -1,0 +1,86 @@
+<div class="table-container">
+    <table class="table is-striped is-hoverable is-fullwidth">
+        <thead>
+            <tr>
+                <th>League Name</th>
+                <th>Progress</th>
+                <th>Pool Members</th>
+                <th>Next Game</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for series in series_groups %}
+            <tr>
+                <td>
+                    <strong>{{ series.series_name }}</strong>
+                </td>
+                <td>
+                    <div class="field is-grouped is-grouped-multiline">
+                        <div class="control">
+                            <div class="tags has-addons">
+                                <span class="tag">{{ series.completed_games }}/{{ series.total_games }}</span>
+                                <span class="tag is-primary">{{ ((series.completed_games / series.total_games) * 100)|round|int }}%</span>
+                            </div>
+                        </div>
+                        <div class="control">
+                            <progress class="progress is-primary is-small" 
+                                      value="{{ series.completed_games }}" 
+                                      max="{{ series.total_games }}" 
+                                      style="width: 100px;">
+                                {{ ((series.completed_games / series.total_games) * 100)|round|int }}%
+                            </progress>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <span class="tag is-info is-light">
+                        <span class="icon">
+                            <i class="fas fa-users"></i>
+                        </span>
+                        <span>
+                            {% if series.primary_booking.pool %}
+                            {{ series.primary_booking.pool.registrations|length }}
+                            {% else %}
+                            0
+                            {% endif %}
+                        </span>
+                    </span>
+                </td>
+                <td>
+                    {% if series.next_game %}
+                    <span class="tag is-light">
+                        <span class="icon">
+                            <i class="fas fa-calendar"></i>
+                        </span>
+                        <span>{{ series.next_game.booking_date.strftime('%b %d, %Y') }}</span>
+                    </span>
+                    {% else %}
+                    <span class="has-text-grey">No upcoming games</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="buttons">
+                        <a href="{{ url_for('bookings.league_manage', series_id=series.series_id) }}" 
+                           class="button is-primary is-small">
+                            <span class="icon">
+                                <i class="fas fa-cog"></i>
+                            </span>
+                            <span>Manage</span>
+                        </a>
+                        {% if series.primary_booking.pool %}
+                        <a href="{{ url_for('pools.manage_pool', pool_id=series.primary_booking.pool.id) }}" 
+                           class="button is-info is-small">
+                            <span class="icon">
+                                <i class="fas fa-users"></i>
+                            </span>
+                            <span>Pool</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

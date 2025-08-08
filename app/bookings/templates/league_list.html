@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% set active_page = "bookings" %}
+
+{% block title %}League Management{% endblock %}
+
+{% block page_header %}
+<h1 class="title">League Management</h1>
+<p class="subtitle">Manage all league series and competitions</p>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <h2 class="title is-4">Active Leagues</h2>
+            </div>
+        </div>
+        <div class="level-right">
+            <div class="level-item">
+                <a href="{{ url_for('bookings.league_create') }}" class="button is-primary">
+                    <span class="icon">
+                        <i class="fas fa-plus"></i>
+                    </span>
+                    <span>Create New League</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if series_groups %}
+    {% include 'partials/league_series_table.html' %}
+    {% else %}
+    {% include 'partials/league_empty_state.html' %}
+    {% endif %}
+    
+    <div class="level">
+        <div class="level-left">
+            <div class="level-item">
+                <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
+                    <span class="icon">
+                        <i class="fas fa-arrow-left"></i>
+                    </span>
+                    <span>Back to All Bookings</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

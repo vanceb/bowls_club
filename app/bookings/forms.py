@@ -6,7 +6,7 @@ Forms migrated from main forms.py for booking functionality.
 from datetime import date, timedelta
 from flask import current_app
 from flask_wtf import FlaskForm
-from wtforms import DateField, SelectField, IntegerField, StringField, TextAreaField, HiddenField, SubmitField
+from wtforms import DateField, SelectField, IntegerField, StringField, TextAreaField, HiddenField, SubmitField, FieldList, FormField
 from wtforms.validators import DataRequired, Optional, Length, NumberRange, ValidationError
 
 
@@ -94,3 +94,75 @@ class BookingResponseForm(FlaskForm):
         validators=[DataRequired()]
     )
     submit = SubmitField('Submit Response')
+
+
+# League Management Forms
+
+class LeagueCreateForm(FlaskForm):
+    """Step 1: Basic league details"""
+    league_name = StringField('League Name', validators=[DataRequired(), Length(max=128)])
+    format = SelectField('Format', coerce=int, choices=[], validators=[DataRequired()])
+    event_type = HiddenField('Event Type', default=3)  # Fixed to League
+    gender = SelectField('Gender', coerce=int, choices=[], validators=[DataRequired()])
+    submit = SubmitField('Next: Schedule Games')
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Populate format choices from config
+        self.format.choices = [
+            (value, key) for key, value in current_app.config.get('EVENT_FORMATS', {}).items()
+        ]
+        
+        # Event type is fixed to League (ID 3) - set the data value
+        self.event_type.data = 3
+        
+        # Populate gender choices from config
+        self.gender.choices = [
+            (value, key) for key, value in current_app.config.get('EVENT_GENDERS', {}).items()
+        ]
+
+
+class GameScheduleRowForm(FlaskForm):
+    """Individual game in the league schedule table"""
+    date = DateField('Date', validators=[Optional()])
+    session = SelectField('Session', coerce=int, choices=[], validators=[Optional()])
+    venue = SelectField('Venue', choices=[
+        ('home', 'Home'),
+        ('away', 'Away'),
+        ('neutral', 'Neutral')
+    ], validators=[Optional()], default='home')
+    opponent = StringField('Opponent', validators=[Optional(), Length(max=128)])
+    notes = StringField('Notes', validators=[Optional(), Length(max=255)])
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populate session choices from config
+        self.session.choices = [(0, 'Select session...')] + [
+            (key, value) for key, value in current_app.config.get('DAILY_SESSIONS', {}).items()
+        ]
+
+
+class LeagueScheduleForm(FlaskForm):
+    """Step 2: Schedule league games in table format"""
+    games = FieldList(FormField(GameScheduleRowForm), min_entries=1)
+    
+    # Action buttons
+    add_row = SubmitField('Add Row')
+    create_all = SubmitField('Create All Games')
+    cancel = SubmitField('Cancel')
+    
+    def validate_games(self, field):
+        """Validate that at least one game has a date and no duplicate dates"""
+        valid_games = [game for game in field.data if game.get('date')]
+        
+        if not valid_games:
+            raise ValidationError('Please schedule at least one game.')
+        
+        # Check for duplicate dates
+        dates_seen = set()
+        for game in valid_games:
+            game_date = game.get('date')
+            if game_date in dates_seen:
+                raise ValidationError(f'Duplicate date found: {game_date.strftime("%Y-%m-%d")}')
+            dates_seen.add(game_date)
