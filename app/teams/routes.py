@@ -423,26 +423,8 @@ def update_member_availability(team_member_id):
 
 
 
-@bp.route('/list')
-@login_required
-@role_required('Event Manager')
-def list_teams():
-    """
-    List all teams
-    """
-    try:
-        # Get all teams
-        teams = db.session.scalars(
-            sa.select(Team)
-            .order_by(Team.team_name)
-        ).all()
-        
-        return render_template('list_teams.html', teams=teams)
-        
-    except Exception as e:
-        current_app.logger.error(f"Error listing teams: {str(e)}")
-        flash('An error occurred while loading teams.', 'error')
-        return redirect(url_for('main.index'))
+# Removed list_teams route - teams are now managed through booking context
+# Use bookings.admin_list_bookings -> admin_manage_teams workflow instead
 
 
 # API endpoints for team management

@@ -56,7 +56,6 @@ class Config:
         None,
         # Event Management Section
         {"name": "Manage Events", "link": "bookings.admin_list_bookings", "roles": ["Event Manager"]},
-        {"name": "Manage Teams", "link": "teams.list_teams", "roles": ["Event Manager"]},
     ]
 
 # Config options relating to Posts    

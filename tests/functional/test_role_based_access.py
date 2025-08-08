@@ -31,7 +31,7 @@ class TestAdminAccess:
             '/events/',  # Event management
             '/events/create',  # Event creation
             '/pools/',  # Pool management
-            '/teams/list',  # Team management
+            '/bookings/admin/list',  # Team management via bookings
             '/content/admin/write_post',  # Content creation
             '/content/admin/manage_posts',  # Content management
             '/content/admin/manage_policy_pages',  # Policy management
@@ -99,7 +99,7 @@ class TestEventManagerAccess:
             '/events/',  # List events
             '/events/create',  # Create events
             '/pools/',  # Pool management
-            '/teams/list',  # Team management
+            '/bookings/admin/list',  # Team management via bookings
         ]
         
         for route in event_manager_routes:
@@ -175,7 +175,7 @@ class TestUserManagerAccess:
             '/events/',
             '/events/create',
             '/pools/',
-            '/teams/list',
+            '/bookings/admin/list',
         ]
         
         for route in event_routes:
@@ -224,7 +224,7 @@ class TestContentManagerAccess:
             '/events/',
             '/events/create',
             '/pools/',
-            '/teams/list',
+            '/bookings/admin/list',
         ]
         
         for route in event_routes:

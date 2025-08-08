@@ -271,7 +271,7 @@ class TestAccessControl:
             '/events/',
             '/events/create',
             '/pools/',
-            '/teams/list'
+            '/bookings/admin/list'
         ]
         
         for route in event_manager_routes:

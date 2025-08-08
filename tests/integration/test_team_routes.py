@@ -629,54 +629,8 @@ class TestTeamRoutes:
                                            data=form_data)
         assert response.status_code == 302  # Redirect with permission error
     
-    def test_list_teams_requires_login(self, client):
-        """Test list teams requires authentication."""
-        response = client.get('/teams/list')
-        assert response.status_code == 302  # Redirect to login
-    
-    def test_list_teams_requires_event_manager_role(self, authenticated_client):
-        """Test list teams requires Event Manager role."""
-        response = authenticated_client.get('/teams/list')
-        assert response.status_code == 403  # Forbidden
-    
-    def test_list_teams_loads(self, admin_client, db_session, test_member):
-        """Test list teams page loads for Event Manager."""
-        # Create test teams
-        booking1 = Booking(
-            booking_date=date.today() + timedelta(days=7),
-            session=1,
-            rink_count=2,
-            organizer_id=test_member.id,
-            booking_type='event'
-        )
-        booking2 = Booking(
-            booking_date=date.today() + timedelta(days=8),
-            session=2,
-            rink_count=1,
-            organizer_id=test_member.id,
-            booking_type='rollup'
-        )
-        db_session.add_all([booking1, booking2])
-        db_session.flush()
-        
-        team1 = Team(
-            team_name='Team Alpha',
-            created_by=test_member.id,
-            booking_id=booking1.id
-        )
-        team2 = Team(
-            team_name='Team Beta',
-            created_by=test_member.id,
-            booking_id=booking2.id
-        )
-        db_session.add_all([team1, team2])
-        db_session.commit()
-        
-        response = admin_client.get('/teams/list')
-        
-        assert response.status_code == 200
-        assert b'Team Alpha' in response.data
-        assert b'Team Beta' in response.data
+    # Removed list_teams tests - functionality moved to booking-centric team management
+    # Teams are now managed through bookings.admin_list_bookings -> admin_manage_teams workflow
     
     def test_api_get_team_requires_login(self, client):
         """Test API get team requires authentication."""
