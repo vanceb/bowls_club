@@ -228,7 +228,17 @@ class BookingManagementForm(FlaskForm):
     
     # Series Management
     series_id = HiddenField('Series ID')
-    create_series = BooleanField('Create as Series (multiple dates)', default=False)
+    series_action = SelectField(
+        'Series Action',
+        choices=[
+            ('no_change', 'No change'),
+            ('remove_series', 'Remove from series'),
+            ('create_new', 'Create new series'),
+            ('join_existing', 'Join existing series')
+        ],
+        default='no_change',
+        validators=[Optional()]
+    )
     series_name = StringField('Series Name', validators=[Optional(), Length(max=256)])
     existing_series = SelectField('Add to Existing Series', 
                                 choices=[('', 'Select a series...')], 

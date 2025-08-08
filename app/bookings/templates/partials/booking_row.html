@@ -17,8 +17,10 @@
         {{ stats.total_teams }} teams
     </td>
     <td>
-        {% if stats.has_pool %}
+        {% if stats.has_own_pool %}
         <span class="tag is-info">{{ stats.pool_members }} registered</span>
+        {% elif stats.has_shared_pool %}
+        <span class="tag is-success">Series Pool</span>
         {% else %}
         <span class="tag is-light">No Pool</span>
         {% endif %}

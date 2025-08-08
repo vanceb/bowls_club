@@ -2,6 +2,7 @@
 
 # Fresh Installation Setup Script for Bowls Club Application
 # This script automates the complete setup process for a fresh installation
+# Updated for booking-centric architecture with pool strategy support
 
 set -e  # Exit on any error
 
@@ -74,14 +75,28 @@ else
     echo "✓ Database migrations already initialized"
 fi
 
-# Step 2: Run database migration
-echo "🔧 Creating database schema..."
-flask db upgrade
+# Step 2: Handle database migration state
+echo "🔧 Setting up database schema..."
+
+# If we just deleted the database, we need to create it from scratch
+# First try to upgrade normally, if that fails, reset the migration state
+if ! flask db upgrade 2>/dev/null; then
+    echo "🔧 Database not in sync with migrations, resetting migration state..."
+    # Create the database file first
+    touch instance/app.db
+    # Reset migration state to current migration
+    flask db stamp head
+    echo "✓ Migration state reset"
+    
+    # Now upgrade should work
+    flask db upgrade
+fi
+
 echo "✓ Database schema created"
 
-# Step 3: Populate initial data
+# Step 4: Populate initial data
 echo "🔧 Populating initial data..."
-python create_initial_data.py
+python bin/create_initial_data.py
 echo "✓ Initial data populated"
 
 echo ""
@@ -95,8 +110,9 @@ echo "To start the application:"
 echo "  flask run"
 echo ""
 echo "Initial Setup Complete:"
-echo "  - Database schema created"
-echo "  - Core roles established" 
+echo "  - Database schema created with booking-centric architecture"
+echo "  - Pool strategy system enabled (EVENT_POOL_STRATEGY configuration)"
+echo "  - Core roles established (User Manager, Content Manager, Event Manager)" 
 echo "  - First admin user created during setup"
 echo ""
 echo "Next steps:"
@@ -105,7 +121,9 @@ echo "  2. Open http://localhost:5000 in your browser"
 echo "  3. Log in using the admin credentials you just created"
 echo "  4. Create additional member accounts for your club"
 echo "  5. Assign roles to members as needed"
-echo "  6. Configure events and teams for your club"
+echo "  6. Create bookings for your club's games and events"
+echo "  7. Use pools for member registration (based on EVENT_POOL_STRATEGY)"
+echo "  8. Set up teams for individual games as needed"
 echo ""
 echo "For detailed instructions, see FRESH_INSTALL.md"
 echo ""

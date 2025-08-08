@@ -189,42 +189,119 @@
                     <div class="tab-content" data-content="series">
                         {{ form.series_id }}
                         
-                        
-                        <div class="field">
-                            <div class="control">
-                                <label class="checkbox">
-                                    {{ form.create_series }}
-                                    Series Booking
-                                </label>
+                        <!-- Series Configuration Card -->
+                        <div class="card" id="seriesPanel" style="display: none;">
+                            <header class="card-header has-background-white" id="seriesPanelToggle" onclick="toggleSeriesPanel()" 
+                                    style="cursor: pointer; user-select: none;" 
+                                    title="Click to expand or collapse series options"
+                                    role="button" tabindex="0" 
+                                    aria-expanded="false" 
+                                    aria-controls="seriesContent"
+                                    onkeypress="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSeriesPanel();}">
+                                <div class="card-header-title">
+                                    <span class="icon is-small mr-2" id="seriesToggleIcon">
+                                        <i class="fas fa-chevron-right"></i>
+                                    </span>
+                                    <span>Series Configuration</span>
+                                    <span class="ml-2 has-tooltip-bottom" data-tooltip="Series allows sharing a single pool across multiple related events">
+                                        <span class="icon is-small has-text-grey-light">
+                                            <i class="fas fa-info-circle"></i>
+                                        </span>
+                                    </span>
+                                    <!-- Strategy tag moved inline for better hierarchy -->
+                                    <span class="ml-auto">
+                                        <span class="tag" id="seriesStrategyTag"></span>
+                                    </span>
+                                </div>
+                            </header>
+                            
+                            <div class="card-content is-hidden" id="seriesContent">
+                                <!-- Current Series Status Display -->
+                                <div class="field">
+                                    <label class="label">Current Series Status</label>
+                                    <div class="box has-background-light" id="currentSeriesStatus">
+                                        <div class="media">
+                                            <div class="media-left">
+                                                <span class="icon is-large has-text-info">
+                                                    <i class="fas fa-info-circle fa-2x"></i>
+                                                </span>
+                                            </div>
+                                            <div class="media-content">
+                                                <p class="subtitle is-6" id="seriesStatusText">Loading series status...</p>
+                                                <p class="content is-small has-text-grey" id="seriesStatusDetails"></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Series Action Dropdown -->
+                                <div class="field">
+                                    <label class="label">{{ form.series_action.label }}</label>
+                                    <div class="control has-icons-left">
+                                        <div class="select is-fullwidth">
+                                            {{ form.series_action }}
+                                        </div>
+                                        <span class="icon is-small is-left">
+                                            <i class="fas fa-cog"></i>
+                                        </span>
+                                    </div>
+                                    <p class="help">Select the action you want to perform with this event's series configuration</p>
+                                    {% for error in form.series_action.errors %}
+                                        <p class="help is-danger">{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Series Name Field - Show when creating new series -->
+                                <div class="field" id="seriesNameField" style="display: none;">
+                                    <label class="label">{{ form.series_name.label }}</label>
+                                    <div class="control has-icons-left">
+                                        {{ form.series_name(class="input", placeholder="e.g. Summer League 2024") }}
+                                        <span class="icon is-small is-left">
+                                            <i class="fas fa-tag"></i>
+                                        </span>
+                                    </div>
+                                    <p class="help">Enter a descriptive name for the new series</p>
+                                    {% for error in form.series_name.errors %}
+                                        <p class="help is-danger">{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Existing Series Dropdown - Show when joining existing series -->
+                                <div class="field" id="existingSeriesField" style="display: none;">
+                                    <label class="label">{{ form.existing_series.label }}</label>
+                                    <div class="control has-icons-left">
+                                        <div class="select is-fullwidth">
+                                            {{ form.existing_series }}
+                                        </div>
+                                        <span class="icon is-small is-left">
+                                            <i class="fas fa-list"></i>
+                                        </span>
+                                    </div>
+                                    <p class="help">Choose an existing series to join this event to</p>
+                                    {% for error in form.existing_series.errors %}
+                                        <p class="help is-danger">{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                                
+                                <div class="message is-info" id="seriesInfoMessage">
+                                    <div class="message-header">
+                                        <p>Series Benefits</p>
+                                    </div>
+                                    <div class="message-body">
+                                        <div class="content">
+                                            <ul>
+                                                <li><strong>Event Strategy:</strong> Players register once for the entire series</li>
+                                                <li><strong>Shared Pool:</strong> Single pool for team selection across all events</li>
+                                                <li><strong>Easier Management:</strong> Manage recurring events as a unified group</li>
+                                                <li><strong>Player Convenience:</strong> Reduces repeated registration for regular participants</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <p class="help">This booking is part of a series with multiple dates</p>
-                        </div>
-                        
-                        <div class="field">
-                            <label class="label">{{ form.series_name.label }}</label>
-                            <div class="control">
-                                {{ form.series_name(class="input") }}
-                            </div>
-                            {% for error in form.series_name.errors %}
-                                <p class="help is-danger">{{ error }}</p>
-                            {% endfor %}
-                            <p class="help">Optional: Give this series a descriptive name</p>
                         </div>
                         
                         <hr>
-                        
-                        <div class="field">
-                            <label class="label">{{ form.existing_series.label }}</label>
-                            <div class="control">
-                                <div class="select is-fullwidth">
-                                    {{ form.existing_series }}
-                                </div>
-                            </div>
-                            {% for error in form.existing_series.errors %}
-                                <p class="help is-danger">{{ error }}</p>
-                            {% endfor %}
-                            <p class="help">Add this booking to an existing series</p>
-                        </div>
                         
                         <div class="notification is-warning">
                             <p><strong>Duplication Options:</strong></p>
@@ -357,6 +434,18 @@
 </div>
 
 <script>
+// Configuration data from Flask
+const EVENT_TYPES = {{ config.EVENT_TYPES | tojson }};
+const EVENT_POOL_STRATEGY = {{ config.EVENT_POOL_STRATEGY | tojson }};
+
+// Current booking state for proper initialization
+const CURRENT_BOOKING = {
+    series_id: "{{ booking.series_id or '' }}",
+    series_name: "{{ booking.get_series_name() if booking.series_id else '' }}",
+    series_count: {{ booking.get_series_bookings()|length if booking.series_id else 1 }},
+    has_series: {{ 'true' if booking.series_id else 'false' }}
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Tab switching functionality
     const tabs = document.querySelectorAll('.tabs li');
@@ -379,50 +468,274 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Handle series dropdown selection
-    const existingSeriesDropdown = document.getElementById('existing_series');
-    const createSeriesCheckbox = document.getElementById('create_series');
-    const seriesIdField = document.getElementById('series_id');
-    const seriesNameField = document.getElementById('series_name');
+    // Initialize series panel based on current event type
+    initializeSeriesPanel();
     
-    if (existingSeriesDropdown && createSeriesCheckbox) {
-        existingSeriesDropdown.addEventListener('change', function() {
-            if (this.value) {
-                // A series was selected
-                const selectedSeriesId = this.value;
-                const selectedSeriesName = this.options[this.selectedIndex].text;
-                
-                // Check the Series Booking checkbox
-                createSeriesCheckbox.checked = true;
-                
-                // Update the hidden series_id field
-                if (seriesIdField) {
-                    seriesIdField.value = selectedSeriesId;
-                }
-                
-                // Update the series_name field
-                if (seriesNameField) {
-                    seriesNameField.value = selectedSeriesName;
-                }
-                
-                console.log('Series selected:', selectedSeriesId, selectedSeriesName);
-            } else {
-                // No series selected - clear everything
-                createSeriesCheckbox.checked = false;
-                
-                if (seriesIdField) {
-                    seriesIdField.value = '';
-                }
-                
-                if (seriesNameField) {
-                    seriesNameField.value = '';
-                }
-                
-                console.log('Series selection cleared');
-            }
+    // Smart series automation - monitor event type changes
+    const eventTypeDropdown = document.getElementById('event_type');
+    if (eventTypeDropdown) {
+        eventTypeDropdown.addEventListener('change', function() {
+            updateSeriesPanel(parseInt(this.value));
+        });
+    }
+    
+    // Handle series action dropdown changes
+    const seriesActionDropdown = document.getElementById('series_action');
+    if (seriesActionDropdown) {
+        seriesActionDropdown.addEventListener('change', function() {
+            handleSeriesActionChange(this.value);
         });
     }
 });
+
+// Handle series action changes with conditional field display
+function handleSeriesActionChange(action) {
+    const seriesNameField = document.getElementById('seriesNameField');
+    const existingSeriesField = document.getElementById('existingSeriesField');
+    
+    // Hide all conditional fields by default
+    if (seriesNameField) seriesNameField.style.display = 'none';
+    if (existingSeriesField) existingSeriesField.style.display = 'none';
+    
+    // Show relevant fields based on action
+    switch (action) {
+        case 'create_new':
+            if (seriesNameField) seriesNameField.style.display = 'block';
+            break;
+        case 'join_existing':
+            if (existingSeriesField) existingSeriesField.style.display = 'block';
+            break;
+        case 'no_change':
+        case 'remove_series':
+        default:
+            // No additional fields needed
+            break;
+    }
+    
+    console.log('Series action changed to:', action);
+}
+
+// Update series status display
+function updateSeriesStatusDisplay() {
+    const statusText = document.getElementById('seriesStatusText');
+    const statusDetails = document.getElementById('seriesStatusDetails');
+    const statusIcon = document.querySelector('#currentSeriesStatus .icon i');
+    
+    if (!statusText || !statusDetails) return;
+    
+    if (CURRENT_BOOKING.has_series && CURRENT_BOOKING.series_id) {
+        const seriesName = CURRENT_BOOKING.series_name;
+        const eventCount = CURRENT_BOOKING.series_count;
+        
+        if (eventCount > 1) {
+            statusText.textContent = `Part of "${seriesName}" series`;
+            statusDetails.textContent = `This series contains ${eventCount} events in total`;
+            if (statusIcon) {
+                statusIcon.className = 'fas fa-copy fa-2x';
+                statusIcon.parentElement.className = 'icon is-large has-text-success';
+            }
+        } else {
+            statusText.textContent = `Only event in "${seriesName}" series`;
+            statusDetails.textContent = 'This is the only event in this series';
+            if (statusIcon) {
+                statusIcon.className = 'fas fa-file fa-2x';
+                statusIcon.parentElement.className = 'icon is-large has-text-warning';
+            }
+        }
+    } else {
+        statusText.textContent = 'Not part of any series';
+        statusDetails.textContent = 'This event stands alone and is not part of a series';
+        if (statusIcon) {
+            statusIcon.className = 'fas fa-info-circle fa-2x';
+            statusIcon.parentElement.className = 'icon is-large has-text-info';
+        }
+    }
+}
+
+function initializeSeriesPanel() {
+    console.log('Initializing series panel with booking state:', CURRENT_BOOKING);
+    
+    // Initialize series panel based on current event type
+    const eventTypeDropdown = document.getElementById('event_type');
+    if (eventTypeDropdown && eventTypeDropdown.value) {
+        updateSeriesPanel(parseInt(eventTypeDropdown.value));
+    }
+    
+    // Update the series status display
+    updateSeriesStatusDisplay();
+    
+    // Initialize the series action dropdown to "no_change"
+    const seriesActionDropdown = document.getElementById('series_action');
+    if (seriesActionDropdown) {
+        seriesActionDropdown.value = 'no_change';
+        handleSeriesActionChange('no_change');
+        
+        // Also call the status display update after a short delay to ensure DOM is ready
+        setTimeout(updateSeriesStatusDisplay, 100);
+    }
+    
+    // Ensure the series_id hidden field is properly set
+    const seriesIdField = document.getElementById('series_id');
+    if (seriesIdField && CURRENT_BOOKING.series_id) {
+        seriesIdField.value = CURRENT_BOOKING.series_id;
+    }
+}
+
+function updateSeriesPanel(eventTypeId) {
+    const seriesPanel = document.getElementById('seriesPanel');
+    const seriesStrategyTag = document.getElementById('seriesStrategyTag');
+    const seriesInfoMessage = document.getElementById('seriesInfoMessage');
+    
+    if (!seriesPanel || !seriesStrategyTag) return;
+    
+    const strategy = EVENT_POOL_STRATEGY[eventTypeId] || 'none';
+    const eventTypeName = getEventTypeName(eventTypeId);
+    
+    // Update strategy tag with more descriptive text
+    const strategyText = getStrategyDescription(strategy);
+    seriesStrategyTag.textContent = strategyText;
+    seriesStrategyTag.className = 'tag ' + getStrategyTagClass(strategy);
+    
+    // Update tooltip for series panel header
+    const seriesPanelToggle = document.getElementById('seriesPanelToggle');
+    if (seriesPanelToggle) {
+        seriesPanelToggle.title = `Click to expand series options. ${strategyText} for ${eventTypeName} events.`;
+    }
+    
+    switch (strategy) {
+        case 'event':
+            // Competition, League, Other - auto-show and auto-expand
+            seriesPanel.style.display = 'block';
+            // Auto-expand panel for event strategy
+            const seriesContent = document.getElementById('seriesContent');
+            const seriesToggleIcon = document.getElementById('seriesToggleIcon');
+            if (seriesContent) {
+                seriesContent.classList.remove('is-hidden');
+                if (seriesToggleIcon) {
+                    seriesToggleIcon.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                }
+                if (seriesPanelToggle) {
+                    seriesPanelToggle.setAttribute('aria-expanded', 'true');
+                }
+            }
+            // Update info message for event strategy
+            if (seriesInfoMessage) {
+                const messageBody = seriesInfoMessage.querySelector('.message-body .content');
+                if (messageBody) {
+                    messageBody.innerHTML = `
+                        <p><strong>Recommended for ${eventTypeName} events:</strong></p>
+                        <ul>
+                            <li><strong>Event Strategy:</strong> Players register once for the entire series</li>
+                            <li><strong>Shared Pool:</strong> Single pool for team selection across all events</li>
+                            <li><strong>Easier Management:</strong> Manage recurring events as a unified group</li>
+                            <li><strong>Player Convenience:</strong> Reduces repeated registration for regular participants</li>
+                        </ul>
+                    `;
+                }
+            }
+            break;
+            
+        case 'booking':
+            // Social, Friendly - show but collapsed
+            seriesPanel.style.display = 'block';
+            // Ensure panel starts collapsed for booking strategy
+            const seriesContentBooking = document.getElementById('seriesContent');
+            const seriesToggleIconBooking = document.getElementById('seriesToggleIcon');
+            const seriesPanelToggleBooking = document.getElementById('seriesPanelToggle');
+            if (seriesContentBooking) {
+                seriesContentBooking.classList.add('is-hidden');
+                if (seriesToggleIconBooking) {
+                    seriesToggleIconBooking.innerHTML = '<i class="fas fa-chevron-right"></i>';
+                }
+                if (seriesPanelToggleBooking) {
+                    seriesPanelToggleBooking.setAttribute('aria-expanded', 'false');
+                }
+            }
+            // Update info message for booking strategy
+            if (seriesInfoMessage) {
+                const messageBody = seriesInfoMessage.querySelector('.message-body .content');
+                if (messageBody) {
+                    messageBody.innerHTML = `
+                        <p><strong>Optional for ${eventTypeName} events:</strong></p>
+                        <ul>
+                            <li><strong>Booking Strategy:</strong> Each event typically has its own pool</li>
+                            <li><strong>Series Option:</strong> Can still be useful for regular recurring events</li>
+                            <li><strong>Flexibility:</strong> Players can register per event or for the series</li>
+                            <li><strong>Use Case:</strong> Best for weekly social games or friendly matches</li>
+                        </ul>
+                    `;
+                }
+            }
+            break;
+            
+        case 'none':
+            // Roll Up - hide entirely
+            seriesPanel.style.display = 'none';
+            break;
+    }
+}
+
+function getStrategyTagClass(strategy) {
+    switch (strategy) {
+        case 'event':
+            return 'is-success';
+        case 'booking':
+            return 'is-info';
+        case 'none':
+            return 'is-light';
+        default:
+            return 'is-light';
+    }
+}
+
+function getStrategyDescription(strategy) {
+    switch (strategy) {
+        case 'event':
+            return 'Event Strategy - Recommended';
+        case 'booking':
+            return 'Booking Strategy - Optional';
+        case 'none':
+            return 'No Pool Strategy';
+        default:
+            return 'Unknown Strategy';
+    }
+}
+
+function getEventTypeName(eventTypeId) {
+    const typeNames = {
+        1: 'Social',
+        2: 'Competition', 
+        3: 'League',
+        4: 'Friendly',
+        5: 'Roll Up',
+        6: 'Other'
+    };
+    return typeNames[eventTypeId] || 'Unknown';
+}
+
+function toggleSeriesPanel() {
+    const seriesContent = document.getElementById('seriesContent');
+    const seriesToggleIcon = document.getElementById('seriesToggleIcon');
+    const seriesPanelToggle = document.getElementById('seriesPanelToggle');
+    
+    if (!seriesContent || !seriesToggleIcon) return;
+    
+    if (seriesContent.classList.contains('is-hidden')) {
+        // Expand with Bulma animation
+        seriesContent.classList.remove('is-hidden');
+        seriesToggleIcon.innerHTML = '<i class="fas fa-chevron-down"></i>';
+        if (seriesPanelToggle) {
+            seriesPanelToggle.setAttribute('aria-expanded', 'true');
+        }
+    } else {
+        // Collapse with Bulma animation
+        seriesContent.classList.add('is-hidden');
+        seriesToggleIcon.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        if (seriesPanelToggle) {
+            seriesPanelToggle.setAttribute('aria-expanded', 'false');
+        }
+    }
+}
 
 // Modal functions
 function openDuplicateModal() {

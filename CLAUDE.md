@@ -252,6 +252,13 @@ git checkout -b feature/your-new-feature
 - File-based content management for posts and policies
 - `migrations/CLAUDE.md` - Database migration procedures
 
+## Database Commands
+
+- To run database commands while getting info from .flaskenv:
+  - Load environment variables from .flaskenv before running database commands
+  - Use `python-dotenv` to load environment variables
+  - Example: `python -m dotenv run flask db migrate` or `python -m dotenv run flask db upgrade`
+
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
