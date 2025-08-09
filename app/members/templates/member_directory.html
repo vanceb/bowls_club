@@ -13,37 +13,14 @@
     <table class="table is-striped is-hoverable is-fullwidth">
         <thead>
             <tr>
-                <th>First Name</th>
-                <th>Last Name</th>
+                <th>Name</th>
                 <th>Phone</th>
                 <th>Email</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody id="members-table-body">
-            {% for member in members %}
-            <tr>
-                <td>{{ member.firstname }}</td>
-                <td>{{ member.lastname }}</td>
-                <td>
-                    {% if member.share_phone %}
-                        {{ member.phone }}
-                    {% else %}
-                        <span class="has-text-grey-light">
-                            <em>Private</em>
-                        </span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if member.share_email %}
-                        {{ member.email }}
-                    {% else %}
-                        <span class="has-text-grey-light">
-                            <em>Private</em>
-                        </span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
+            <!-- Results will be dynamically loaded here -->
         </tbody>
     </table>
 
@@ -64,11 +41,43 @@
                         
                         // Create cells with proper privacy handling
                         const cellData = [
-                            { content: member.firstname, isHtml: false },
-                            { content: member.lastname, isHtml: false },
+                            { content: `${member.firstname} ${member.lastname}`, isHtml: false },
                             { content: member.share_phone ? member.phone : 'Private', isHtml: false, isPrivate: !member.share_phone },
                             { content: member.share_email ? member.email : 'Private', isHtml: false, isPrivate: !member.share_email }
                         ];
+                        
+                        // Add action buttons
+                        const actionsCell = document.createElement('td');
+                        const buttonsDiv = document.createElement('div');
+                        buttonsDiv.className = 'buttons are-small';
+                        
+                        // Call button (only if phone is available)
+                        if (member.share_phone && member.phone) {
+                            const callButton = document.createElement('a');
+                            callButton.href = `tel:${member.phone}`;
+                            callButton.className = 'button is-small is-info';
+                            callButton.innerHTML = '<span class="icon"><i class="fas fa-phone"></i></span><span>Call</span>';
+                            buttonsDiv.appendChild(callButton);
+                        }
+                        
+                        // Email button (only if email is available)
+                        if (member.share_email && member.email) {
+                            const emailButton = document.createElement('a');
+                            emailButton.href = `mailto:${member.email}`;
+                            emailButton.className = 'button is-small is-primary';
+                            emailButton.innerHTML = '<span class="icon"><i class="fas fa-envelope"></i></span><span>Email</span>';
+                            buttonsDiv.appendChild(emailButton);
+                        }
+                        
+                        // If no actions available, show disabled message
+                        if (buttonsDiv.children.length === 0) {
+                            const noActionSpan = document.createElement('span');
+                            noActionSpan.className = 'has-text-grey-light';
+                            noActionSpan.innerHTML = '<em>Private</em>';
+                            buttonsDiv.appendChild(noActionSpan);
+                        }
+                        
+                        actionsCell.appendChild(buttonsDiv);
                         
                         cellData.forEach(cellInfo => {
                             const cell = document.createElement('td');
@@ -82,6 +91,9 @@
                             }
                             row.appendChild(cell);
                         });
+                        
+                        // Add the actions cell to the row
+                        row.appendChild(actionsCell);
                         
                         tbody.appendChild(row);
                     });

@@ -13,6 +13,16 @@
         </div>
         <div class="level-right">
             <div class="level-item">
+                <div class="select">
+                    <select id="role-filter" onchange="filterUsersByRole()">
+                        <option value="">All Roles</option>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="level-item">
                 <button class="button is-success" onclick="showAddUserModal()">
                     <span class="icon">
                         <i class="fas fa-user-plus"></i>
@@ -213,8 +223,13 @@
         loadUsersWithRoles();
     });
 
-    function loadUsersWithRoles() {
-        fetch('/members/api/v1/users_with_roles')
+    function loadUsersWithRoles(roleFilter = null) {
+        let url = '/members/api/v1/users_with_roles';
+        if (roleFilter) {
+            url += `?role_filter=${roleFilter}`;
+        }
+        
+        fetch(url)
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('users-with-roles-container');
@@ -259,6 +274,11 @@
                 console.error('Error loading users with roles:', error);
                 document.getElementById('users-with-roles-container').innerHTML = '<p class="has-text-danger">Error loading users.</p>';
             });
+    }
+
+    function filterUsersByRole() {
+        const roleFilter = document.getElementById('role-filter').value;
+        loadUsersWithRoles(roleFilter || null);
     }
 
     function showCreateRoleModal() {
@@ -335,8 +355,7 @@
         const roleId = document.getElementById('role-select').value;
         
         if (!selectedUserId || !roleId) {
-            alert('Please select both a user and a role.');
-            return;
+            return; // Silently return without action if validation fails
         }
         
         fetch('/members/admin/add_user_to_role', {
@@ -354,8 +373,8 @@
         .then(data => {
             if (data.success) {
                 closeAddUserModal();
-                loadUsersWithRoles();
-                alert('User added to role successfully!');
+                const roleFilter = document.getElementById('role-filter').value;
+                loadUsersWithRoles(roleFilter || null);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -367,10 +386,6 @@
     }
 
     function removeUserFromRole(userId, roleId) {
-        if (!confirm('Are you sure you want to remove this role from the user?')) {
-            return;
-        }
-        
         fetch('/members/admin/remove_user_from_role', {
             method: 'POST',
             headers: {
@@ -385,8 +400,8 @@
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                loadUsersWithRoles();
-                alert('Role removed from user successfully!');
+                const roleFilter = document.getElementById('role-filter').value;
+                loadUsersWithRoles(roleFilter || null);
             } else {
                 alert('Error: ' + data.error);
             }

@@ -15,11 +15,7 @@
 <table class="table is-striped is-hoverable is-fullwidth">
     <thead>
         <tr>
-            <th>Username</th>
-            <th>First Name</th>
-            <th>Last Name</th>
-            <th>Email</th>
-            <th>Phone</th>
+            <th>Name</th>
             <th>Gender</th>
             <th>Status</th>
             <th>Last Seen</th>
@@ -45,11 +41,7 @@
                     
                     // Create cells and set textContent to prevent XSS
                     const cells = [
-                        member.username,
-                        member.firstname,
-                        member.lastname,
-                        member.email || 'N/A',  // Show N/A if email is null (shouldn't happen for admin users)
-                        member.phone || 'N/A',  // Show N/A if phone is null (shouldn't happen for admin users)
+                        `${member.firstname} ${member.lastname}`,
                         member.gender,
                         member.status,
                         member.last_seen,
