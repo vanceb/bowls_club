@@ -64,6 +64,7 @@
                         if (member.share_email && member.email) {
                             const emailButton = document.createElement('a');
                             emailButton.href = `mailto:${member.email}`;
+                            emailButton.target = '_blank';
                             emailButton.className = 'button is-small is-primary';
                             emailButton.innerHTML = '<span class="icon"><i class="fas fa-envelope"></i></span><span>Email</span>';
                             buttonsDiv.appendChild(emailButton);
