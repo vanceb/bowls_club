@@ -378,6 +378,7 @@ def admin_edit_member(member_id):
             member.email = form.email.data
             member.phone = form.phone.data
             member.username = form.username.data
+            member.gender = form.gender.data if form.gender.data else None
             member.status = form.status.data
             member.share_email = form.share_email.data
             member.share_phone = form.share_phone.data

@@ -42,7 +42,7 @@
                     // Create cells and set textContent to prevent XSS
                     const cells = [
                         `${member.firstname} ${member.lastname}`,
-                        member.gender,
+                        member.gender || '', // Handle null/undefined gender
                         member.status,
                         member.last_seen,
                         member.lockout ? 'Yes' : 'No',

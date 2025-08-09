@@ -110,7 +110,7 @@ class EditMemberForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=15)])
     is_admin = BooleanField('Is Admin')
-    gender = SelectField('Gender', choices=[('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
+    gender = SelectField('Gender', choices=[('', 'Not specified'), ('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other')])
     status = SelectField(
         'Status',
         choices=[
