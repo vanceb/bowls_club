@@ -83,12 +83,14 @@
         {% endfor %}
     </div>
 
+    {% if current_user.is_admin %}
     <div class="field">
         <label class="checkbox">
             {{ form.is_admin }}
             {{ form.is_admin.label.text }}
         </label>
     </div>
+    {% endif %}
 
     <!-- Roles Section -->
     <div class="field">

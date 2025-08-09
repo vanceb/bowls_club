@@ -317,10 +317,14 @@ def admin_manage_members():
     Admin interface for managing members
     """
     try:
+        current_app.logger.info(f"User {current_user.id} accessing manage_members. Is admin: {current_user.is_admin}, Roles: {[role.name for role in current_user.roles]}")
+        
         # Get all members ordered by lastname, firstname
         members = db.session.scalars(
             sa.select(Member).order_by(Member.lastname, Member.firstname)
         ).all()
+        
+        current_app.logger.info(f"Found {len(members)} members for manage_members")
         
         return render_template('member_admin_manage.html', members=members)
         
@@ -344,6 +348,14 @@ def admin_edit_member(member_id):
             return redirect(url_for('members.admin_manage_members'))
         
         form = EditMemberForm(obj=member)
+        
+        # Populate roles field with all available roles
+        all_roles = db.session.scalars(sa.select(Role).order_by(Role.name)).all()
+        form.roles.choices = [(role.id, role.name) for role in all_roles]
+        
+        # Set current member's roles as selected
+        if request.method == 'GET':
+            form.roles.data = [role.id for role in member.roles]
         
         # Handle member deletion
         if request.method == 'POST' and 'delete_member' in request.form:
@@ -370,7 +382,18 @@ def admin_edit_member(member_id):
             member.share_email = form.share_email.data
             member.share_phone = form.share_phone.data
             member.lockout = form.lockout.data
-            member.is_admin = form.is_admin.data
+            
+            # Only allow is_admin changes if current user is an admin
+            if current_user.is_admin:
+                member.is_admin = form.is_admin.data
+            
+            # Update member roles
+            selected_role_ids = form.roles.data or []
+            if selected_role_ids:
+                selected_roles = db.session.scalars(sa.select(Role).where(Role.id.in_(selected_role_ids))).all()
+            else:
+                selected_roles = []
+            member.roles = selected_roles
             
             db.session.commit()
             
@@ -732,6 +755,8 @@ def directory():
     try:
         from flask_paginate import Pagination, get_page_parameter
         
+        current_app.logger.info(f"User {current_user.id} accessing directory. Is admin: {current_user.is_admin}, Roles: {[role.name for role in current_user.roles]}")
+        
         # Get page parameter
         page = request.args.get(get_page_parameter(), type=int, default=1)
         per_page = 20
@@ -744,10 +769,14 @@ def directory():
         # Get total count for pagination
         total = db.session.scalar(sa.select(sa.func.count()).select_from(members_query.subquery()))
         
+        current_app.logger.info(f"Directory found {total} total members")
+        
         # Get paginated members
         members = db.session.scalars(
             members_query.offset((page - 1) * per_page).limit(per_page)
         ).all()
+        
+        current_app.logger.info(f"Directory returning {len(members)} members for page {page}")
         
         # Create pagination object
         pagination = Pagination(page=page, per_page=per_page, total=total,
@@ -824,7 +853,11 @@ def api_search_members():
         route_context = request.args.get('route', 'members')  # 'members' or 'manage_members'
         
         # Determine if user should see admin data and if pending members should be included
-        show_admin_data = current_user.is_authenticated and current_user.is_admin
+        # Admin users have access to everything, or check for User Manager role
+        show_admin_data = current_user.is_authenticated and (
+            current_user.is_admin or 
+            any(role.name == 'User Manager' for role in current_user.roles)
+        )
         include_pending = route_context == 'manage_members' and show_admin_data
         
         if not search_term:
@@ -903,16 +936,29 @@ def api_search_members():
 def api_users_with_roles():
     """
     Get all users with their assigned roles (AJAX endpoint)
-    Admin only access
+    Admin only access. Supports role filtering via ?role_filter=<role_id>
     """
     try:
-        # Get all users who have roles assigned
-        users_with_roles = db.session.scalars(
-            sa.select(Member)
-            .join(Member.roles)
-            .order_by(Member.lastname, Member.firstname)
-            .distinct()
-        ).all()
+        role_filter = request.args.get('role_filter')
+        
+        # Build query based on filter
+        if role_filter:
+            # Filter by specific role
+            users_with_roles = db.session.scalars(
+                sa.select(Member)
+                .join(Member.roles)
+                .where(Role.id == int(role_filter))
+                .order_by(Member.lastname, Member.firstname)
+                .distinct()
+            ).all()
+        else:
+            # Get all users who have roles assigned
+            users_with_roles = db.session.scalars(
+                sa.select(Member)
+                .join(Member.roles)
+                .order_by(Member.lastname, Member.firstname)
+                .distinct()
+            ).all()
         
         # Format results
         results = []
