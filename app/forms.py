@@ -226,6 +226,15 @@ class BookingManagementForm(FlaskForm):
         validators=[Optional()]
     )
     
+    # Organizer Assignment  
+    organizer_id = SelectField(
+        'Event Organizer', 
+        coerce=lambda x: int(x) if x else None,  # Handle empty strings
+        choices=[],  # Will be populated dynamically with active members
+        validators=[Optional()],
+        render_kw={'class': 'select'}
+    )
+    
     # Series Management
     series_id = HiddenField('Series ID')
     series_action = SelectField(
@@ -278,6 +287,22 @@ class BookingManagementForm(FlaskForm):
             # Populate venue choices
             self.home_away.choices = [('', 'Select venue...')] + [
                 (value, key) for key, value in current_app.config.get('HOME_AWAY_OPTIONS', {}).items()
+            ]
+            
+            # Populate organizer choices with active members
+            from app.models import Member
+            from app import db
+            import sqlalchemy as sa
+            
+            active_members = db.session.scalars(
+                sa.select(Member)
+                .where(Member.status.in_(['Full', 'Life', 'Social']))
+                .order_by(Member.firstname, Member.lastname)
+            ).all()
+            
+            self.organizer_id.choices = [(None, 'Select organizer...')] + [
+                (member.id, f"{member.firstname} {member.lastname}")
+                for member in active_members
             ]
             
             # Set rink count validation

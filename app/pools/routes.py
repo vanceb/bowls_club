@@ -21,7 +21,7 @@ from app.pools.utils import (
     can_user_manage_pool, get_pool_statistics,
     create_pool_for_booking
 )
-from app.bookings.utils import can_user_manage_event
+from app.bookings.utils import can_user_manage_booking
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete,
     audit_log_security_event, get_model_changes

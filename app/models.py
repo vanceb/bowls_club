@@ -275,6 +275,7 @@ class Booking(db.Model):
     
     # Series grouping fields (new functionality)
     series_id: so.Mapped[Optional[str]] = so.mapped_column(sa.String(36), nullable=True)  # UUID for grouping related bookings
+    series_name: so.Mapped[Optional[str]] = so.mapped_column(sa.String(256), nullable=True)  # Display name for series (stored in primary booking)
     series_commitment_required: so.Mapped[bool] = so.mapped_column(sa.Boolean, nullable=False, default=False)
     
     # Roll-up booking fields (preserved)
@@ -408,15 +409,30 @@ class Booking(db.Model):
         return self.series_commitment_required
     
     def get_series_name(self):
-        """Get a human-readable series name"""
+        """Get a human-readable series name from the primary booking"""
         if not self.series_id:
             return self.name
         
-        # For series, use the name with series indicator
-        series_bookings = self.get_series_bookings()
-        if len(series_bookings) > 1:
-            return f"{self.name} (Series)"
-        return self.name
+        # If this booking has a series_name (i.e., it's the primary), return it
+        if self.series_name:
+            return self.series_name
+            
+        # Otherwise, find the primary booking in the series and get its series_name
+        from app import db
+        import sqlalchemy as sa
+        
+        primary_booking = db.session.scalar(
+            sa.select(Booking)
+            .where(Booking.series_id == self.series_id)
+            .where(Booking.series_name.isnot(None))
+            .limit(1)
+        )
+        
+        if primary_booking and primary_booking.series_name:
+            return primary_booking.series_name
+            
+        # Fallback to the old behavior if no series_name is set
+        return f"{self.name} (Series)"
 
     # Pool Strategy Methods (new functionality)
     def get_pool_strategy(self) -> str:

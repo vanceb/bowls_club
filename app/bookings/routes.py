@@ -14,7 +14,7 @@ from app.bookings import bp
 from app.models import Booking, Member, Team
 from app.routes import role_required
 from app.bookings.utils import add_home_games_filter
-from app.bookings.utils import can_user_manage_event
+from app.bookings.utils import can_user_manage_booking
 from app.audit import audit_log_create, audit_log_update, audit_log_delete, audit_log_bulk_operation, audit_log_security_event, get_model_changes
 
 
@@ -426,10 +426,10 @@ def api_update_booking(booking_id):
                 'error': 'Booking not found'
             }), 404
         
-        # Check permissions - must be able to manage the associated event
-        if booking.event and not can_user_manage_event(current_user, booking.event):
+        # Check permissions - must be able to manage the booking
+        if not can_user_manage_booking(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized API attempt to update booking {booking_id} for event {booking.event.id}')
+                                   f'Unauthorized API attempt to update booking {booking_id}')
             return jsonify({
                 'success': False,
                 'error': 'Permission denied'
@@ -503,10 +503,10 @@ def api_delete_booking(booking_id):
                 'error': 'Booking not found'
             }), 404
         
-        # Check permissions - must be able to manage the associated event
-        if booking.event and not can_user_manage_event(current_user, booking.event):
+        # Check permissions - must be able to manage the booking
+        if not can_user_manage_booking(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
-                                   f'Unauthorized API attempt to delete booking {booking_id} for event {booking.event.id}')
+                                   f'Unauthorized API attempt to delete booking {booking_id}')
             return jsonify({
                 'success': False,
                 'error': 'Permission denied'
@@ -553,7 +553,7 @@ def admin_manage_teams(booking_id):
             return redirect(url_for('bookings.admin_list_bookings'))
         
         # Check if user has permission to manage teams
-        if not current_user.is_admin and booking.organizer_id != current_user.id:
+        if not can_user_manage_booking(current_user, booking):
             audit_log_security_event('ACCESS_DENIED', 
                                    f'Unauthorized attempt to manage teams for booking {booking_id}')
             flash('You do not have permission to manage teams for this booking.', 'error')
@@ -1204,7 +1204,7 @@ def admin_manage_booking(booking_id):
     """
     try:
         from app.forms import BookingManagementForm
-        from app.bookings.utils import can_user_manage_booking, create_booking_with_defaults
+        from app.bookings.utils import can_user_manage_booking, create_booking_with_defaults, get_effective_organizer_for_booking, is_primary_booking_in_series
         
         
         booking = db.session.get(Booking, booking_id)
@@ -1270,6 +1270,14 @@ def admin_manage_booking(booking_id):
         if booking.series_id:
             current_app.logger.info(f"Current booking series name: {booking.get_series_name()}")
         
+        # Get series context
+        is_primary = is_primary_booking_in_series(booking)
+        effective_organizer = get_effective_organizer_for_booking(booking)
+        primary_booking = None
+        if booking.series_id and not is_primary:
+            from app.bookings.utils import get_primary_booking_in_series
+            primary_booking = get_primary_booking_in_series(booking.series_id)
+        
         if request.method == 'GET':
             # Populate form with current booking data
             form.name.data = booking.name
@@ -1277,20 +1285,237 @@ def admin_manage_booking(booking_id):
             form.gender.data = booking.gender
             form.format.data = booking.format
             form.scoring.data = booking.scoring
-            form.has_pool.data = booking.pool is not None
             form.booking_date.data = booking.booking_date
             form.session.data = booking.session
             form.rink_count.data = booking.rink_count
             form.vs.data = booking.vs
             form.home_away.data = booking.home_away
+            
+            # For organizer: show direct organizer for primary bookings, effective organizer for others
+            if is_primary or not booking.series_id:
+                form.organizer_id.data = booking.organizer_id
+            else:
+                # Non-primary series booking - show the effective organizer (read-only context)
+                form.organizer_id.data = effective_organizer.id if effective_organizer else None
+            
             form.series_id.data = booking.series_id if hasattr(booking, 'series_id') else None
-            form.series_name.data = booking.get_series_name() if booking.series_id else None
+            form.series_name.data = booking.series_name if booking.series_id else None
         
         if request.method == 'POST':
             # Check if this is a duplicate action from the modal
             action = request.form.get('action')
+            current_app.logger.info(f"POST request for booking {booking_id} with action: '{action}'")
+            current_app.logger.info(f"All form data keys: {list(request.form.keys())}")
+            for key, value in request.form.items():
+                current_app.logger.info(f"  {key}: '{value}'")
             
-            if action == 'duplicate':
+            if action == 'toggle_pool':
+                # Handle pool toggle - much simpler logic
+                try:
+                    from app.models import Pool
+                    from app.audit import audit_log_create, audit_log_update, audit_log_delete
+                    
+                    if not booking.pool:
+                        # No pool exists - create and open it
+                        new_pool = Pool(booking_id=booking.id, is_open=True)
+                        db.session.add(new_pool)
+                        booking.has_pool = True
+                        db.session.commit()
+                        audit_log_create('Pool', new_pool.id, f'Created pool for booking: {booking.name}')
+                        flash('Pool created and opened for registration!', 'success')
+                    elif booking.pool.is_open:
+                        # Pool exists and is open - close it
+                        booking.pool.close_pool()
+                        db.session.commit()
+                        audit_log_update('Pool', booking.pool.id, f'Closed pool for booking: {booking.name}')
+                        flash('Pool closed for registration.', 'info')
+                    else:
+                        # Pool exists and is closed - reopen it
+                        booking.pool.reopen_pool()
+                        db.session.commit()
+                        audit_log_update('Pool', booking.pool.id, f'Reopened pool for booking: {booking.name}')
+                        flash('Pool reopened for registration!', 'success')
+                        
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error toggling pool for booking {booking_id}: {str(e)}")
+                    flash('Error occurred while toggling pool status.', 'error')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+            
+            elif action == 'create_series':
+                # Handle simple series creation - convert standalone booking to series with pool
+                try:
+                    if booking.series_id:
+                        flash('This booking is already part of a series.', 'error')
+                        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                    # Generate new series_id using existing mechanism
+                    import uuid
+                    new_series_id = str(uuid.uuid4())
+                    booking.series_id = new_series_id
+                    booking.series_name = f"{booking.name} Series"  # Default series name
+                    
+                    # Create pool for the series if one doesn't exist
+                    pool_created = False
+                    if not booking.pool:
+                        from app.models import Pool
+                        new_pool = Pool(booking_id=booking.id, is_open=True)
+                        db.session.add(new_pool)
+                        booking.has_pool = True
+                        pool_created = True
+                        current_app.logger.info(f"Created pool for new series booking {booking.id}")
+                    
+                    db.session.commit()
+                    
+                    # Audit log the series creation and pool creation
+                    audit_log_update('Booking', booking.id, 
+                                   f'Created new series for booking: {booking.name}')
+                    if pool_created:
+                        audit_log_create('Pool', new_pool.id, 
+                                       f'Created pool for new series: {booking.name}')
+                    
+                    flash(f'Successfully created series for "{booking.name}" with pool. You can now duplicate this booking to add more events to the series.', 'success')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error creating series for booking {booking_id}: {str(e)}")
+                    flash('Error occurred while creating series.', 'error')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+
+            elif action == 'save_booking':
+                # Handle regular booking form save
+                current_app.logger.info(f"Processing save_booking action for booking {booking_id}")
+                
+                # Process the main booking form normally
+                if form.validate_on_submit():
+                    # Update booking fields from form data
+                    booking.name = form.name.data
+                    booking.event_type = form.event_type.data
+                    booking.format = form.format.data  
+                    booking.gender = form.gender.data
+                    booking.scoring = form.scoring.data
+                    booking.booking_date = form.booking_date.data
+                    booking.session = form.session.data
+                    booking.rink_count = form.rink_count.data
+                    booking.vs = form.vs.data
+                    booking.home_away = form.home_away.data
+                    booking.organizer_id = form.organizer_id.data if form.organizer_id.data else None
+                    
+                    try:
+                        db.session.commit()
+                        from app.audit import audit_log_update
+                        audit_log_update('Booking', booking.id, f'Updated booking: {booking.name}')
+                        flash('Booking updated successfully!', 'success')
+                    except Exception as e:
+                        db.session.rollback()
+                        current_app.logger.error(f"Error saving booking {booking_id}: {str(e)}")
+                        flash('Error occurred while saving booking.', 'error')
+                else:
+                    current_app.logger.warning(f"Form validation failed for save_booking: {form.errors}")
+                    flash('Form validation failed. Please check your inputs.', 'error')
+                
+                return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+            
+            elif action == 'save_series':
+                # Handle Series Management tab field updates
+                try:
+                    current_app.logger.info(f"Processing save_series action for booking {booking_id}")
+                    
+                    # Simple CSRF validation for the series management form
+                    from flask_wtf import FlaskForm
+                    csrf_form = FlaskForm()
+                    if not csrf_form.validate_on_submit():
+                        flash('Security validation failed.', 'error')
+                        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                    changes_made = False
+                    
+                    # Update series name if this is a primary booking and series_name is provided
+                    if is_primary_booking_in_series(booking):
+                        new_series_name = request.form.get('series_name', '').strip()
+                        if new_series_name:
+                            old_series_name = booking.series_name
+                            if old_series_name != new_series_name:
+                                booking.series_name = new_series_name
+                                changes_made = True
+                                current_app.logger.info(f"Updated series name from '{old_series_name}' to '{new_series_name}'")
+                    
+                    # Update organizer if allowed (primary bookings or non-series bookings)
+                    if not booking.series_id or is_primary_booking_in_series(booking):
+                        new_organizer_id_str = request.form.get('organizer_id', '')
+                        if new_organizer_id_str:
+                            old_organizer_id = booking.organizer_id
+                            new_organizer_id = int(new_organizer_id_str) if new_organizer_id_str != '' else None
+                            if old_organizer_id != new_organizer_id:
+                                booking.organizer_id = new_organizer_id
+                                changes_made = True
+                                current_app.logger.info(f"Updated organizer from '{old_organizer_id}' to '{new_organizer_id}'")
+                    
+                    if changes_made:
+                        db.session.commit()
+                        from app.audit import audit_log_update
+                        audit_log_update('Booking', booking.id, f'Updated series management fields for booking: {booking.name}')
+                        flash('Series management fields updated successfully!', 'success')
+                    else:
+                        flash('No changes were made.', 'info')
+                    
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error saving series management fields for booking {booking_id}: {str(e)}")
+                    flash('Error occurred while saving changes.', 'error')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+
+            elif action == 'delete_series':
+                # Handle series deletion - delete ALL bookings in the series
+                try:
+                    if not booking.series_id:
+                        flash('This booking is not part of a series.', 'error')
+                        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                    from app.audit import audit_log_delete, audit_log_bulk_operation
+                    
+                    # Get all bookings in the series for counting and audit
+                    series_bookings = db.session.scalars(
+                        sa.select(Booking).where(Booking.series_id == booking.series_id)
+                    ).all()
+                    
+                    if not series_bookings:
+                        flash('No bookings found in this series.', 'error')
+                        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+                    
+                    series_name = booking.get_series_name()
+                    booking_count = len(series_bookings)
+                    booking_names = [b.name for b in series_bookings]
+                    
+                    # Delete all bookings in the series (cascades to pools, teams, registrations)
+                    for series_booking in series_bookings:
+                        db.session.delete(series_booking)
+                    
+                    db.session.commit()
+                    
+                    # Audit log the bulk deletion
+                    audit_log_bulk_operation(
+                        'SERIES_DELETE', 
+                        'Booking', 
+                        booking_count, 
+                        f'Deleted entire series "{series_name}" containing {booking_count} events: {", ".join(booking_names)}'
+                    )
+                    
+                    flash(f'Successfully deleted entire series "{series_name}" containing {booking_count} events.', 'success')
+                    return redirect(url_for('bookings.admin_list_bookings'))
+                    
+                except Exception as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Error deleting series for booking {booking_id}: {str(e)}")
+                    flash('Error occurred while deleting series.', 'error')
+                    return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
+            
+            elif action == 'duplicate':
                 # Handle modal-based duplication
                 try:
                     # Get duplicate parameters from the modal form
@@ -1308,7 +1533,10 @@ def admin_manage_booking(booking_id):
                         return render_template('admin_manage_booking.html', 
                                              booking=booking,
                                              form=form,
-                                             stats=stats)
+                                             stats=stats,
+                                             is_primary_booking=is_primary,
+                                             effective_organizer=effective_organizer,
+                                             primary_booking=primary_booking)
                     
                     # Create duplicate booking with modified fields
                     duplicate_booking = create_booking_with_defaults(
@@ -1362,7 +1590,10 @@ def admin_manage_booking(booking_id):
                 return render_template('admin_manage_booking.html', 
                                      booking=booking,
                                      form=form,
-                                     stats=stats)
+                                     stats=stats,
+                                     is_primary_booking=is_primary,
+                                     effective_organizer=effective_organizer,
+                                     primary_booking=primary_booking)
                     
             # Debug: Log form submission details
             current_app.logger.info(f"POST request received for booking {booking_id}")
@@ -1372,7 +1603,17 @@ def admin_manage_booking(booking_id):
             current_app.logger.info(f"Form data - series_id: '{form.series_id.data}'")
             current_app.logger.info(f"Form data - series_action: '{form.series_action.data}'")
             current_app.logger.info(f"Form data - series_name: '{form.series_name.data}'")
+            current_app.logger.info(f"Form data - organizer_id: '{form.organizer_id.data}'")
             current_app.logger.info(f"Form data - has_pool: {form.has_pool.data}")
+            current_app.logger.info(f"Current booking series_name in DB: '{booking.series_name}'")
+            current_app.logger.info(f"Current booking organizer_id in DB: '{booking.organizer_id}'")
+            current_app.logger.info(f"Is primary booking: {is_primary}")
+            current_app.logger.info(f"Action from request: '{request.form.get('action')}'")
+            
+            # Log raw form data
+            current_app.logger.info(f"Raw form data keys: {list(request.form.keys())}")
+            for key, value in request.form.items():
+                current_app.logger.info(f"  {key}: '{value}'")
             
             if not form.validate_on_submit():
                 current_app.logger.warning(f"Form validation failed: {form.errors}")
@@ -1483,6 +1724,45 @@ def admin_manage_booking(booking_id):
                         changes['home_away'] = {'old': booking.home_away, 'new': form.home_away.data}
                         booking.home_away = form.home_away.data
                     
+                    # Handle organizer assignment changes (only for primary bookings or non-series bookings)
+                    current_app.logger.info(f"Checking organizer changes: is_primary={is_primary}, series_id={booking.series_id}, form.organizer_id.data={form.organizer_id.data}, booking.organizer_id={booking.organizer_id}")
+                    if (is_primary or not booking.series_id) and form.organizer_id.data is not None and booking.organizer_id != form.organizer_id.data:
+                        current_app.logger.info("EXECUTING organizer change logic")
+                        old_organizer_id = booking.organizer_id
+                        old_organizer_name = f"Member {old_organizer_id}" if old_organizer_id else "None"
+                        if old_organizer_id:
+                            old_organizer = db.session.get(Member, old_organizer_id)
+                            if old_organizer:
+                                old_organizer_name = f"{old_organizer.firstname} {old_organizer.lastname}"
+                        
+                        new_organizer = db.session.get(Member, form.organizer_id.data)
+                        new_organizer_name = f"{new_organizer.firstname} {new_organizer.lastname}" if new_organizer else f"Member {form.organizer_id.data}"
+                        
+                        changes['organizer_id'] = {'old': old_organizer_name, 'new': new_organizer_name}
+                        booking.organizer_id = form.organizer_id.data
+                        
+                        series_context = f" (affects entire series {booking.series_id})" if booking.series_id else ""
+                        current_app.logger.info(f"Changed organizer for booking {booking.id} from {old_organizer_name} to {new_organizer_name}{series_context}")
+                    else:
+                        current_app.logger.info("SKIPPING organizer change logic")
+                    
+                    # Handle series name changes (only for primary bookings)
+                    current_app.logger.info(f"Checking series name changes: series_id={booking.series_id}, is_primary={is_primary}, form.series_name.data='{form.series_name.data}', booking.series_name='{booking.series_name}'")
+                    if booking.series_id and is_primary:
+                        current_app.logger.info("EXECUTING series name change logic")
+                        new_series_name = form.series_name.data.strip() if form.series_name.data else None
+                        current_app.logger.info(f"Comparing: new='{new_series_name}' vs current='{booking.series_name}'")
+                        if new_series_name != booking.series_name:
+                            current_app.logger.info("UPDATING series name in database")
+                            old_series_name = booking.series_name or "(No name set)"
+                            booking.series_name = new_series_name
+                            changes['series_name'] = {'old': old_series_name, 'new': new_series_name or "(Cleared)"}
+                            current_app.logger.info(f"Updated series name from '{old_series_name}' to '{new_series_name or '(Cleared)'}' for primary booking {booking.id}")
+                        else:
+                            current_app.logger.info("Series name unchanged")
+                    else:
+                        current_app.logger.info("SKIPPING series name change logic")
+                    
                     # Handle series changes based on action selection
                     series_action = form.series_action.data
                     current_app.logger.info(f"Processing series action: {series_action}")
@@ -1517,32 +1797,9 @@ def admin_manage_booking(booking_id):
                         # Do nothing - keep current series configuration
                         current_app.logger.info(f"No change requested for series configuration of booking {booking.id}")
                     
-                    # Handle pool creation/deletion
-                    current_has_pool = booking.pool is not None
-                    current_app.logger.info(f"Pool status check - booking.id: {booking.id}, current_has_pool: {current_has_pool}, form.has_pool.data: {form.has_pool.data}")
-                    
-                    if current_has_pool != form.has_pool.data:
-                        if form.has_pool.data and not current_has_pool:
-                            # Create new pool
-                            from app.models import Pool
-                            new_pool = Pool(booking_id=booking.id, is_open=True)
-                            db.session.add(new_pool)
-                            booking.has_pool = True
-                            changes['pool'] = {'old': 'None', 'new': 'Created'}
-                            current_app.logger.info(f"Created new pool for booking {booking.id}")
-                        elif not form.has_pool.data and current_has_pool:
-                            # Delete existing pool
-                            db.session.delete(booking.pool)
-                            booking.has_pool = False
-                            changes['pool'] = {'old': 'Exists', 'new': 'Deleted'}
-                            current_app.logger.info(f"Deleted pool for booking {booking.id}")
-                    
+                    current_app.logger.info("ABOUT TO COMMIT TO DATABASE")
                     db.session.commit()
-                    
-                    # Verify pool creation after commit
-                    db.session.refresh(booking)
-                    pool_after_commit = booking.pool is not None
-                    current_app.logger.info(f"After commit - booking.id: {booking.id}, pool exists: {pool_after_commit}, booking.has_pool: {booking.has_pool}")
+                    current_app.logger.info("DATABASE COMMIT COMPLETED")
                     
                     # Audit log changes
                     if changes:
@@ -1556,7 +1813,10 @@ def admin_manage_booking(booking_id):
         return render_template('admin_manage_booking.html', 
                              booking=booking,
                              form=form,
-                             stats=stats)
+                             stats=stats,
+                             is_primary_booking=is_primary,
+                             effective_organizer=effective_organizer,
+                             primary_booking=primary_booking)
                              
     except Exception as e:
         import traceback
@@ -1593,6 +1853,13 @@ def admin_delete_booking(booking_id):
                                    f'Unauthorized attempt to delete booking {booking_id}')
             flash('You do not have permission to delete this booking.', 'error')
             return redirect(url_for('bookings.admin_list_bookings'))
+        
+        # Prevent deletion of primary booking in a series
+        if booking.series_id:
+            from app.bookings.utils import is_primary_booking_in_series
+            if is_primary_booking_in_series(booking):
+                flash('Cannot delete the primary booking of a series. Use "Delete Series" to remove all events.', 'error')
+                return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
         
         booking_name = booking.name
         event_type_name = booking.get_event_type_name()
@@ -1757,6 +2024,10 @@ def league_schedule():
                         has_pool=(i == 0),  # Only first booking gets pool
                         series_commitment_required=True
                     )
+                    
+                    # Set series name only on the first (primary) booking
+                    if i == 0:
+                        booking.series_name = league_details['league_name']
                     
                     db.session.add(booking)
                     bookings_created.append(booking)

@@ -33,6 +33,7 @@ def add_home_games_filter(query):
 def can_user_manage_booking(user: Member, booking: Booking) -> bool:
     """
     Check if a user can manage a specific booking.
+    Considers both direct organizer and series-level organizer.
     
     Args:
         user: Member instance
@@ -49,7 +50,12 @@ def can_user_manage_booking(user: Member, booking: Booking) -> bool:
     if user.has_role('Event Manager'):
         return True
     
-    # Check if user is the organizer of this booking
+    # Check if user is the effective organizer of this booking (direct or series-level)
+    effective_organizer = get_effective_organizer_for_booking(booking)
+    if effective_organizer and effective_organizer.id == user.id:
+        return True
+    
+    # Fallback: check direct organizer assignment (for backwards compatibility)
     return booking.organizer_id == user.id if booking.organizer_id else False
 
 
@@ -265,17 +271,51 @@ def get_effective_pool_for_booking(booking: Booking) -> Optional['Pool']:
     return None
 
 
-# Legacy function for backward compatibility - will be removed
-def can_user_manage_event(user: Member, event_or_booking) -> bool:
+def get_effective_organizer_for_booking(booking: Booking) -> Optional['Member']:
     """
-    Legacy function for backward compatibility.
-    Use can_user_manage_booking instead.
+    Get the effective organizer for a booking, considering series strategy.
+    For series bookings, this may return the primary booking's organizer.
+    
+    Args:
+        booking: The booking to get the organizer for
+        
+    Returns:
+        Member instance or None
     """
-    current_app.logger.warning("can_user_manage_event is deprecated, use can_user_manage_booking instead")
+    # If booking has its own organizer, return it
+    if booking.organizer_id:
+        from app.models import Member
+        return db.session.get(Member, booking.organizer_id)
     
-    # If it's a booking object, use the new function
-    if hasattr(event_or_booking, 'booking_date'):
-        return can_user_manage_booking(user, event_or_booking)
+    # If no series, no shared organizer possible
+    if not booking.series_id:
+        return None
     
-    # Legacy behavior for any remaining event objects
-    return user.is_admin or user.has_role('Event Manager')
+    # Find the primary booking in the series and get its organizer
+    primary_booking = get_primary_booking_in_series(booking.series_id)
+    if primary_booking and primary_booking.id != booking.id and primary_booking.organizer_id:
+        from app.models import Member
+        return db.session.get(Member, primary_booking.organizer_id)
+    
+    return None
+
+
+def is_primary_booking_in_series(booking: Booking) -> bool:
+    """
+    Check if this booking is the primary booking in its series.
+    The primary booking owns shared resources like pools and organizers.
+    
+    Args:
+        booking: The booking to check
+        
+    Returns:
+        True if this is the primary booking in the series
+    """
+    if not booking.series_id:
+        return False
+        
+    primary_booking = get_primary_booking_in_series(booking.series_id)
+    return primary_booking is not None and primary_booking.id == booking.id
+
+
+# Legacy function removed - all code now uses can_user_manage_booking()

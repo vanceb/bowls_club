@@ -10,10 +10,44 @@
 
 {% block content %}
 <div class="container">
+    <!-- Series Context Notification -->
+    {% if booking.series_id and not is_primary_booking %}
+    <div class="notification is-info is-light">
+        <div class="columns is-vcentered">
+            <div class="column">
+                <p>
+                    <span class="icon"><i class="fas fa-info-circle"></i></span>
+                    <strong>Series Event:</strong> This is part of the "{{ booking.get_series_name() }}" series.
+                    {% if effective_organizer %}
+                        Series organizer: <strong>{{ effective_organizer.firstname }} {{ effective_organizer.lastname }}</strong>
+                    {% endif %}
+                </p>
+                <p class="is-size-7 has-text-grey">
+                    To change the organizer for the entire series, edit the primary event.
+                </p>
+            </div>
+            <div class="column is-narrow">
+                {% if primary_booking %}
+                <a href="{{ url_for('bookings.admin_manage_booking', booking_id=primary_booking.id) }}" 
+                   class="button is-primary">
+                    <span class="icon"><i class="fas fa-star"></i></span>
+                    <span>Go to Primary Booking</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="box">
-        <h3 class="title is-4">Event Details</h3>
+        <h3 class="title is-4">
+            Event Details
+            {% if booking.series_id %}
+                : {{ booking.get_series_name() }}
+            {% endif %}
+        </h3>
                 
-                <form method="POST">
+                <form id="main-booking-form" method="POST">
                     {{ form.hidden_tag() }}
                     
                     <div class="tabs is-boxed">
@@ -24,16 +58,10 @@
                                     <span>Event Details</span>
                                 </a>
                             </li>
-                            <li data-tab="logistics">
+                            <li data-tab="booking">
                                 <a>
                                     <span class="icon is-small"><i class="fas fa-calendar" aria-hidden="true"></i></span>
-                                    <span>Date & Logistics</span>
-                                </a>
-                            </li>
-                            <li data-tab="series">
-                                <a>
-                                    <span class="icon is-small"><i class="fas fa-copy" aria-hidden="true"></i></span>
-                                    <span>Series & Duplication</span>
+                                    <span>This Booking</span>
                                 </a>
                             </li>
                         </ul>
@@ -41,16 +69,6 @@
                     
                     <!-- Event Details Tab -->
                     <div class="tab-content is-active" data-content="event">
-                        <div class="field">
-                            <label class="label">{{ form.name.label }}</label>
-                            <div class="control">
-                                {{ form.name(class="input") }}
-                            </div>
-                            {% for error in form.name.errors %}
-                                <p class="help is-danger">{{ error }}</p>
-                            {% endfor %}
-                        </div>
-                    
                         <div class="columns">
                             <div class="column">
                                 <div class="field">
@@ -107,19 +125,137 @@
                             </div>
                         </div>
                         
-                        <div class="field">
+                        <!-- Event Details Actions -->
+                        <div class="field is-grouped">
                             <div class="control">
-                                <label class="checkbox">
-                                    {{ form.has_pool }}
-                                    Enable Pool Registration
-                                </label>
+                                <button type="submit" name="action" value="save_booking" class="button is-primary">
+                                    <span class="icon">
+                                        <i class="fas fa-save"></i>
+                                    </span>
+                                    <span>Save</span>
+                                </button>
                             </div>
-                            <p class="help">Enable pool registration to allow members to register interest before team selection</p>
+                            <div class="control">
+                                <button type="submit" name="action" value="toggle_pool" class="button {% if booking.pool and booking.pool.is_open %}is-success{% elif booking.pool %}is-warning{% else %}is-light{% endif %}">
+                                    <span class="icon">
+                                        <i class="fas {% if booking.pool and booking.pool.is_open %}fa-users{% elif booking.pool %}fa-users-slash{% else %}fa-plus{% endif %}"></i>
+                                    </span>
+                                    <span>
+                                        {% if booking.pool and booking.pool.is_open %}
+                                            Pool Open
+                                        {% elif booking.pool %}
+                                            Pool Closed
+                                        {% else %}
+                                            Create Pool
+                                        {% endif %}
+                                    </span>
+                                </button>
+                            </div>
                         </div>
+                        <p class="help">
+                            {% if booking.pool and booking.pool.is_open %}
+                                Pool is open for member registrations. Click pool button to close registration.
+                            {% elif booking.pool %}
+                                Pool is closed for new registrations. Click pool button to reopen.
+                            {% else %}
+                                Click pool button to create and open registration. Save button updates event details.
+                            {% endif %}
+                        </p>
+                        
+                        <!-- Series Management Section - For primary series bookings -->
+                        {% if booking.series_id and is_primary_booking %}
+                        <form method="POST" id="series-management-form" class="mt-5">
+                            {{ form.hidden_tag() }}
+                            <input type="hidden" name="action" value="save_series">
+                        
+                            <div class="card">
+                                <div class="card-header">
+                                    <p class="card-header-title">
+                                        <span class="icon"><i class="fas fa-users-cog"></i></span>
+                                        Series Management
+                                    </p>
+                                </div>
+                                <div class="card-content">
+                                    <!-- Series Name Field - Editable for primary bookings -->
+                                    <div class="field">
+                                        <label class="label">Series Display Name</label>
+                                        <div class="control">
+                                            {{ form.series_name(class="input", placeholder="Enter series name (e.g. Summer League 2024)") }}
+                                        </div>
+                                        {% for error in form.series_name.errors %}
+                                            <p class="help is-danger">{{ error }}</p>
+                                        {% endfor %}
+                                        <p class="help">This name will be displayed for all events in this series.</p>
+                                    </div>
+                                    
+                                    <!-- Series Organizer Field -->
+                                    <div class="field">
+                                        <label class="label">{{ form.organizer_id.label }}</label>
+                                        <div class="control">
+                                            <div class="select is-fullwidth">
+                                                {{ form.organizer_id }}
+                                            </div>
+                                        </div>
+                                        {% for error in form.organizer_id.errors %}
+                                            <p class="help is-danger">{{ error }}</p>
+                                        {% endfor %}
+                                        <p class="help">The series organizer can manage all events in this series, including team selection and scheduling.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Series Management Actions -->
+                            <div class="field is-grouped mt-3">
+                                <div class="control">
+                                    <button type="submit" class="button is-primary">
+                                        <span class="icon">
+                                            <i class="fas fa-save"></i>
+                                        </span>
+                                        <span>Save Series Changes</span>
+                                    </button>
+                                </div>
+                                <div class="control">
+                                    <form method="POST" style="display: inline;">
+                                        {{ form.hidden_tag() }}
+                                        <input type="hidden" name="action" value="delete_series">
+                                        <button type="submit" class="button is-danger"
+                                                onclick="return confirm('⚠️ DANGER: Delete entire series?\n\nThis will PERMANENTLY DELETE:\n• ALL {{ booking.get_series_bookings()|length }} events in this series\n• ALL associated pools and registrations\n• ALL team assignments\n\nThis action CANNOT be undone!\n\nType DELETE to confirm:') && prompt('Type DELETE to confirm series deletion:') === 'DELETE';">
+                                            <span class="icon">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </span>
+                                            <span>Delete Entire Series</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </form>
+                        {% endif %}
                     </div>
                     
-                    <!-- Date & Logistics Tab -->
-                    <div class="tab-content" data-content="logistics">
+                    <!-- This Booking Tab -->
+                    <div class="tab-content" data-content="booking">
+                        <!-- Event Name Field - First -->
+                        <div class="field">
+                            <label class="label">{{ form.name.label }}</label>
+                            <div class="control">
+                                {{ form.name(class="input") }}
+                            </div>
+                            {% for error in form.name.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Opposition Field - Second -->
+                        <div class="field">
+                            <label class="label">{{ form.vs.label }}</label>
+                            <div class="control">
+                                {{ form.vs(class="input") }}
+                            </div>
+                            {% for error in form.vs.errors %}
+                                <p class="help is-danger">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                        
                         <div class="columns">
                             <div class="column">
                                 <div class="field">
@@ -174,187 +310,86 @@
                             </div>
                         </div>
                         
-                        <div class="field">
-                            <label class="label">{{ form.vs.label }}</label>
+                        <!-- Booking Actions -->
+                        <div class="field is-grouped">
                             <div class="control">
-                                {{ form.vs(class="input") }}
+                                <button type="submit" name="action" value="save_booking" class="button is-primary">
+                                    <span class="icon">
+                                        <i class="fas fa-save"></i>
+                                    </span>
+                                    <span>Save</span>
+                                </button>
                             </div>
-                            {% for error in form.vs.errors %}
-                                <p class="help is-danger">{{ error }}</p>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    
-                    <!-- Series & Duplication Tab -->
-                    <div class="tab-content" data-content="series">
-                        {{ form.series_id }}
-                        
-                        <!-- Series Configuration Card -->
-                        <div class="card" id="seriesPanel" style="display: none;">
-                            <header class="card-header has-background-white" id="seriesPanelToggle" onclick="toggleSeriesPanel()" 
-                                    style="cursor: pointer; user-select: none;" 
-                                    title="Click to expand or collapse series options"
-                                    role="button" tabindex="0" 
-                                    aria-expanded="false" 
-                                    aria-controls="seriesContent"
-                                    onkeypress="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleSeriesPanel();}">
-                                <div class="card-header-title">
-                                    <span class="icon is-small mr-2" id="seriesToggleIcon">
-                                        <i class="fas fa-chevron-right"></i>
+                            <div class="control">
+                                <a href="{{ url_for('bookings.admin_manage_teams', booking_id=booking.id) }}" 
+                                   class="button is-success">
+                                    <span class="icon">
+                                        <i class="fas fa-users"></i>
                                     </span>
-                                    <span>Series Configuration</span>
-                                    <span class="ml-2 has-tooltip-bottom" data-tooltip="Series allows sharing a single pool across multiple related events">
-                                        <span class="icon is-small has-text-grey-light">
-                                            <i class="fas fa-info-circle"></i>
-                                        </span>
+                                    <span>Manage Teams for this Booking</span>
+                                </a>
+                            </div>
+                            <div class="control">
+                                <button type="button" class="button is-info" onclick="openDuplicateModal()">
+                                    <span class="icon">
+                                        <i class="fas fa-copy"></i>
                                     </span>
-                                    <!-- Strategy tag moved inline for better hierarchy -->
-                                    <span class="ml-auto">
-                                        <span class="tag" id="seriesStrategyTag"></span>
+                                    <span>Duplicate</span>
+                                </button>
+                            </div>
+                            <div class="control">
+                                <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
+                                    <span class="icon">
+                                        <i class="fas fa-arrow-left"></i>
                                     </span>
-                                </div>
-                            </header>
-                            
-                            <div class="card-content is-hidden" id="seriesContent">
-                                <!-- Current Series Status Display -->
-                                <div class="field">
-                                    <label class="label">Current Series Status</label>
-                                    <div class="box has-background-light" id="currentSeriesStatus">
-                                        <div class="media">
-                                            <div class="media-left">
-                                                <span class="icon is-large has-text-info">
-                                                    <i class="fas fa-info-circle fa-2x"></i>
-                                                </span>
-                                            </div>
-                                            <div class="media-content">
-                                                <p class="subtitle is-6" id="seriesStatusText">Loading series status...</p>
-                                                <p class="content is-small has-text-grey" id="seriesStatusDetails"></p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Series Action Dropdown -->
-                                <div class="field">
-                                    <label class="label">{{ form.series_action.label }}</label>
-                                    <div class="control has-icons-left">
-                                        <div class="select is-fullwidth">
-                                            {{ form.series_action }}
-                                        </div>
-                                        <span class="icon is-small is-left">
-                                            <i class="fas fa-cog"></i>
+                                    <span>Back to Events</span>
+                                </a>
+                            </div>
+                            <div class="control">
+                                {% if booking.series_id and is_primary_booking %}
+                                    <button type="button" class="button is-danger" disabled title="Cannot delete primary booking. Use 'Delete Series' in Series Management tab to delete all events.">
+                                        <span class="icon">
+                                            <i class="fas fa-ban"></i>
                                         </span>
-                                    </div>
-                                    <p class="help">Select the action you want to perform with this event's series configuration</p>
-                                    {% for error in form.series_action.errors %}
-                                        <p class="help is-danger">{{ error }}</p>
-                                    {% endfor %}
-                                </div>
-                                
-                                <!-- Series Name Field - Show when creating new series -->
-                                <div class="field" id="seriesNameField" style="display: none;">
-                                    <label class="label">{{ form.series_name.label }}</label>
-                                    <div class="control has-icons-left">
-                                        {{ form.series_name(class="input", placeholder="e.g. Summer League 2024") }}
-                                        <span class="icon is-small is-left">
-                                            <i class="fas fa-tag"></i>
+                                        <span>Cannot Delete Primary</span>
+                                    </button>
+                                {% else %}
+                                    <button type="submit" form="delete-form" class="button is-danger"
+                                            onclick="return confirm('Are you sure you want to delete this booking? This action cannot be undone.');">
+                                        <span class="icon">
+                                            <i class="fas fa-trash"></i>
                                         </span>
-                                    </div>
-                                    <p class="help">Enter a descriptive name for the new series</p>
-                                    {% for error in form.series_name.errors %}
-                                        <p class="help is-danger">{{ error }}</p>
-                                    {% endfor %}
-                                </div>
-                                
-                                <!-- Existing Series Dropdown - Show when joining existing series -->
-                                <div class="field" id="existingSeriesField" style="display: none;">
-                                    <label class="label">{{ form.existing_series.label }}</label>
-                                    <div class="control has-icons-left">
-                                        <div class="select is-fullwidth">
-                                            {{ form.existing_series }}
-                                        </div>
-                                        <span class="icon is-small is-left">
-                                            <i class="fas fa-list"></i>
-                                        </span>
-                                    </div>
-                                    <p class="help">Choose an existing series to join this event to</p>
-                                    {% for error in form.existing_series.errors %}
-                                        <p class="help is-danger">{{ error }}</p>
-                                    {% endfor %}
-                                </div>
-                                
-                                <div class="message is-info" id="seriesInfoMessage">
-                                    <div class="message-header">
-                                        <p>Series Benefits</p>
-                                    </div>
-                                    <div class="message-body">
-                                        <div class="content">
-                                            <ul>
-                                                <li><strong>Event Strategy:</strong> Players register once for the entire series</li>
-                                                <li><strong>Shared Pool:</strong> Single pool for team selection across all events</li>
-                                                <li><strong>Easier Management:</strong> Manage recurring events as a unified group</li>
-                                                <li><strong>Player Convenience:</strong> Reduces repeated registration for regular participants</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
+                                        <span>Delete Booking</span>
+                                    </button>
+                                {% endif %}
                             </div>
                         </div>
                         
-                        <hr>
-                        
-                        <div class="notification is-warning">
-                            <p><strong>Duplication Options:</strong></p>
-                            <ul>
-                                <li><strong>Save Event:</strong> Updates the current event with your changes</li>
-                                <li><strong>Duplicate to New Date:</strong> Creates a copy of this event that you can modify for a different date</li>
-                            </ul>
-                        </div>
                     </div>
                     
-                    <div class="field is-grouped">
-                        <div class="control">
-                            {{ form.submit(class="button is-primary") }}
-                        </div>
-                        <div class="control">
-                            <button type="button" class="button is-info" onclick="openDuplicateModal()">
-                                <span class="icon">
-                                    <i class="fas fa-copy"></i>
-                                </span>
-                                <span>Duplicate</span>
-                            </button>
-                        </div>
-                        <div class="control">
-                            <a href="{{ url_for('bookings.admin_manage_teams', booking_id=booking.id) }}" 
-                               class="button is-success">
-                                <span class="icon">
-                                    <i class="fas fa-users"></i>
-                                </span>
-                                <span>Manage Teams</span>
-                            </a>
-                        </div>
-                        <div class="control">
-                            <a href="{{ url_for('bookings.admin_list_bookings') }}" class="button is-light">
-                                <span class="icon">
-                                    <i class="fas fa-arrow-left"></i>
-                                </span>
-                                <span>Back to Events</span>
-                            </a>
-                        </div>
-                    </div>
                 </form>
                 
-                <hr>
+                <!-- Create Series Button - Only show for standalone bookings -->
+                {% if not booking.series_id %}
+                <div class="field is-grouped mt-3">
+                    <div class="control">
+                        <form method="POST" style="display: inline;">
+                            {{ form.hidden_tag() }}
+                            <input type="hidden" name="action" value="create_series">
+                            <button type="submit" class="button is-info">
+                                <span class="icon">
+                                    <i class="fas fa-plus"></i>
+                                </span>
+                                <span>Create Series</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
                 
-                <form method="POST" action="{{ url_for('bookings.admin_delete_booking', booking_id=booking.id) }}" 
-                      onsubmit="return confirm('Are you sure you want to delete this event? This action cannot be undone.');">
+                <!-- Hidden delete form for Delete Booking button -->
+                <form id="delete-form" method="POST" action="{{ url_for('bookings.admin_delete_booking', booking_id=booking.id) }}" style="display: none;">
                     {{ form.hidden_tag() }}
-                    <button type="submit" class="button is-danger">
-                        <span class="icon">
-                            <i class="fas fa-trash"></i>
-                        </span>
-                        <span>Delete Event</span>
-                    </button>
                 </form>
     </div>
 </div>
@@ -448,11 +483,12 @@ const CURRENT_BOOKING = {
 
 document.addEventListener('DOMContentLoaded', function() {
     // Tab switching functionality
-    const tabs = document.querySelectorAll('.tabs li');
-    const tabContents = document.querySelectorAll('.tab-content');
+    const tabs = document.querySelectorAll('.tabs li[data-tab]');
+    const tabContents = document.querySelectorAll('.tab-content[data-content]');
     
     tabs.forEach(tab => {
-        tab.addEventListener('click', function() {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
             const targetTab = this.getAttribute('data-tab');
             
             // Remove active class from all tabs and content
@@ -745,5 +781,6 @@ function openDuplicateModal() {
 function closeDuplicateModal() {
     document.getElementById('duplicateModal').classList.remove('is-active');
 }
+
 </script>
 {% endblock %}
