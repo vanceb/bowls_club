@@ -1961,7 +1961,9 @@ def league_create():
                 'league_name': form.league_name.data,
                 'format': form.format.data,
                 'event_type': form.event_type.data,
-                'gender': form.gender.data
+                'gender': form.gender.data,
+                'rink_count': form.rink_count.data,
+                'scoring': form.scoring.data
             }
             return redirect(url_for('bookings.league_schedule'))
         
@@ -2019,6 +2021,8 @@ def league_schedule():
                         event_type=league_details['event_type'],
                         format=league_details['format'],
                         gender=league_details['gender'],
+                        rink_count=league_details['rink_count'],
+                        scoring=league_details['scoring'],
                         vs=game_data.get('opponent', ''),
                         home_away=game_data.get('venue', 'home'),
                         has_pool=(i == 0),  # Only first booking gets pool

@@ -104,6 +104,8 @@ class LeagueCreateForm(FlaskForm):
     format = SelectField('Format', coerce=int, choices=[], validators=[DataRequired()])
     event_type = HiddenField('Event Type', default=3)  # Fixed to League
     gender = SelectField('Gender', coerce=int, choices=[], validators=[DataRequired()])
+    rink_count = IntegerField('Rinks per Game', validators=[DataRequired(), NumberRange(min=1, max=6)], default=1)
+    scoring = StringField('Scoring', validators=[Optional(), Length(max=64)], default='21 Up')
     submit = SubmitField('Next: Schedule Games')
     
     def __init__(self, *args, **kwargs):

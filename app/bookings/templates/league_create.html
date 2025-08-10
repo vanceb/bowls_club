@@ -16,6 +16,7 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     
+                    <!-- League Name (Full Width) -->
                     <div class="field">
                         <label class="label">{{ form.league_name.label }}</label>
                         <div class="control">
@@ -26,31 +27,65 @@
                         {% endfor %}
                     </div>
                     
-                    <div class="field">
-                        <label class="label">{{ form.format.label }}</label>
-                        <div class="control">
-                            <div class="select is-fullwidth">
-                                {{ form.format() }}
+                    <!-- Format and Gender (Side by Side) -->
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.format.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ form.format() }}
+                                    </div>
+                                </div>
+                                {% for error in form.format.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
                             </div>
                         </div>
-                        {% for error in form.format.errors %}
-                            <p class="help is-danger">{{ error }}</p>
-                        {% endfor %}
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.gender.label }}</label>
+                                <div class="control">
+                                    <div class="select is-fullwidth">
+                                        {{ form.gender() }}
+                                    </div>
+                                </div>
+                                {% for error in form.gender.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Rinks and Scoring (Side by Side) -->
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.rink_count.label }}</label>
+                                <div class="control">
+                                    {{ form.rink_count(class="input") }}
+                                </div>
+                                {% for error in form.rink_count.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                                <p class="help">Number of rinks required for each game</p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">{{ form.scoring.label }}</label>
+                                <div class="control">
+                                    {{ form.scoring(class="input", placeholder="e.g., 21 Up, 18 Ends") }}
+                                </div>
+                                {% for error in form.scoring.errors %}
+                                    <p class="help is-danger">{{ error }}</p>
+                                {% endfor %}
+                                <p class="help">Scoring system for games</p>
+                            </div>
+                        </div>
                     </div>
                     
                     {{ form.event_type() }}
-                    
-                    <div class="field">
-                        <label class="label">{{ form.gender.label }}</label>
-                        <div class="control">
-                            <div class="select is-fullwidth">
-                                {{ form.gender() }}
-                            </div>
-                        </div>
-                        {% for error in form.gender.errors %}
-                            <p class="help is-danger">{{ error }}</p>
-                        {% endfor %}
-                    </div>
                     
                     <div class="field is-grouped">
                         <div class="control">

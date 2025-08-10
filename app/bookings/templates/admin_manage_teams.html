@@ -121,77 +121,91 @@
             <!-- Pool Members Column -->
             <div class="column is-5">
                 <div class="box pool-container">
-                    {% if available_members %}
-                    <div class="level">
-                        <div class="level-left">
-                            <div class="level-item">
-                                <h3 class="title is-4">Pool Players ({{ available_members|length }})</h3>
+                    {% set effective_pool = booking.get_effective_pool() %}
+                    {% if effective_pool %}
+                        <!-- Pool exists -->
+                        <div class="level">
+                            <div class="level-left">
+                                <div class="level-item">
+                                    <h3 class="title is-4">Pool Players ({{ available_members|length }})</h3>
+                                </div>
+                            </div>
+                            <div class="level-right">
+                                <div class="level-item">
+                                    <button type="button" class="button is-success is-small" onclick="openAddPlayerModal()">
+                                        <span class="icon">
+                                            <i class="fas fa-user-plus"></i>
+                                        </span>
+                                        <span>Add Player</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="level-right">
-                            <div class="level-item">
-                                <button type="button" class="button is-success is-small" onclick="openAddPlayerModal()">
-                                    <span class="icon">
-                                        <i class="fas fa-user-plus"></i>
-                                    </span>
-                                    <span>Add Player</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <p class="subtitle is-6">Drag to teams ←</p>
-                    
-                    <div class="pool-members" style="max-height: 70vh; overflow-y: auto;">
-                        {% for member in available_members %}
-                        {% set is_assigned = member.id in assigned_member_ids %}
-                        <div class="notification p-3 mb-2 player-card pool-player {% if is_assigned %}has-background-grey-light player-assigned{% else %}has-background-info-light{% endif %}" draggable="{% if not is_assigned %}true{% else %}false{% endif %}" data-member-id="{{ member.id }}" data-assigned="{{ 'true' if is_assigned else 'false' }}">
-                            <div class="level is-mobile">
-                                <div class="level-left">
-                                    <div>
-                                        <p class="has-text-weight-semibold {% if is_assigned %}has-text-grey{% endif %}">{{ member.firstname }} {{ member.lastname }}</p>
-                                        <p class="is-size-7 has-text-grey">Member #{{ member.id }}{% if is_assigned %} - Already Assigned{% endif %}</p>
+                        
+                        {% if available_members %}
+                            <!-- Pool has members -->
+                            <p class="subtitle is-6">Drag to teams ←</p>
+                            <div class="pool-members" style="max-height: 70vh; overflow-y: auto;">
+                                {% for member in available_members %}
+                                {% set is_assigned = member.id in assigned_member_ids %}
+                                <div class="notification p-3 mb-2 player-card pool-player {% if is_assigned %}has-background-grey-light player-assigned{% else %}has-background-info-light{% endif %}" draggable="{% if not is_assigned %}true{% else %}false{% endif %}" data-member-id="{{ member.id }}" data-assigned="{{ 'true' if is_assigned else 'false' }}">
+                                    <div class="level is-mobile">
+                                        <div class="level-left">
+                                            <div>
+                                                <p class="has-text-weight-semibold {% if is_assigned %}has-text-grey{% endif %}">{{ member.firstname }} {{ member.lastname }}</p>
+                                                <p class="is-size-7 has-text-grey">Member #{{ member.id }}{% if is_assigned %} - Already Assigned{% endif %}</p>
+                                            </div>
+                                        </div>
+                                        <div class="level-right">
+                                            <span class="icon {% if is_assigned %}has-text-grey{% else %}has-text-info{% endif %}">
+                                                {% if is_assigned %}
+                                                <i class="fas fa-check"></i>
+                                                {% else %}
+                                                <i class="fas fa-grip-vertical"></i>
+                                                {% endif %}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="level-right">
-                                    <span class="icon {% if is_assigned %}has-text-grey{% else %}has-text-info{% endif %}">
-                                        {% if is_assigned %}
-                                        <i class="fas fa-check"></i>
-                                        {% else %}
-                                        <i class="fas fa-grip-vertical"></i>
-                                        {% endif %}
-                                    </span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <!-- Pool exists but no members -->
+                            <div class="notification is-warning is-light">
+                                <div class="content">
+                                    <p><strong>Pool created but no members registered yet.</strong></p>
+                                    <p>Use the "Add Player" button above to add members to the pool, then drag them to teams.</p>
+                                    <p class="is-size-7 has-text-grey">Pool name: {{ effective_pool.pool_name }}</p>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- No pool exists -->
+                        <div class="level">
+                            <div class="level-left">
+                                <div class="level-item">
+                                    <h3 class="title is-4">Pool Players (0)</h3>
+                                </div>
+                            </div>
+                            <div class="level-right">
+                                <div class="level-item">
+                                    <button type="button" class="button is-success is-small" onclick="openAddPlayerModal()">
+                                        <span class="icon">
+                                            <i class="fas fa-user-plus"></i>
+                                        </span>
+                                        <span>Add Player</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        {% endfor %}
-                    </div>
-                    {% else %}
-                    <!-- No Pool State -->
-                    <div class="level">
-                        <div class="level-left">
-                            <div class="level-item">
-                                <h3 class="title is-4">Pool Players (0)</h3>
+                        
+                        <div class="notification is-info is-light">
+                            <div class="content">
+                                <p><strong>No pool created yet.</strong></p>
+                                <p>Players will be automatically added to a pool when you use the "Add Player" button above.</p>
+                                <p class="is-size-7 has-text-grey">Alternatively, you can create a pool from the Event Details tab in the booking management page.</p>
                             </div>
                         </div>
-                        <div class="level-right">
-                            <div class="level-item">
-                                <button type="button" class="button is-success is-small" onclick="openAddPlayerModal()">
-                                    <span class="icon">
-                                        <i class="fas fa-user-plus"></i>
-                                    </span>
-                                    <span>Add Player</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="notification is-info is-light">
-                        <div class="content">
-                            <p><strong>No pool created yet.</strong></p>
-                            <p>Players will be automatically added to a pool when you use the "Add Player" button above.</p>
-                            <p class="is-size-7 has-text-grey">Alternatively, you can create a pool from the Event Details tab in the booking management page.</p>
-                        </div>
-                    </div>
                     {% endif %}
                 </div>
             </div>
