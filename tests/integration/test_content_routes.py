@@ -77,7 +77,8 @@ class TestContentAdminRoutes:
             firstname='Content',
             lastname='Manager',
             email='content@test.com',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         user.set_password('testpass123!')
         user.roles.append(role)

@@ -79,12 +79,23 @@ def audit_log_create(model_name: str, record_id: Union[int, str], description: s
         description: Human-readable description of the operation
         additional_data: Optional additional data to include in the log
     """
-    logger = setup_audit_logger()
-    user_info = get_current_user_info()
-    
-    log_message = f"CREATE | {model_name} | ID: {record_id} | User: {user_info} | {description}"
-    
-    logger.info(log_message)
+    try:
+        logger = setup_audit_logger()
+        user_info = get_current_user_info()
+        
+        log_message = f"CREATE | {model_name} | ID: {record_id} | User: {user_info} | {description}"
+        
+        logger.info(log_message)
+    except Exception as e:
+        # Audit logging should never break application functionality
+        # But we should still log the failure for debugging
+        try:
+            # Try to log the audit logging failure itself
+            fallback_logger = setup_audit_logger()
+            fallback_logger.error(f"AUDIT_FAILURE | Failed to log CREATE for {model_name} ID {record_id}: {str(e)}")
+        except Exception:
+            # If even the fallback fails, don't crash the application
+            pass
 
 
 def audit_log_update(model_name: str, record_id: Union[int, str], description: str,

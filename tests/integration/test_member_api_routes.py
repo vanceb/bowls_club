@@ -4,6 +4,7 @@ Integration tests for member API routes.
 import pytest
 import json
 from app.models import Member, Role
+from tests.fixtures.factories import MemberFactory
 
 
 @pytest.mark.integration
@@ -20,11 +21,11 @@ class TestMemberAPIRoutes:
     def test_search_members_empty_query(self, authenticated_client, db_session):
         """Test member search with empty query returns all active members."""
         # Create test members
-        member1 = Member(username='user1', firstname='John', lastname='Doe', 
+        member1 = MemberFactory.create(username='user1', firstname='John', lastname='Doe', 
                         email='john@test.com', status='Full')
-        member2 = Member(username='user2', firstname='Jane', lastname='Smith', 
+        member2 = MemberFactory.create(username='user2', firstname='Jane', lastname='Smith', 
                         email='jane@test.com', status='Full')  
-        member3 = Member(username='user3', firstname='Bob', lastname='Wilson',
+        member3 = MemberFactory.create(username='user3', firstname='Bob', lastname='Wilson',
                         email='bob@test.com', status='Pending')  # Should be excluded
         
         db_session.add_all([member1, member2, member3])
@@ -46,11 +47,11 @@ class TestMemberAPIRoutes:
     def test_search_members_with_query(self, authenticated_client, db_session):
         """Test member search with search query."""
         # Create test members
-        member1 = Member(username='johndoe', firstname='John', lastname='Doe',
+        member1 = MemberFactory.create(username='johndoe', firstname='John', lastname='Doe',
                         email='john@test.com', status='Full')
-        member2 = Member(username='janedoe', firstname='Jane', lastname='Doe',
+        member2 = MemberFactory.create(username='janedoe', firstname='Jane', lastname='Doe',
                         email='jane@test.com', status='Full')
-        member3 = Member(username='bobsmith', firstname='Bob', lastname='Smith',
+        member3 = MemberFactory.create(username='bobsmith', firstname='Bob', lastname='Smith',
                         email='bob@test.com', status='Full')
         
         db_session.add_all([member1, member2, member3])
@@ -71,9 +72,9 @@ class TestMemberAPIRoutes:
     def test_search_members_admin_context(self, admin_client, db_session):
         """Test member search with admin context includes pending members."""
         # Create test members
-        pending_member = Member(username='pending', firstname='Pending', lastname='User',
+        pending_member = MemberFactory.create(username='pending', firstname='Pending', lastname='User',
                               email='pending@test.com', status='Pending')
-        active_member = Member(username='active', firstname='Active', lastname='User',
+        active_member = MemberFactory.create(username='active', firstname='Active', lastname='User',
                              email='active@test.com', status='Full')
         
         db_session.add_all([pending_member, active_member])
@@ -94,7 +95,7 @@ class TestMemberAPIRoutes:
     def test_search_members_privacy_filtering(self, authenticated_client, db_session):
         """Test member search respects privacy settings."""
         # Create member with private contact info
-        private_member = Member(
+        private_member = MemberFactory.create(
             username='private', firstname='Private', lastname='User',
             email='private@test.com', phone='123-456-7890',
             status='Full', share_email=False, share_phone=False
@@ -120,7 +121,7 @@ class TestMemberAPIRoutes:
     def test_search_members_admin_sees_private_data(self, admin_client, db_session):
         """Test admin user can see all member data regardless of privacy settings."""
         # Create member with private contact info
-        private_member = Member(
+        private_member = MemberFactory.create(
             username='private', firstname='Private', lastname='User',
             email='private@test.com', phone='123-456-7890',
             status='Full', share_email=False, share_phone=False
@@ -152,8 +153,8 @@ class TestMemberAPIRoutes:
     def test_users_with_roles_admin_access(self, admin_client, db_session, core_roles):
         """Test users with roles API works for admin."""
         # Create user with role
-        user_with_role = Member(username='roleuser', firstname='Role', lastname='User',
-                               email='role@test.com')
+        user_with_role = MemberFactory.create(username='roleuser', firstname='Role', lastname='User',
+                               email='role@test.com', status='Full')
         user_with_role.roles = [core_roles[0]]  # Assign first core role
         db_session.add(user_with_role)
         db_session.commit()
@@ -199,7 +200,7 @@ class TestMemberAPIRoutes:
     def test_add_user_to_role_already_has_role(self, client, user_manager_member, core_roles, db_session):
         """Test adding user to role they already have."""
         # Create user with role
-        user_with_role = Member(username='roleuser', email='role@test.com')
+        user_with_role = MemberFactory.create(username='roleuser', email='role@test.com', status='Full')
         role = core_roles[0]
         user_with_role.roles = [role]
         db_session.add(user_with_role)
@@ -221,7 +222,7 @@ class TestMemberAPIRoutes:
     def test_remove_user_from_role_success(self, client, user_manager_member, core_roles, db_session):
         """Test successfully removing user from role."""
         # Create user with role
-        user_with_role = Member(username='roleuser', email='role@test.com')
+        user_with_role = MemberFactory.create(username='roleuser', email='role@test.com', status='Full')
         role = core_roles[0]
         user_with_role.roles = [role]
         db_session.add(user_with_role)

@@ -286,8 +286,9 @@ class TestAuditLogIntegration:
         # modifying application code during testing
         
         with app.app_context():
-            # Create test data
-            member = Member(
+            # Create test data using factory
+            from tests.fixtures.factories import MemberFactory
+            member = MemberFactory.create(
                 username='audittest',
                 firstname='Audit',
                 lastname='Test',

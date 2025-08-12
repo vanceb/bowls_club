@@ -3,6 +3,7 @@ Integration tests for public member routes (directory, apply).
 """
 import pytest
 from app.models import Member
+from tests.fixtures.factories import MemberFactory
 
 
 @pytest.mark.integration
@@ -18,11 +19,11 @@ class TestPublicMemberRoutes:
     def test_member_directory_loads(self, authenticated_client, db_session):
         """Test member directory page loads for authenticated user."""
         # Create some test members
-        member1 = Member(username='john', firstname='John', lastname='Doe',
+        member1 = MemberFactory.create(username='john', firstname='John', lastname='Doe',
                         email='john@test.com', status='Full')
-        member2 = Member(username='jane', firstname='Jane', lastname='Smith',
+        member2 = MemberFactory.create(username='jane', firstname='Jane', lastname='Smith',
                         email='jane@test.com', status='Social')
-        pending_member = Member(username='pending', firstname='Pending', lastname='User',
+        pending_member = MemberFactory.create(username='pending', firstname='Pending', lastname='User',
                               email='pending@test.com', status='Pending')  # Should not appear
         
         db_session.add_all([member1, member2, pending_member])
@@ -42,14 +43,14 @@ class TestPublicMemberRoutes:
     def test_member_directory_privacy_respected(self, authenticated_client, db_session):
         """Test member directory respects privacy settings."""
         # Create member with private contact info
-        private_member = Member(
+        private_member = MemberFactory.create(
             username='private', firstname='Private', lastname='User',
             email='private@test.com', phone='123-456-7890', 
             status='Full', share_email=False, share_phone=False
         )
         
         # Create member with public contact info
-        public_member = Member(
+        public_member = MemberFactory.create(
             username='public', firstname='Public', lastname='User',
             email='public@test.com', phone='987-654-3210',
             status='Full', share_email=True, share_phone=True

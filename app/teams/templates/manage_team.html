@@ -20,8 +20,8 @@
                         Booking #{{ team.booking.id }} - {{ team.booking.booking_date.strftime('%A %b %d, %Y') }}
                     </a>
                 </p>
-                {% if team.booking.event %}
-                <p><strong>Event:</strong> {{ team.booking.event.name }} ({{ team.booking.event.event_type }})</p>
+                {% if team.booking.booking_type == 'event' %}
+                <p><strong>Event:</strong> {{ team.booking.name }} ({{ team.booking.get_event_type_name() }})</p>
                 {% endif %}
                 <p><strong>Team Members:</strong> {{ team_members|length }}</p>
             </div>

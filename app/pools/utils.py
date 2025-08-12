@@ -33,13 +33,10 @@ def can_user_manage_pool(user: Member, pool: Pool) -> bool:
     if user.has_role('Event Manager'):
         return True
     
-    # If pool is associated with an event, check if user is an event manager for that event
-    if pool.event:
-        return user in pool.event.event_managers
-    
-    # If pool is associated with a booking, check if user is the organizer (for roll-ups)
-    if pool.booking and pool.booking.organizer_id:
-        return user.id == pool.booking.organizer_id
+    # All pools are now booking-based - check if user is the organizer or can manage the booking
+    if pool.booking:
+        from app.bookings.utils import can_user_manage_booking
+        return can_user_manage_booking(user, pool.booking)
     
     return False
 
@@ -79,16 +76,9 @@ def get_pool_statistics(pool: Pool) -> Dict[str, Any]:
         auto_close_date = pool.auto_close_date
         will_auto_close = auto_close_date and auto_close_date > datetime.now() if auto_close_date else False
         
-        # Pool type specific information
+        # Pool type specific information (booking-centric architecture)
         pool_context = {}
-        if pool.event:
-            pool_context.update({
-                'event_name': pool.event.name,
-                'event_type': pool.event.get_event_type_name(),
-                'event_format': pool.event.get_format_name(),
-                'event_has_bookings': len(pool.event.bookings) > 0
-            })
-        elif pool.booking:
+        if pool.booking:
             pool_context.update({
                 'booking_date': pool.booking.booking_date,
                 'booking_session': pool.booking.session,

@@ -5,6 +5,7 @@ import pytest
 import json
 from datetime import date, timedelta, datetime
 from app.models import Member, Booking, Team, TeamMember
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.integration
@@ -30,19 +31,17 @@ class TestTeamRoutes:
     def test_create_team_get_page_loads(self, admin_client, db_session):
         """Test create team GET page loads for Event Manager."""
         # Create test booking (events are not required for team creation)
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Team Creation Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            name='Test Team Creation Booking',
             event_type=1,
             gender=4,
             format=5,
-            organizer_id=1,
+            organizer=1,
             booking_type='event'
         )
-        db_session.add(booking)
-        db_session.commit()
         
         response = admin_client.get(f'/teams/create/{booking.id}')
         
@@ -54,19 +53,17 @@ class TestTeamRoutes:
     def test_create_team_post_valid_data(self, admin_client, db_session, test_member):
         """Test create team POST with valid data."""
         # Create test booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Team Post Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            name='Test Team Post Booking',
             event_type=1,
             gender=4,
             format=5,
-            organizer_id=1,
+            organizer=1,
             booking_type='event'
         )
-        db_session.add(booking)
-        db_session.commit()
         
         form_data = {
             'team_name': 'Test Team',
@@ -91,15 +88,14 @@ class TestTeamRoutes:
     def test_create_team_post_invalid_data(self, admin_client, db_session):
         """Test create team POST with invalid data."""
         # Create test booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Invalid Data Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=1,
+            organizer=1,
             booking_type='event'
         )
-        db_session.add(booking)
-        db_session.commit()
         
         form_data = {
             'team_name': '',  # Invalid - empty name
@@ -125,14 +121,14 @@ class TestTeamRoutes:
     def test_manage_team_permission_denied(self, authenticated_client, db_session, admin_member):
         """Test manage team permission denied for non-owner."""
         # Create team owned by admin
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=admin_member.id,
+            organizer=admin_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -150,14 +146,14 @@ class TestTeamRoutes:
     def test_manage_team_loads_for_owner(self, authenticated_client, db_session, test_member):
         """Test manage team page loads for team owner."""
         # Create team owned by test_member
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -177,14 +173,14 @@ class TestTeamRoutes:
     def test_manage_team_loads_for_admin(self, admin_client, db_session, test_member):
         """Test manage team page loads for admin."""
         # Create team owned by regular user
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -203,25 +199,26 @@ class TestTeamRoutes:
     def test_manage_team_add_member_action(self, admin_client, db_session, test_member):
         """Test adding member to team via manage team POST."""
         # Create additional member
-        new_member = Member(
+        new_member = MemberFactory.create(
             username='newmember',
             firstname='New',
             lastname='Member',
             email='new@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add(new_member)
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -255,7 +252,7 @@ class TestTeamRoutes:
     def test_manage_team_substitute_player_action(self, admin_client, db_session, test_member):
         """Test substituting player via manage team POST."""
         # Create members
-        original_member = Member(
+        original_member = MemberFactory.create(
             username='original',
             firstname='Original',
             lastname='Player',
@@ -263,25 +260,26 @@ class TestTeamRoutes:
             phone='123-456-7890',
             status='Full'
         )
-        substitute_member = Member(
+        substitute_member = MemberFactory.create(
             username='substitute',
             firstname='Substitute',
             lastname='Player',
             email='substitute@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add_all([original_member, substitute_member])
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -333,25 +331,26 @@ class TestTeamRoutes:
     def test_manage_team_delete_player_action(self, admin_client, db_session, test_member):
         """Test deleting player via manage team POST."""
         # Create member to delete
-        member_to_delete = Member(
+        member_to_delete = MemberFactory.create(
             username='todelete',
             firstname='To',
             lastname='Delete',
             email='delete@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add(member_to_delete)
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -392,25 +391,26 @@ class TestTeamRoutes:
     def test_manage_team_update_position_action(self, admin_client, db_session, test_member):
         """Test updating player position via manage team POST."""
         # Create member
-        member = Member(
+        member = MemberFactory.create(
             username='playeruser',
             firstname='Player',
             lastname='User',
             email='player@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add(member)
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -457,14 +457,14 @@ class TestTeamRoutes:
     def test_add_substitute_permission_denied(self, authenticated_client, db_session, admin_member):
         """Test add substitute permission denied for non-owner."""
         # Create team owned by admin
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=admin_member.id,
+            organizer=admin_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -487,25 +487,26 @@ class TestTeamRoutes:
     def test_add_substitute_valid_data(self, admin_client, db_session, test_member):
         """Test add substitute with valid data."""
         # Create substitute member
-        substitute = Member(
+        substitute = MemberFactory.create(
             username='substitute',
             firstname='Sub',
             lastname='Player',
             email='sub@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add(substitute)
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -543,14 +544,14 @@ class TestTeamRoutes:
     def test_update_member_availability_own_status(self, authenticated_client, db_session, test_member):
         """Test member can update their own availability."""
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -591,14 +592,14 @@ class TestTeamRoutes:
     def test_update_member_availability_permission_denied(self, authenticated_client, db_session, admin_member):
         """Test cannot update other member's availability without permission."""
         # Create team and booking owned by admin
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=admin_member.id,
+            organizer=admin_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -649,14 +650,14 @@ class TestTeamRoutes:
     def test_api_get_team_permission_denied(self, authenticated_client, db_session, admin_member):
         """Test API get team permission denied for non-owner."""
         # Create team owned by admin
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=admin_member.id,
+            organizer=admin_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -677,25 +678,26 @@ class TestTeamRoutes:
     def test_api_get_team_success(self, authenticated_client, db_session, test_member):
         """Test API get team success for team owner."""
         # Create team member
-        team_member_user = Member(
+        team_member_user = MemberFactory.create(
             username='teammember',
             firstname='Team',
             lastname='Member',
             email='team@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add(team_member_user)
         
         # Create team and booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -736,14 +738,14 @@ class TestTeamRoutes:
     def test_api_get_team_success_for_admin(self, admin_client, db_session, test_member):
         """Test API get team success for admin user."""
         # Create team owned by regular user
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -768,15 +770,15 @@ class TestTeamFormValidation:
     
     def test_create_team_form_validation_empty_name(self, admin_client, db_session):
         """Test create team form validation with empty team name."""
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=1,
+            organizer=1,
             booking_type='event'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         form_data = {
             'team_name': '',
@@ -790,15 +792,15 @@ class TestTeamFormValidation:
     
     def test_create_team_form_validation_long_name(self, admin_client, db_session):
         """Test create team form validation with overly long team name."""
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=1,
+            organizer=1,
             booking_type='event'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         form_data = {
             'team_name': 'x' * 101,  # Exceeds 100 character limit
@@ -814,14 +816,14 @@ class TestTeamFormValidation:
     def test_manage_team_csrf_validation(self, admin_client, db_session, test_member):
         """Test manage team CSRF validation."""
         # Create team
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='event'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(
@@ -852,12 +854,12 @@ class TestTeamIntegration:
     def test_team_creation_with_event_format_positions(self, admin_client, db_session, test_member):
         """Test team creation uses event format for position assignment."""
         # Create booking with specific format using booking-centric architecture
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Triples Competition',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=1,
+            organizer=1,
             booking_type='event',
             event_type=1,  # Competition type
             format=3,      # Triples format (integer ID)
@@ -866,7 +868,7 @@ class TestTeamIntegration:
         db_session.add(booking)
         
         # Create additional members
-        member2 = Member(
+        member2 = MemberFactory.create(
             username='member2',
             firstname='Member',
             lastname='Two',
@@ -874,13 +876,14 @@ class TestTeamIntegration:
             phone='123-456-7890',
             status='Full'
         )
-        member3 = Member(
+        member3 = MemberFactory.create(
             username='member3',
             firstname='Member',
             lastname='Three',
             email='member3@example.com',
             phone='123-456-7890',
-            status='Full'
+            status='Full',
+            joined_date=date.today()
         )
         db_session.add_all([member2, member3])
         db_session.commit()
@@ -906,14 +909,14 @@ class TestTeamIntegration:
     def test_rollup_team_management_redirect(self, admin_client, db_session, test_member):
         """Test team management redirects back to rollup when specified."""
         # Create rollup booking
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Booking',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=1,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='rollup'
         )
-        db_session.add(booking)
         db_session.flush()
         
         team = Team(

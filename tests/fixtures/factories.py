@@ -5,7 +5,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from datetime import date, timedelta
 from app import db
-from app.models import Member, Role, Booking, Team, Pool
+from app.models import Member, Role, Booking, Team, Pool, TeamMember
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -32,7 +32,7 @@ class MemberFactory(SQLAlchemyModelFactory):
     lastname = factory.Faker('last_name')
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
     phone = factory.Faker('phone_number')
-    status = 'Full'
+    # status defaults to 'Pending' from model - don't override
     is_admin = False
     share_email = True
     share_phone = True
@@ -62,6 +62,12 @@ class AdminMemberFactory(MemberFactory):
             return
         if extracted:
             obj.roles = extracted
+
+
+class FullMemberFactory(MemberFactory):
+    """Factory for creating full Member instances."""
+    
+    status = 'Full'
 
 
 class PendingMemberFactory(MemberFactory):
@@ -135,5 +141,19 @@ class EventBookingFactory(BookingFactory):
     event_type = 1  # Social
     format = 2  # Pairs
     gender = 3  # Mixed
+
+
+class TeamMemberFactory(SQLAlchemyModelFactory):
+    """Factory for creating TeamMember instances."""
+    
+    class Meta:
+        model = TeamMember
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    team = factory.SubFactory(TeamFactory)
+    member = factory.SubFactory(MemberFactory)
+    position = 'Player'
+    availability_status = 'available'
 
 

@@ -6,7 +6,7 @@
 {% block page_header %}
 <h1 class="title">Create Pool</h1>
 {% if pool_type == 'event' %}
-<h2 class="subtitle">Create a member registration pool for "{{ event.name }}"</h2>
+<h2 class="subtitle">Create a member registration pool for "{{ booking.name }}"</h2>
 {% else %}
 <h2 class="subtitle">Create a member registration pool for booking on {{ booking.booking_date }}</h2>
 {% endif %}
@@ -63,12 +63,12 @@
                     <div class="notification is-info is-light">
                         <h4 class="title is-6">Pool Details</h4>
                         {% if pool_type == 'event' %}
-                        <p><strong>Event:</strong> {{ event.name }}</p>
-                        <p><strong>Type:</strong> {{ event.get_event_type_name() }}</p>
-                        <p><strong>Format:</strong> {{ event.get_format_name() }}</p>
-                        <p><strong>Gender:</strong> {{ event.get_gender_name() }}</p>
-                        {% if event.scoring %}
-                        <p><strong>Scoring:</strong> {{ event.scoring }}</p>
+                        <p><strong>Event:</strong> {{ booking.name }}</p>
+                        <p><strong>Type:</strong> {{ booking.get_event_type_name() }}</p>
+                        <p><strong>Format:</strong> {{ booking.get_format_name() }}</p>
+                        <p><strong>Gender:</strong> {{ booking.get_gender_name() }}</p>
+                        {% if booking.scoring %}
+                        <p><strong>Scoring:</strong> {{ booking.scoring }}</p>
                         {% endif %}
                         {% else %}
                         <p><strong>Booking Date:</strong> {{ booking.booking_date }}</p>

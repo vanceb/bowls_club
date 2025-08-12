@@ -31,7 +31,8 @@ def global_event_manager(db_session, event_manager_role):
         lastname='EventManager',
         email='global.event@example.com',
         phone='555-0001',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('password123')
     member.roles = [event_manager_role]
@@ -49,7 +50,8 @@ def specific_event_manager(db_session):
         lastname='EventManager',
         email='specific.event@example.com',
         phone='555-0002',  
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('password123')
     db_session.add(member)
@@ -66,7 +68,8 @@ def regular_member(db_session):
         lastname='Member',
         email='regular@example.com',
         phone='555-0003',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('password123')
     db_session.add(member)

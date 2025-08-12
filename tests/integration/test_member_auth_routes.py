@@ -2,6 +2,7 @@
 Integration tests for member authentication routes.
 """
 import pytest
+from datetime import date
 from flask import url_for
 from app.models import Member
 
@@ -58,7 +59,9 @@ class TestAuthRoutes:
             firstname='Locked',
             lastname='User',
             email='locked@example.com',
-            lockout=True
+            status='Full',
+            lockout=True,
+            joined_date=date.today()
         )
         locked_member.set_password('password123')
         db_session.add(locked_member)

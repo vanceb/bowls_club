@@ -105,7 +105,7 @@ class TestAdminMenuUtils:
         db_session.commit()
         
         # Create test user with specific roles
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', 
             firstname='Test',
             lastname='User',
@@ -121,15 +121,18 @@ class TestAdminMenuUtils:
             {'name': 'Manage Posts', 'link': 'admin.manage_posts', 'roles': ['Content Manager']},
             {'name': 'General Admin', 'link': 'admin.general'}  # No roles specified
         ]
-        mock_app.config.get.return_value = test_menu_items
+        mock_config = MagicMock()
+        mock_config.get.return_value = test_menu_items
+        mock_app.config = mock_config
         
         filtered_menu = filter_admin_menu_by_roles(member)
         
-        # Should include items for User Manager and items without role restrictions
-        assert len(filtered_menu) >= 2
+        # Should include items for User Manager role only
+        # Items without roles are admin-only by default
+        assert len(filtered_menu) == 1
         filtered_names = [item['name'] for item in filtered_menu if item is not None]
         assert 'Manage Members' in filtered_names
-        assert 'General Admin' in filtered_names
+        assert 'General Admin' not in filtered_names  # No roles = admin-only
         assert 'Manage Posts' not in filtered_names
     
     @patch('app.members.utils.current_app')
@@ -137,7 +140,7 @@ class TestAdminMenuUtils:
     def test_filter_admin_menu_admin_user(self, mock_authenticated, mock_app, db_session):
         """Test admin menu filtering for admin users."""
         # Create admin user
-        admin = Member(
+        admin = MemberFactory.create(
             username='admin', 
             firstname='Admin',
             lastname='User',
@@ -152,7 +155,9 @@ class TestAdminMenuUtils:
             {'name': 'Manage Members', 'link': 'members.admin_manage_members', 'roles': ['User Manager']},
             {'name': 'Manage Posts', 'link': 'admin.manage_posts', 'roles': ['Content Manager']},
         ]
-        mock_app.config.get.return_value = test_menu_items
+        mock_config = MagicMock()
+        mock_config.get.return_value = test_menu_items
+        mock_app.config = mock_config
         
         filtered_menu = filter_admin_menu_by_roles(admin)
         
@@ -166,7 +171,7 @@ class TestMemberDataUtils:
     
     def test_get_member_data_private(self, db_session):
         """Test getting member data without private information."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User',
@@ -191,7 +196,7 @@ class TestMemberDataUtils:
     
     def test_get_member_data_public(self, db_session):
         """Test getting member data with public information."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User',
@@ -210,7 +215,7 @@ class TestMemberDataUtils:
     
     def test_get_member_data_admin_view(self, db_session):
         """Test getting member data with admin privileges."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User',

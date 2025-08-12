@@ -6,6 +6,7 @@ import tempfile
 import os
 from app import create_app, db
 from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
+from tests.fixtures.factories import BookingFactory, MemberFactory, AdminMemberFactory, FullMemberFactory, PendingMemberFactory
 
 # Set environment variables for testing
 os.environ['SECRET_KEY'] = 'test-secret-key-for-testing-only'
@@ -17,9 +18,29 @@ def app():
     """Create application for testing."""
     app = create_app('testing')
     
-    # Create application context
+    # Create application context and set up database
     with app.app_context():
+        # Import all models to ensure they are loaded
+        from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
+        
+        # Ensure all models are registered with SQLAlchemy
+        # This forces SQLAlchemy to process all model definitions
+        from app import models
+        
+        # Create all database tables
+        db.create_all()
+        
+        # Debug: Check if tables were created
+        import sqlalchemy as sa
+        inspector = sa.inspect(db.engine)
+        tables = inspector.get_table_names()
+        if 'member' not in tables:
+            raise RuntimeError(f"Database setup failed. Tables created: {tables}")
+        
         yield app
+        
+        # Clean up after all tests in session
+        db.drop_all()
 
 
 @pytest.fixture
@@ -38,15 +59,22 @@ def runner(app):
 def db_session(app):
     """Create database session for testing."""
     with app.app_context():
-        # Create all tables
-        db.create_all()
-        
-        # Provide the session
+        # Provide the session (tables are already created in app fixture)
         yield db.session
         
-        # Clean up
-        db.session.remove()
-        db.drop_all()
+        # Clean up - remove any data created during the test
+        # Note: We don't drop tables here since they're session-scoped
+        # Just clear the data for the next test
+        try:
+            # Clear all tables for clean state between tests
+            for table in reversed(db.metadata.sorted_tables):
+                db.session.execute(table.delete())
+            db.session.commit()
+        except Exception:
+            # If there's an error, rollback
+            db.session.rollback()
+        finally:
+            db.session.remove()
 
 
 @pytest.fixture
@@ -65,53 +93,34 @@ def core_roles(db_session):
 @pytest.fixture
 def test_member(db_session):
     """Create a basic test member."""
-    member = Member(
-        username='testuser',
+    member = FullMemberFactory.create(
         firstname='Test',
-        lastname='User', 
-        email='test@example.com',
-        phone='123-456-7890',
-        status='Full'
+        lastname='User',
+        password='testpassword123'
     )
-    member.set_password('testpassword123')
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
 @pytest.fixture
 def admin_member(db_session, core_roles):
     """Create an admin test member with all roles."""
-    member = Member(
-        username='admin',
+    member = AdminMemberFactory.create(
         firstname='Admin',
         lastname='User',
-        email='admin@example.com', 
-        phone='123-456-7890',
-        status='Full',
-        is_admin=True
+        password='adminpassword123',
+        roles=core_roles  # Assign all core roles
     )
-    member.set_password('adminpassword123')
-    member.roles = core_roles  # Assign all core roles
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
 @pytest.fixture
 def pending_member(db_session):
     """Create a pending member for testing."""
-    member = Member(
-        username='pendinguser',
+    member = PendingMemberFactory.create(
         firstname='Pending',
         lastname='User',
-        email='pending@example.com',
-        phone='123-456-7890',
-        status='Pending'
+        password='pendingpassword123'
     )
-    member.set_password('pendingpassword123')
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
@@ -119,15 +128,11 @@ def pending_member(db_session):
 def user_manager_member(db_session, core_roles):
     """Create a member with User Manager role."""
     user_manager_role = next(role for role in core_roles if role.name == 'User Manager')
-    member = Member(
-        username='usermanager',
+    member = FullMemberFactory.create(
         firstname='User',
         lastname='Manager',
-        email='usermanager@example.com',
-        phone='123-456-7890',
-        status='Full'
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [user_manager_role]
     db_session.add(member)
     db_session.commit()
@@ -156,17 +161,15 @@ def admin_client(client, admin_member):
 def test_booking(db_session):
     """Create a test booking."""
     from datetime import datetime, timedelta, date
-    booking = Booking(
+    booking = BookingFactory.create(
+        name='Test Conftest Booking',
         booking_date=date.today() + timedelta(days=1),
         session=1,
         rink_count=2,
-        name='Test Booking',
         event_type=1,
         gender=4,
         format=5
     )
-    db_session.add(booking)
-    db_session.commit()
     return booking
 
 
@@ -190,6 +193,33 @@ def test_booking_with_pool(db_session, test_booking):
 
 
 @pytest.fixture
+def test_event(db_session):
+    """Create a test event (booking)."""
+    from datetime import datetime, timedelta, date
+    event = BookingFactory.create(
+        name='Test Event',
+        booking_date=date.today() + timedelta(days=7),
+        session=1,
+        rink_count=2,
+        booking_type='event',
+        event_type=1,  # Social
+        gender=4,  # Open
+        format=5   # Fours - 2 Wood
+    )
+    return event
+
+
+@pytest.fixture
+def test_event_with_pool(db_session, test_event):
+    """Create a test event with pool."""
+    pool = Pool(booking_id=test_event.id, is_open=True)
+    db_session.add(pool)
+    db_session.commit()
+    test_event.pool = pool
+    return test_event
+
+
+@pytest.fixture
 def event_manager_member(db_session, core_roles):
     """Create a member with Event Manager role."""
     event_manager_role = next((role for role in core_roles if role.name == 'Event Manager'), None)
@@ -198,15 +228,11 @@ def event_manager_member(db_session, core_roles):
         db_session.add(event_manager_role)
         db_session.commit()
     
-    member = Member(
-        username='eventmanager',
+    member = FullMemberFactory.create(
         firstname='Event',
         lastname='Manager',
-        email='eventmanager@example.com',
-        phone='123-456-7890',
-        status='Full'
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [event_manager_role]
     db_session.add(member)
     db_session.commit()
@@ -222,15 +248,11 @@ def content_manager_member(db_session, core_roles):
         db_session.add(content_manager_role)
         db_session.commit()
     
-    member = Member(
-        username='contentmanager',
+    member = FullMemberFactory.create(
         firstname='Content',
         lastname='Manager',
-        email='contentmanager@example.com',
-        phone='123-456-7890',
-        status='Full'
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [content_manager_role]
     db_session.add(member)
     db_session.commit()

@@ -473,7 +473,8 @@ class TestDataPrivacy:
             phone='555-0123',
             status='Full',
             share_phone=False,
-            share_email=False
+            share_email=False,
+            joined_date=date.today()
         )
         private_member.set_password('testpass123')
         db_session.add(private_member)
@@ -498,7 +499,8 @@ class TestDataPrivacy:
             phone='555-0124',
             status='Full',
             share_phone=False,
-            share_email=False
+            share_email=False,
+            joined_date=date.today()
         )
         private_member.set_password('testpass123')
         db_session.add(private_member)
@@ -533,7 +535,8 @@ def create_user_with_role(role_name, db_session, core_roles):
         lastname='User',
         email=f'{role_name.lower().replace(" ", "")}@example.com',
         phone='123-456-7890',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('testpass123')
     

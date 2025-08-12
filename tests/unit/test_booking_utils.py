@@ -5,6 +5,7 @@ import pytest
 import sqlalchemy as sa
 from app.bookings.utils import add_home_games_filter
 from app.models import Booking, Member
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.unit
@@ -15,7 +16,7 @@ class TestBookingUtils:
         """Test add_home_games_filter with basic query."""
         with app.app_context():
             # Create test member
-            member = Member(
+            member = MemberFactory.create(
                 username='testuser', firstname='Test', lastname='User',
                 email='test@test.com', status='Full'
             )
@@ -23,37 +24,40 @@ class TestBookingUtils:
             db_session.commit()
             
             # Create test bookings
-            home_booking = Booking(
+            home_booking = BookingFactory.create(
+                name='Test Home Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=2,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='home'
             )
-            away_booking = Booking(
+            away_booking = BookingFactory.create(
+                name='Test Away Booking',
                 booking_date=sa.func.date('2024-01-02'),
                 session=1,
                 rink_count=3,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='away'
             )
-            neutral_booking = Booking(
+            neutral_booking = BookingFactory.create(
+                name='Test Neutral Booking',
                 booking_date=sa.func.date('2024-01-03'),
                 session=1,
                 rink_count=1,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='neutral'
             )
-            null_booking = Booking(
+            null_booking = BookingFactory.create(
+                name='Test Null Booking',
                 booking_date=sa.func.date('2024-01-04'),
                 session=1,
                 rink_count=4,
-                organizer_id=member.id,
+                organizer=member,
                 home_away=None
             )
             
-            db_session.add_all([home_booking, away_booking, neutral_booking, null_booking])
-            db_session.commit()
+            # Factories already commit to database, no need for manual add/commit
             
             # Test basic query
             base_query = sa.select(Booking)
@@ -73,7 +77,7 @@ class TestBookingUtils:
         """Test add_home_games_filter with sum aggregation query."""
         with app.app_context():
             # Create test member
-            member = Member(
+            member = MemberFactory.create(
                 username='testuser', firstname='Test', lastname='User',
                 email='test@test.com', status='Full'
             )
@@ -81,30 +85,32 @@ class TestBookingUtils:
             db_session.commit()
             
             # Create test bookings
-            home_booking = Booking(
+            home_booking = BookingFactory.create(
+                name='Test Home Sum Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=2,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='home'
             )
-            away_booking = Booking(
+            away_booking = BookingFactory.create(
+                name='Test Away Sum Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=3,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='away'
             )
-            neutral_booking = Booking(
+            neutral_booking = BookingFactory.create(
+                name='Test Neutral Sum Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=1,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='neutral'
             )
             
-            db_session.add_all([home_booking, away_booking, neutral_booking])
-            db_session.commit()
+            # Factories already commit to database, no need for manual add/commit
             
             # Test sum query (commonly used for availability calculations)
             base_query = sa.select(sa.func.sum(Booking.rink_count)).where(
@@ -132,7 +138,7 @@ class TestBookingUtils:
         """Test add_home_games_filter when only away games exist."""
         with app.app_context():
             # Create test member
-            member = Member(
+            member = MemberFactory.create(
                 username='testuser', firstname='Test', lastname='User',
                 email='test@test.com', status='Full'
             )
@@ -140,23 +146,24 @@ class TestBookingUtils:
             db_session.commit()
             
             # Create only away bookings
-            away_booking1 = Booking(
+            away_booking1 = BookingFactory.create(
+                name='Test Away Booking 1',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=2,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='away'
             )
-            away_booking2 = Booking(
+            away_booking2 = BookingFactory.create(
+                name='Test Away Booking 2',
                 booking_date=sa.func.date('2024-01-01'),
                 session=2,
                 rink_count=3,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='away'
             )
             
-            db_session.add_all([away_booking1, away_booking2])
-            db_session.commit()
+            # Factories already commit to database, no need for manual add/commit
             
             # Test query should return no results
             base_query = sa.select(Booking)
@@ -176,7 +183,7 @@ class TestBookingUtils:
         """Test add_home_games_filter combined with other query conditions."""
         with app.app_context():
             # Create test member
-            member = Member(
+            member = MemberFactory.create(
                 username='testuser', firstname='Test', lastname='User',
                 email='test@test.com', status='Full'
             )
@@ -184,30 +191,32 @@ class TestBookingUtils:
             db_session.commit()
             
             # Create test bookings on different dates
-            home_booking_jan = Booking(
+            home_booking_jan = BookingFactory.create(
+                name='Test Home Jan Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=2,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='home'
             )
-            home_booking_feb = Booking(
+            home_booking_feb = BookingFactory.create(
+                name='Test Home Feb Booking',
                 booking_date=sa.func.date('2024-02-01'),
                 session=1,
                 rink_count=3,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='home'
             )
-            away_booking_jan = Booking(
+            away_booking_jan = BookingFactory.create(
+                name='Test Away Jan Booking',
                 booking_date=sa.func.date('2024-01-01'),
                 session=1,
                 rink_count=1,
-                organizer_id=member.id,
+                organizer=member,
                 home_away='away'
             )
             
-            db_session.add_all([home_booking_jan, home_booking_feb, away_booking_jan])
-            db_session.commit()
+            # Factories already commit to database, no need for manual add/commit
             
             # Test with additional date filter
             base_query = sa.select(Booking).where(

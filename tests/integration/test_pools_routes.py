@@ -59,10 +59,10 @@ class TestPoolManagement:
         response = client.get(f'/pools/create/booking/{temp_booking.id}')
         assert response.status_code == 200
     
-    def test_manage_pool_requires_permission(self, client, temp_user, temp_pool):
+    def test_manage_pool_requires_permission(self, client, test_member, temp_pool):
         """Test managing pool requires appropriate permissions."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.get(f'/pools/manage/{temp_pool.id}')
         assert response.status_code in [403, 302]
@@ -84,10 +84,10 @@ class TestPoolRegistration:
         response = client.post(f'/pools/register/{temp_pool.id}')
         assert response.status_code in [401, 302]
     
-    def test_register_member_success(self, client, temp_user, temp_booking_with_pool):
+    def test_register_member_success(self, client, test_member, temp_booking_with_pool):
         """Test successful member registration to pool."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         pool = temp_booking_with_pool.pool
         
@@ -101,23 +101,23 @@ class TestPoolRegistration:
             # Should log the registration
             mock_audit.assert_called()
     
-    def test_register_member_already_registered(self, client, temp_user, temp_booking_with_pool):
+    def test_register_member_already_registered(self, client, test_member, temp_booking_with_pool):
         """Test registering already registered member."""
         pool = temp_booking_with_pool.pool
         
         # Create existing registration
-        existing_reg = PoolRegistration(pool_id=pool.id, member_id=temp_user.id)
+        existing_reg = PoolRegistration(pool_id=pool.id, member_id=test_member.id)
         db.session.add(existing_reg)
         db.session.commit()
         
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/register/{pool.id}')
         # Should handle gracefully (warning message or redirect)
         assert response.status_code in [200, 302]
     
-    def test_register_member_pool_closed(self, client, temp_user, temp_booking):
+    def test_register_member_pool_closed(self, client, test_member, temp_booking):
         """Test registering for closed pool."""
         # Create closed pool
         closed_pool = Pool(booking_id=temp_booking.id, is_open=False)
@@ -125,7 +125,7 @@ class TestPoolRegistration:
         db.session.commit()
         
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/register/{closed_pool.id}')
         # Should reject or show warning
@@ -136,17 +136,17 @@ class TestPoolRegistration:
         response = client.post('/pools/unregister/1')
         assert response.status_code in [401, 302]
     
-    def test_unregister_member_success(self, client, temp_user, temp_booking_with_pool):
+    def test_unregister_member_success(self, client, test_member, temp_booking_with_pool):
         """Test successful member unregistration from pool."""
         pool = temp_booking_with_pool.pool
         
         # Create registration to remove
-        registration = PoolRegistration(pool_id=pool.id, member_id=temp_user.id)
+        registration = PoolRegistration(pool_id=pool.id, member_id=test_member.id)
         db.session.add(registration)
         db.session.commit()
         
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         with patch('app.audit.audit_log_delete') as mock_audit:
             response = client.post(f'/pools/unregister/{registration.id}')
@@ -154,10 +154,10 @@ class TestPoolRegistration:
             assert response.status_code in [200, 302]
             mock_audit.assert_called()
     
-    def test_unregister_member_not_registered(self, client, temp_user):
+    def test_unregister_member_not_registered(self, client, test_member):
         """Test unregistering non-existent registration."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post('/pools/unregister/99999')
         assert response.status_code in [404, 302]
@@ -166,10 +166,10 @@ class TestPoolRegistration:
 class TestPoolActions:
     """Test pool action routes."""
     
-    def test_toggle_pool_status_requires_permission(self, client, temp_user, temp_pool):
+    def test_toggle_pool_status_requires_permission(self, client, test_member, temp_pool):
         """Test toggling pool status requires permissions."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/toggle/{temp_pool.id}')
         assert response.status_code in [403, 302]
@@ -191,18 +191,18 @@ class TestPoolActions:
             db.session.refresh(temp_pool)
             assert temp_pool.is_open != original_status
     
-    def test_delete_pool_requires_event_manager(self, client, temp_user, temp_pool):
+    def test_delete_pool_requires_event_manager(self, client, test_member, temp_pool):
         """Test pool deletion requires Event Manager role."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/delete/{temp_pool.id}')
         assert response.status_code in [403, 302]
     
-    def test_delete_pool_with_registrations_prevented(self, client, event_manager_user, temp_pool, temp_user):
+    def test_delete_pool_with_registrations_prevented(self, client, event_manager_user, temp_pool, test_member):
         """Test pool with registrations cannot be deleted."""
         # Add registration to pool
-        registration = PoolRegistration(pool_id=temp_pool.id, member_id=temp_user.id)
+        registration = PoolRegistration(pool_id=temp_pool.id, member_id=test_member.id)
         db.session.add(registration)
         db.session.commit()
         
@@ -214,7 +214,7 @@ class TestPoolActions:
         assert response.status_code in [200, 302]
         
         # Pool should still exist
-        assert Pool.query.get(temp_pool.id) is not None
+        assert db.session.get(Pool, temp_pool.id) is not None
     
     def test_delete_empty_pool_success(self, client, event_manager_user, temp_booking):
         """Test successful deletion of empty pool."""
@@ -237,10 +237,10 @@ class TestPoolActions:
 class TestPoolAdminRoutes:
     """Test pool admin management routes."""
     
-    def test_admin_create_event_pool_requires_role(self, client, temp_user, temp_booking):
+    def test_admin_create_event_pool_requires_role(self, client, test_member, temp_booking):
         """Test admin pool creation requires Event Manager role."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/admin/create_event_pool/{temp_booking.id}')
         assert response.status_code in [403, 302]
@@ -256,41 +256,41 @@ class TestPoolAdminRoutes:
             assert response.status_code in [200, 302]
             mock_audit.assert_called()
     
-    def test_admin_add_member_to_pool_requires_role(self, client, temp_user, temp_booking):
+    def test_admin_add_member_to_pool_requires_role(self, client, test_member, temp_booking):
         """Test admin adding member to pool requires Event Manager role."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/admin/add_member_to_pool/{temp_booking.id}', data={
-            'member_id': temp_user.id
+            'member_id': test_member.id
         })
         assert response.status_code in [403, 302]
     
-    def test_admin_add_member_to_pool_success(self, client, event_manager_user, temp_booking_with_pool, temp_user):
+    def test_admin_add_member_to_pool_success(self, client, event_manager_user, temp_booking_with_pool, test_member):
         """Test admin can add member to pool."""
         with client.session_transaction() as sess:
             sess['_user_id'] = str(event_manager_user.id)
         
         with patch('app.audit.audit_log_create') as mock_audit:
             response = client.post(f'/pools/admin/add_member_to_pool/{temp_booking_with_pool.id}', data={
-                'member_id': temp_user.id
+                'member_id': test_member.id
             })
             
             assert response.status_code in [200, 302]
             mock_audit.assert_called()
     
-    def test_admin_delete_from_pool_requires_role(self, client, temp_user):
+    def test_admin_delete_from_pool_requires_role(self, client, test_member):
         """Test admin removing from pool requires Event Manager role."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post('/pools/admin/delete_from_pool/1')
         assert response.status_code in [403, 302]
     
-    def test_admin_delete_from_pool_success(self, client, event_manager_user, temp_booking_with_pool, temp_user):
+    def test_admin_delete_from_pool_success(self, client, event_manager_user, temp_booking_with_pool, test_member):
         """Test admin can remove member from pool."""
         pool = temp_booking_with_pool.pool
-        registration = PoolRegistration(pool_id=pool.id, member_id=temp_user.id)
+        registration = PoolRegistration(pool_id=pool.id, member_id=test_member.id)
         db.session.add(registration)
         db.session.commit()
         
@@ -303,10 +303,10 @@ class TestPoolAdminRoutes:
             assert response.status_code in [200, 302]
             mock_audit.assert_called()
     
-    def test_admin_auto_select_pool_members_requires_role(self, client, temp_user, temp_booking):
+    def test_admin_auto_select_pool_members_requires_role(self, client, test_member, temp_booking):
         """Test auto-select pool members requires Event Manager role."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.post(f'/pools/admin/auto_select_pool_members/{temp_booking.id}', data={
             'method': 'oldest_first',
@@ -350,10 +350,10 @@ class TestPoolAPI:
         response = client.get(f'/pools/api/v1/pool/{temp_pool.id}')
         assert response.status_code in [401, 302]
     
-    def test_api_get_pool_success(self, client, temp_user, temp_pool):
+    def test_api_get_pool_success(self, client, test_member, temp_pool):
         """Test authenticated user can get pool details."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.get(f'/pools/api/v1/pool/{temp_pool.id}')
         assert response.status_code == 200
@@ -363,10 +363,10 @@ class TestPoolAPI:
         assert data['success'] == True
         assert 'pool' in data
     
-    def test_api_get_pool_not_found(self, client, temp_user):
+    def test_api_get_pool_not_found(self, client, test_member):
         """Test API returns 404 for non-existent pool."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         response = client.get('/pools/api/v1/pool/99999')
         assert response.status_code == 404
@@ -378,21 +378,21 @@ class TestPoolAPI:
 class TestPoolBusinessLogic:
     """Test pool business logic and edge cases."""
     
-    def test_pool_capacity_limits(self, client, temp_user, temp_booking_with_pool):
+    def test_pool_capacity_limits(self, client, test_member, temp_booking_with_pool):
         """Test pool respects capacity limits if configured."""
         pool = temp_booking_with_pool.pool
         
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         # Test registration when pool might be at capacity
         response = client.post(f'/pools/register/{pool.id}')
         assert response.status_code in [200, 302]
     
-    def test_pool_registration_with_event_dates(self, client, temp_user, temp_booking_with_pool):
+    def test_pool_registration_with_event_dates(self, client, test_member, temp_booking_with_pool):
         """Test pool registration considers event timing."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         # Registration should work for future events
         response = client.post(f'/pools/register/{temp_booking_with_pool.pool.id}')
@@ -412,10 +412,10 @@ class TestPoolBusinessLogic:
         # Should prevent inactive members from registering
         assert response.status_code in [200, 302, 403]
     
-    def test_pool_registration_audit_trail(self, client, temp_user, temp_booking_with_pool):
+    def test_pool_registration_audit_trail(self, client, test_member, temp_booking_with_pool):
         """Test pool operations create proper audit trail."""
         with client.session_transaction() as sess:
-            sess['_user_id'] = str(temp_user.id)
+            sess['_user_id'] = str(test_member.id)
         
         with patch('app.audit.audit_log_create') as mock_create:
             with patch('app.audit.audit_log_delete') as mock_delete:
@@ -427,7 +427,7 @@ class TestPoolBusinessLogic:
                 # Find registration to unregister
                 registration = PoolRegistration.query.filter_by(
                     pool_id=temp_booking_with_pool.pool.id,
-                    member_id=temp_user.id
+                    member_id=test_member.id
                 ).first()
                 
                 if registration:
@@ -463,46 +463,44 @@ class TestPoolFiltering:
 
 # Test fixtures for pools testing
 @pytest.fixture
-def temp_booking(app):
+def temp_booking(db_session):
     """Create a test booking for pool tests."""
-    with app.app_context():
-        from tests.fixtures.factories import BookingFactory
-        booking = BookingFactory()
-        return booking
+    from tests.fixtures.factories import BookingFactory
+    booking = BookingFactory.create()
+    return booking
 
 
 @pytest.fixture
-def temp_pool(app, temp_booking):
+def temp_pool(db_session, temp_booking):
     """Create a test pool."""
-    with app.app_context():
-        pool = Pool(booking_id=temp_booking.id, is_open=True)
-        db.session.add(pool)
-        db.session.commit()
-        return pool
+    pool = Pool(booking_id=temp_booking.id, is_open=True)
+    db_session.add(pool)
+    db_session.commit()
+    return pool
 
 
 @pytest.fixture
-def event_manager_user(app):
+def event_manager_user(db_session):
     """Create user with Event Manager role."""
-    with app.app_context():
-        user = MemberFactory()
-        role = Role.query.filter_by(name='Event Manager').first()
-        if not role:
-            role = Role(name='Event Manager')
-            db.session.add(role)
-        user.roles.append(role)
-        db.session.add(user)
-        db.session.commit()
-        return user
+    from tests.fixtures.factories import MemberFactory
+    user = MemberFactory.create()
+    role = db_session.query(Role).filter_by(name='Event Manager').first()
+    if not role:
+        role = Role(name='Event Manager')
+        db_session.add(role)
+        db_session.commit()
+    user.roles.append(role)
+    db_session.add(user)
+    db_session.commit()
+    return user
 
 
 @pytest.fixture
-def temp_booking_with_pool(app, temp_booking):
+def temp_booking_with_pool(db_session, temp_booking):
     """Create booking with associated pool."""
-    with app.app_context():
-        pool = Pool(booking_id=temp_booking.id, is_open=True)
-        temp_booking.has_pool = True
-        db.session.add(pool)
-        db.session.commit()
-        temp_booking.pool = pool
-        return temp_booking
+    pool = Pool(booking_id=temp_booking.id, is_open=True)
+    temp_booking.has_pool = True
+    db_session.add(pool)
+    db_session.commit()
+    temp_booking.pool = pool
+    return temp_booking

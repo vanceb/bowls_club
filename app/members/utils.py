@@ -185,6 +185,7 @@ def get_member_data(member, show_private_data=False):
     """
     base_data = {
         'id': member.id,
+        'username': member.username,
         'firstname': member.firstname,
         'lastname': member.lastname,
         'status': member.status
@@ -193,10 +194,14 @@ def get_member_data(member, show_private_data=False):
     # Add email if it should be shared or if requester has admin privileges
     if show_private_data or member.share_email:
         base_data['email'] = member.email
+    else:
+        base_data['email'] = 'Private'
     
     # Add phone if it should be shared or if requester has admin privileges  
     if show_private_data or member.share_phone:
         base_data['phone'] = member.phone
+    else:
+        base_data['phone'] = 'Private'
     
     # Always include privacy flags so frontend can determine display logic
     base_data.update({
@@ -207,7 +212,6 @@ def get_member_data(member, show_private_data=False):
     # Admin-only fields
     if show_private_data:
         base_data.update({
-            'username': member.username,
             'gender': member.gender,
             'is_admin': member.is_admin,
             'last_login': member.last_login.isoformat() if member.last_login else None,
