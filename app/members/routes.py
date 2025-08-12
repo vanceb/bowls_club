@@ -966,6 +966,7 @@ def api_users_with_roles():
         for user in users_with_roles:
             user_data = {
                 'id': user.id,
+                'username': user.username,
                 'firstname': user.firstname,
                 'lastname': user.lastname,
                 'email': user.email,
