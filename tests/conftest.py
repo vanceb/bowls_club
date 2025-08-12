@@ -6,6 +6,7 @@ import tempfile
 import os
 from app import create_app, db
 from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
+from tests.fixtures.factories import BookingFactory
 
 # Set environment variables for testing
 os.environ['SECRET_KEY'] = 'test-secret-key-for-testing-only'
@@ -17,9 +18,29 @@ def app():
     """Create application for testing."""
     app = create_app('testing')
     
-    # Create application context
+    # Create application context and set up database
     with app.app_context():
+        # Import all models to ensure they are loaded
+        from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
+        
+        # Ensure all models are registered with SQLAlchemy
+        # This forces SQLAlchemy to process all model definitions
+        from app import models
+        
+        # Create all database tables
+        db.create_all()
+        
+        # Debug: Check if tables were created
+        import sqlalchemy as sa
+        inspector = sa.inspect(db.engine)
+        tables = inspector.get_table_names()
+        if 'member' not in tables:
+            raise RuntimeError(f"Database setup failed. Tables created: {tables}")
+        
         yield app
+        
+        # Clean up after all tests in session
+        db.drop_all()
 
 
 @pytest.fixture
@@ -38,15 +59,22 @@ def runner(app):
 def db_session(app):
     """Create database session for testing."""
     with app.app_context():
-        # Create all tables
-        db.create_all()
-        
-        # Provide the session
+        # Provide the session (tables are already created in app fixture)
         yield db.session
         
-        # Clean up
-        db.session.remove()
-        db.drop_all()
+        # Clean up - remove any data created during the test
+        # Note: We don't drop tables here since they're session-scoped
+        # Just clear the data for the next test
+        try:
+            # Clear all tables for clean state between tests
+            for table in reversed(db.metadata.sorted_tables):
+                db.session.execute(table.delete())
+            db.session.commit()
+        except Exception:
+            # If there's an error, rollback
+            db.session.rollback()
+        finally:
+            db.session.remove()
 
 
 @pytest.fixture
@@ -65,13 +93,15 @@ def core_roles(db_session):
 @pytest.fixture
 def test_member(db_session):
     """Create a basic test member."""
+    from datetime import date
     member = Member(
         username='testuser',
         firstname='Test',
         lastname='User', 
         email='test@example.com',
         phone='123-456-7890',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('testpassword123')
     db_session.add(member)
@@ -82,6 +112,7 @@ def test_member(db_session):
 @pytest.fixture
 def admin_member(db_session, core_roles):
     """Create an admin test member with all roles."""
+    from datetime import date
     member = Member(
         username='admin',
         firstname='Admin',
@@ -89,7 +120,8 @@ def admin_member(db_session, core_roles):
         email='admin@example.com', 
         phone='123-456-7890',
         status='Full',
-        is_admin=True
+        is_admin=True,
+        joined_date=date.today()
     )
     member.set_password('adminpassword123')
     member.roles = core_roles  # Assign all core roles
@@ -101,13 +133,15 @@ def admin_member(db_session, core_roles):
 @pytest.fixture
 def pending_member(db_session):
     """Create a pending member for testing."""
+    from datetime import date
     member = Member(
         username='pendinguser',
         firstname='Pending',
         lastname='User',
         email='pending@example.com',
         phone='123-456-7890',
-        status='Pending'
+        status='Pending',
+        joined_date=date.today()
     )
     member.set_password('pendingpassword123')
     db_session.add(member)
@@ -118,6 +152,7 @@ def pending_member(db_session):
 @pytest.fixture
 def user_manager_member(db_session, core_roles):
     """Create a member with User Manager role."""
+    from datetime import date
     user_manager_role = next(role for role in core_roles if role.name == 'User Manager')
     member = Member(
         username='usermanager',
@@ -125,7 +160,8 @@ def user_manager_member(db_session, core_roles):
         lastname='Manager',
         email='usermanager@example.com',
         phone='123-456-7890',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('managerpassword123')
     member.roles = [user_manager_role]
@@ -156,17 +192,15 @@ def admin_client(client, admin_member):
 def test_booking(db_session):
     """Create a test booking."""
     from datetime import datetime, timedelta, date
-    booking = Booking(
+    booking = BookingFactory.create(
+        name='Test Conftest Booking',
         booking_date=date.today() + timedelta(days=1),
         session=1,
         rink_count=2,
-        name='Test Booking',
         event_type=1,
         gender=4,
         format=5
     )
-    db_session.add(booking)
-    db_session.commit()
     return booking
 
 
@@ -192,6 +226,7 @@ def test_booking_with_pool(db_session, test_booking):
 @pytest.fixture
 def event_manager_member(db_session, core_roles):
     """Create a member with Event Manager role."""
+    from datetime import date
     event_manager_role = next((role for role in core_roles if role.name == 'Event Manager'), None)
     if not event_manager_role:
         event_manager_role = Role(name='Event Manager')
@@ -204,7 +239,8 @@ def event_manager_member(db_session, core_roles):
         lastname='Manager',
         email='eventmanager@example.com',
         phone='123-456-7890',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('managerpassword123')
     member.roles = [event_manager_role]
@@ -216,6 +252,7 @@ def event_manager_member(db_session, core_roles):
 @pytest.fixture
 def content_manager_member(db_session, core_roles):
     """Create a member with Content Manager role."""
+    from datetime import date
     content_manager_role = next((role for role in core_roles if role.name == 'Content Manager'), None)
     if not content_manager_role:
         content_manager_role = Role(name='Content Manager')
@@ -228,7 +265,8 @@ def content_manager_member(db_session, core_roles):
         lastname='Manager',
         email='contentmanager@example.com',
         phone='123-456-7890',
-        status='Full'
+        status='Full',
+        joined_date=date.today()
     )
     member.set_password('managerpassword123')
     member.roles = [content_manager_role]

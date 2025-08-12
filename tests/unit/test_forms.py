@@ -7,6 +7,7 @@ from app.forms import (
     PasswordChangeForm, EditProfileForm, MemberForm, EditMemberForm
 )
 from app.models import Member
+from tests.fixtures.factories import MemberFactory
 
 
 @pytest.mark.unit
@@ -138,7 +139,7 @@ class TestEditProfileForm:
         """Test duplicate email validation."""
         with app.app_context():
             # Create existing member
-            existing_member = Member(
+            existing_member = MemberFactory.create(
                 username='existing',
                 firstname='Existing',
                 lastname='User',
@@ -191,7 +192,7 @@ class TestMemberForm:
         """Test duplicate username validation."""
         with app.app_context():
             # Create existing member
-            existing_member = Member(
+            existing_member = MemberFactory.create(
                 username='existing',
                 firstname='Existing',
                 lastname='User',

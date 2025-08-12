@@ -5,6 +5,7 @@ import pytest
 import json
 from datetime import date, timedelta
 from app.models import Member, Booking
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.integration
@@ -14,11 +15,11 @@ class TestBookingIntegration:
     def test_complete_rollup_booking_workflow(self, authenticated_client, db_session, test_member):
         """Test complete roll-up booking workflow from creation to response."""
         # Create additional members to invite
-        player1 = Member(
+        player1 = MemberFactory.create(
             username='player1', firstname='Player', lastname='One',
             email='player1@test.com', status='Full'
         )
-        player2 = Member(
+        player2 = MemberFactory.create(
             username='player2', firstname='Player', lastname='Two',
             email='player2@test.com', status='Full'
         )
@@ -76,11 +77,11 @@ class TestBookingIntegration:
     def test_booking_rink_availability_integration(self, authenticated_client, db_session):
         """Test booking rink availability across different booking types."""
         # Create test members
-        organizer1 = Member(
+        organizer1 = MemberFactory.create(
             username='org1', firstname='Organizer', lastname='One',
             email='org1@test.com', status='Full'
         )
-        organizer2 = Member(
+        organizer2 = MemberFactory.create(
             username='org2', firstname='Organizer', lastname='Two',
             email='org2@test.com', status='Full'
         )
@@ -90,15 +91,16 @@ class TestBookingIntegration:
         test_date = date.today() + timedelta(days=5)
         
         # Create initial booking using 4 rinks
-        booking1 = Booking(
+        booking1 = BookingFactory.create(
+            name='Test Integration Booking',
             booking_date=test_date,
             session=1,
             rink_count=4,
-            organizer_id=organizer1.id,
+            organizer=organizer1,
             booking_type='event',
             home_away='home'
         )
-        db_session.add(booking1)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Test bookings range API shows correct availability
@@ -125,15 +127,16 @@ class TestBookingIntegration:
         # The form should reject this as only 2 rinks are available
         
         # Create away game using all 6 rinks (should not affect availability)
-        away_booking = Booking(
+        away_booking = BookingFactory.create(
+            name='Test Integration Booking',
             booking_date=test_date,
             session=2,  # Different session
             rink_count=6,
-            organizer_id=organizer2.id,
+            organizer=organizer2,
             booking_type='event',
             home_away='away'
         )
-        db_session.add(away_booking)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Test that away game doesn't affect home availability
@@ -149,15 +152,15 @@ class TestBookingIntegration:
     def test_event_booking_with_teams_integration(self, admin_client, db_session):
         """Test complete event booking workflow with team management."""
         # Create organizer and players
-        organizer = Member(
+        organizer = MemberFactory.create(
             username='organizer', firstname='Event', lastname='Organizer',
             email='organizer@test.com', status='Full'
         )
-        lead = Member(
+        lead = MemberFactory.create(
             username='lead', firstname='Lead', lastname='Player',
             email='lead@test.com', status='Full'
         )
-        skip = Member(
+        skip = MemberFactory.create(
             username='skip', firstname='Skip', lastname='Player',
             email='skip@test.com', status='Full'
         )
@@ -165,18 +168,18 @@ class TestBookingIntegration:
         db_session.commit()
         
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Integration Championship',
             booking_date=date.today() + timedelta(days=7),
             session=1,
             rink_count=2,
-            organizer_id=organizer.id,
+            organizer=organizer,
             event_type=2,  # Competition
             format=2,  # Pairs
             gender=3,  # Mixed
             vs='Championship Opponents'
         )
-        db_session.add(booking)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Test booking appears in API with event details
@@ -234,11 +237,11 @@ class TestBookingIntegration:
     def test_booking_calendar_integration(self, authenticated_client, db_session):
         """Test booking calendar displays different booking types correctly."""
         # Create test members
-        event_organizer = Member(
+        event_organizer = MemberFactory.create(
             username='event_org', firstname='Event', lastname='Organizer',
             email='event@test.com', status='Full'
         )
-        rollup_organizer = Member(
+        rollup_organizer = MemberFactory.create(
             username='rollup_org', firstname='Rollup', lastname='Organizer',
             email='rollup@test.com', status='Full'
         )
@@ -248,30 +251,31 @@ class TestBookingIntegration:
         test_date = date.today() + timedelta(days=4)
         
         # Create event booking (which includes all event information in booking-centric architecture)
-        event_booking = Booking(
+        event_booking = BookingFactory.create(
             name='Calendar Test Event',
             booking_date=test_date,
             session=1,
             rink_count=3,
-            organizer_id=event_organizer.id,
+            organizer=event_organizer,
             event_type=1,  # Social
             format=3,  # Triples
             gender=2,  # Ladies
             vs='Calendar Opponents'
         )
-        db_session.add(event_booking)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Create rollup booking
-        rollup_booking = Booking(
+        rollup_booking = BookingFactory.create(
+            name='Test Integration Booking',
             booking_date=test_date,
             session=2,
             rink_count=1,
-            organizer_id=rollup_organizer.id,
+            organizer=rollup_organizer,
             booking_type='rollup',
             organizer_notes='Calendar rollup test'
         )
-        db_session.add(rollup_booking)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Add player to rollup
@@ -314,14 +318,15 @@ class TestBookingIntegration:
     def test_booking_permissions_integration(self, client, db_session, test_member, admin_member):
         """Test booking permissions across different user roles."""
         # Create booking as admin
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Integration Booking',
             booking_date=date.today() + timedelta(days=6),
             session=1,
             rink_count=2,
-            organizer_id=admin_member.id,
+            organizer=admin_member,
             booking_type='event'
         )
-        db_session.add(booking)
+        # Factory already commits - no need for manual add
         db_session.commit()
         
         # Test regular user access

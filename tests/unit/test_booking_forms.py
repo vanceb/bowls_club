@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from app.bookings.forms import BookingForm
 from app.rollups.forms import RollUpBookingForm
 from app.models import Member, Booking
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.unit
@@ -84,22 +85,21 @@ class TestBookingForm:
         with app.app_context():
             # Create an existing booking that uses 5 rinks
             test_date = date.today() + timedelta(days=1)
-            existing_member = Member(
+            existing_member = MemberFactory.create(
                 username='existing', firstname='Existing', lastname='User',
                 email='existing@test.com', status='Full'
             )
             db_session.add(existing_member)
             db_session.commit()
             
-            existing_booking = Booking(
+            existing_booking = BookingFactory.create(
+                name='Test Forms Booking',
                 booking_date=test_date,
                 session=1,
                 rink_count=5,
-                organizer_id=existing_member.id,
+                organizer=existing_member,
                 home_away='home'
             )
-            db_session.add(existing_booking)
-            db_session.commit()
             
             # Try to book 3 more rinks (should fail as only 1 available)
             form_data = {
@@ -117,22 +117,21 @@ class TestBookingForm:
         with app.app_context():
             # Create an away game booking
             test_date = date.today() + timedelta(days=1)
-            existing_member = Member(
+            existing_member = MemberFactory.create(
                 username='existing', firstname='Existing', lastname='User',
                 email='existing@test.com', status='Full'
             )
             db_session.add(existing_member)
             db_session.commit()
             
-            away_booking = Booking(
+            away_booking = BookingFactory.create(
+                name='Test Forms Booking',
                 booking_date=test_date,
                 session=1,
                 rink_count=6,  # All rinks, but away
-                organizer_id=existing_member.id,
+                organizer=existing_member,
                 home_away='away'
             )
-            db_session.add(away_booking)
-            db_session.commit()
             
             # Should still be able to book home games
             form_data = {
@@ -234,22 +233,21 @@ class TestRollUpBookingForm:
             # It relies on the booking creation logic to check availability
             # This test verifies the form validates successfully even with existing bookings
             test_date = date.today() + timedelta(days=2)
-            existing_member = Member(
+            existing_member = MemberFactory.create(
                 username='existing', firstname='Existing', lastname='User',
                 email='existing@test.com', status='Full'
             )
             db_session.add(existing_member)
             db_session.commit()
             
-            existing_booking = Booking(
+            existing_booking = BookingFactory.create(
+                name='Test Forms Booking',
                 booking_date=test_date,
                 session=2,
                 rink_count=6,
-                organizer_id=existing_member.id,
+                organizer=existing_member,
                 home_away='home'
             )
-            db_session.add(existing_booking)
-            db_session.commit()
             
             # Try to book roll-up (form should validate, availability checked at booking time)
             form_data = {

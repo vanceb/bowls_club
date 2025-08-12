@@ -3,7 +3,8 @@ Integration tests for booking admin routes.
 """
 import pytest
 from datetime import date, timedelta
-from app.models import Member, Booking
+from app.models import Member, Booking, Team, TeamMember
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.integration
@@ -30,28 +31,27 @@ class TestBookingAdminRoutes:
     def test_edit_booking_get_page_loads(self, admin_client, db_session):
         """Test edit booking GET page loads."""
         # Create test booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Admin Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            name='Test Admin Booking',
             event_type=1,
             gender=4,
             format=5,
-            organizer_id=member.id,
+            organizer=member,
             priority='High',
             vs='Test Opposition',
             home_away='home'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = admin_client.get(f'/bookings/admin/edit/{booking.id}')
         
@@ -63,24 +63,24 @@ class TestBookingAdminRoutes:
     def test_edit_booking_post_valid_data(self, admin_client, db_session):
         """Test edit booking POST with valid data."""
         # Create test booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Edit Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id,
+            organizer=member,
             priority='High',
             vs='Original Opposition',
             home_away='home'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         form_data = {
             'booking_date': (date.today() + timedelta(days=2)).isoformat(),
@@ -116,21 +116,21 @@ class TestBookingAdminRoutes:
     def test_manage_teams_requires_permission(self, authenticated_client, db_session):
         """Test manage teams requires permission (organizer or Event Manager)."""
         # Create booking with different organizer
-        organizer = Member(
+        organizer = MemberFactory.create(
             username='organizer', firstname='Organizer', lastname='User',
             email='organizer@test.com', status='Full'
         )
         db_session.add(organizer)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Permission Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
             organizer_id=organizer.id
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = authenticated_client.get(f'/bookings/admin/manage_teams/{booking.id}',
                                           follow_redirects=True)
@@ -147,7 +147,7 @@ class TestBookingAdminRoutes:
         See: https://github.com/vanceb/bowls_club/issues/18
         """
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
@@ -157,8 +157,7 @@ class TestBookingAdminRoutes:
             format=2,  # Pairs
             gender=3  # Mixed
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = authenticated_client.get(f'/bookings/admin/manage_teams/{booking.id}')
         
@@ -171,13 +170,13 @@ class TestBookingAdminRoutes:
         # Create organizer and booking
         organizer = Member(
             username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            email='organizer@test.com', status='Full', joined_date=date.today()
         )
         db_session.add(organizer)
         db_session.commit()
         
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Admin Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
@@ -187,8 +186,7 @@ class TestBookingAdminRoutes:
             format=3,  # Triples
             gender=1  # Gents
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = admin_client.get(f'/bookings/admin/manage_teams/{booking.id}')
         
@@ -201,13 +199,13 @@ class TestBookingAdminRoutes:
         # Create organizer and members
         organizer = Member(
             username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            email='organizer@test.com', status='Full', joined_date=date.today()
         )
-        player1 = Member(
+        player1 = MemberFactory.create(
             username='player1', firstname='Player', lastname='One',
             email='player1@test.com', status='Full'
         )
-        player2 = Member(
+        player2 = MemberFactory.create(
             username='player2', firstname='Player', lastname='Two',
             email='player2@test.com', status='Full'
         )
@@ -215,7 +213,7 @@ class TestBookingAdminRoutes:
         db_session.commit()
         
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Pairs Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
@@ -225,8 +223,7 @@ class TestBookingAdminRoutes:
             format=2,  # Pairs
             gender=3  # Mixed
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         form_data = {
             'action': 'add_team',
@@ -242,7 +239,7 @@ class TestBookingAdminRoutes:
         assert b'Team added successfully' in response.data
         
         # Verify team was created
-        team = db_session.query(BookingTeam).filter_by(booking_id=booking.id).first()
+        team = db_session.query(Team).filter_by(booking_id=booking.id).first()
         assert team is not None
         assert team.team_name == 'Test Team'
     
@@ -251,9 +248,9 @@ class TestBookingAdminRoutes:
         # Create organizer and players
         organizer = Member(
             username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            email='organizer@test.com', status='Full', joined_date=date.today()
         )
-        player = Member(
+        player = MemberFactory.create(
             username='player1', firstname='Player', lastname='One',
             email='player1@test.com', status='Full'
         )
@@ -261,7 +258,7 @@ class TestBookingAdminRoutes:
         db_session.commit()
         
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Test Event',
             booking_date=date.today() + timedelta(days=1),
             session=1,
@@ -271,14 +268,13 @@ class TestBookingAdminRoutes:
             format=2,  # Pairs
             gender=3
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
-        # Create booking team (no longer references EventTeam)
-        team = BookingTeam(
+        # Create team (uses booking-centric Team model)
+        team = Team(
             booking_id=booking.id,
             team_name='Test Team',
-            team_number=1
+            created_by=organizer.id
         )
         db_session.add(team)
         db_session.commit()
@@ -299,7 +295,7 @@ class TestBookingAdminRoutes:
         assert b'Player added successfully' in response.data
         
         # Verify player was added
-        team_member = db_session.query(BookingTeamMember).filter_by(
+        team_member = db_session.query(TeamMember).filter_by(
             team_id=team.id, member_id=player.id
         ).first()
         assert team_member is not None

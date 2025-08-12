@@ -4,7 +4,8 @@ Integration tests for main booking routes.
 import pytest
 import json
 from datetime import date, timedelta
-from app.models import Member, Booking
+from app.models import Member, Booking, Team, TeamMember
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.integration
@@ -35,7 +36,7 @@ class TestBookingRoutes:
     def test_get_bookings_valid_date(self, authenticated_client, db_session):
         """Test get_bookings with valid date."""
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
@@ -43,16 +44,16 @@ class TestBookingRoutes:
         db_session.commit()
         
         test_date = date.today() + timedelta(days=1)
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Get Bookings',
             booking_date=test_date,
             session=1,
             rink_count=2,
-            organizer_id=member.id,
+            organizer=member,
             booking_type='event',
             organizer_notes='Test booking'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = authenticated_client.get(f'/bookings/get_bookings/{test_date.isoformat()}')
         
@@ -85,7 +86,7 @@ class TestBookingRoutes:
         # Create test member and bookings
         member = Member(
             username='testuser', firstname='Test', lastname='User',
-            email='test@test.com', status='Full'
+            email='test@test.com', status='Full', joined_date=date.today()
         )
         db_session.add(member)
         db_session.commit()
@@ -95,17 +96,19 @@ class TestBookingRoutes:
         date2 = date.today() + timedelta(days=3)
         
         booking1 = Booking(
+            name='Test Range Booking 1',
             booking_date=date1,
             session=1,
             rink_count=2,
-            organizer_id=member.id,
+            organizer=member,
             booking_type='event'
         )
         booking2 = Booking(
+            name='Test Range Booking 2',
             booking_date=date2,
             session=2,
             rink_count=3,
-            organizer_id=member.id,
+            organizer=member,
             booking_type='rollup'
         )
         db_session.add_all([booking1, booking2])
@@ -127,12 +130,12 @@ class TestBookingRoutes:
     
     def test_book_rollup_requires_login(self, client):
         """Test book rollup page requires authentication."""
-        response = client.get('/bookings/rollup/book')
+        response = client.get('/rollups/book')
         assert response.status_code == 302  # Redirect to login
     
     def test_book_rollup_get_page_loads(self, authenticated_client):
         """Test book rollup GET page loads."""
-        response = authenticated_client.get('/bookings/rollup/book')
+        response = authenticated_client.get('/rollups/book')
         
         assert response.status_code == 200
         assert b'Book Roll-Up' in response.data
@@ -154,7 +157,7 @@ class TestBookingRoutes:
             'csrf_token': 'dummy'  # CSRF disabled in testing
         }
         
-        response = authenticated_client.post('/bookings/rollup/book', 
+        response = authenticated_client.post('/rollups/book', 
                                            data=form_data, 
                                            follow_redirects=True)
         
@@ -168,50 +171,62 @@ class TestBookingRoutes:
         assert booking.rink_count == 1
         assert booking.organizer_notes == 'Test rollup booking'
         
-        # Verify organizer was added as confirmed player
-        organizer_player = db_session.query(BookingPlayer).filter_by(
-            booking_id=booking.id, 
+        # Verify organizer was added as team member
+        rollup_team = db_session.query(Team).filter_by(booking_id=booking.id).first()
+        assert rollup_team is not None
+        
+        organizer_member = db_session.query(TeamMember).filter_by(
+            team_id=rollup_team.id, 
             member_id=test_member.id
         ).first()
-        assert organizer_player is not None
-        assert organizer_player.status == 'confirmed'
+        assert organizer_member is not None
+        assert organizer_member.availability_status == 'available'
     
     def test_respond_to_rollup_requires_login(self, client):
         """Test respond to rollup requires authentication."""
-        response = client.get('/bookings/rollup/respond/1/accept')
+        response = client.get('/rollups/respond/1/accept')
         assert response.status_code == 302  # Redirect to login
     
     def test_respond_to_rollup_accept(self, authenticated_client, db_session, test_member):
         """Test accepting rollup invitation."""
         # Create organizer and booking
-        organizer = Member(
+        organizer = MemberFactory.create(
             username='organizer', firstname='Organizer', lastname='User',
             email='organizer@test.com', status='Full'
         )
         db_session.add(organizer)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Rollup Booking',
             booking_date=date.today() + timedelta(days=2),
             session=2,
             rink_count=1,
-            organizer_id=organizer.id,
+            organizer=organizer,
             booking_type='rollup'
         )
-        db_session.add(booking)
+        # Factory already commits
+        
+        # Create team for rollup
+        rollup_team = Team(
+            booking_id=booking.id,
+            team_name=f"Roll-up {booking.booking_date}",
+            created_by=organizer.id
+        )
+        db_session.add(rollup_team)
         db_session.commit()
         
         # Create invitation for test_member
-        invitation = BookingPlayer(
-            booking_id=booking.id,
+        invitation = TeamMember(
+            team_id=rollup_team.id,
             member_id=test_member.id,
-            status='pending',
-            invited_by=organizer.id
+            position='Player',
+            availability_status='pending'
         )
         db_session.add(invitation)
         db_session.commit()
         
-        response = authenticated_client.get(f'/bookings/rollup/respond/{booking.id}/accept',
+        response = authenticated_client.get(f'/rollups/respond/{booking.id}/accept',
                                           follow_redirects=True)
         
         assert response.status_code == 200
@@ -219,40 +234,49 @@ class TestBookingRoutes:
         
         # Verify invitation was updated
         db_session.refresh(invitation)
-        assert invitation.status == 'confirmed'
-        assert invitation.response_at is not None
+        assert invitation.availability_status == 'available'
+        assert invitation.confirmed_at is not None
     
     def test_respond_to_rollup_decline(self, authenticated_client, db_session, test_member):
         """Test declining rollup invitation."""
         # Create organizer and booking
-        organizer = Member(
+        organizer = MemberFactory.create(
             username='organizer', firstname='Organizer', lastname='User',
             email='organizer@test.com', status='Full'
         )
         db_session.add(organizer)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Rollup Booking',
             booking_date=date.today() + timedelta(days=2),
             session=2,
             rink_count=1,
-            organizer_id=organizer.id,
+            organizer=organizer,
             booking_type='rollup'
         )
-        db_session.add(booking)
+        # Factory already commits
+        
+        # Create team for rollup
+        rollup_team = Team(
+            booking_id=booking.id,
+            team_name=f"Roll-up {booking.booking_date}",
+            created_by=organizer.id
+        )
+        db_session.add(rollup_team)
         db_session.commit()
         
         # Create invitation for test_member
-        invitation = BookingPlayer(
-            booking_id=booking.id,
+        invitation = TeamMember(
+            team_id=rollup_team.id,
             member_id=test_member.id,
-            status='pending',
-            invited_by=organizer.id
+            position='Player',
+            availability_status='pending'
         )
         db_session.add(invitation)
         db_session.commit()
         
-        response = authenticated_client.get(f'/bookings/rollup/respond/{booking.id}/decline',
+        response = authenticated_client.get(f'/rollups/respond/{booking.id}/decline',
                                           follow_redirects=True)
         
         assert response.status_code == 200
@@ -260,51 +284,51 @@ class TestBookingRoutes:
         
         # Verify invitation was updated
         db_session.refresh(invitation)
-        assert invitation.status == 'declined'
-        assert invitation.response_at is not None
+        assert invitation.availability_status == 'unavailable'
+        assert invitation.confirmed_at is not None
     
     def test_manage_rollup_requires_login(self, client):
         """Test manage rollup requires authentication."""
-        response = client.get('/bookings/rollup/manage/1')
+        response = client.get('/rollups/manage/1')
         assert response.status_code == 302  # Redirect to login
     
     def test_manage_rollup_organizer_only(self, authenticated_client, db_session, test_member):
         """Test manage rollup only accessible by organizer."""
         # Create different organizer
-        organizer = Member(
+        organizer = MemberFactory.create(
             username='organizer', firstname='Organizer', lastname='User',
             email='organizer@test.com', status='Full'
         )
         db_session.add(organizer)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Rollup Booking',
             booking_date=date.today() + timedelta(days=2),
             session=2,
             rink_count=1,
-            organizer_id=organizer.id,  # Different from test_member
+            organizer=organizer,  # Different from test_member
             booking_type='rollup'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
-        response = authenticated_client.get(f'/bookings/rollup/manage/{booking.id}')
+        response = authenticated_client.get(f'/rollups/manage/{booking.id}')
         assert response.status_code == 403  # Forbidden
     
     def test_manage_rollup_loads_for_organizer(self, authenticated_client, db_session, test_member):
         """Test manage rollup page loads for organizer."""
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test Rollup Booking',
             booking_date=date.today() + timedelta(days=2),
             session=2,
             rink_count=1,
-            organizer_id=test_member.id,
+            organizer=test_member,
             booking_type='rollup',
             organizer_notes='Test rollup'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
-        response = authenticated_client.get(f'/bookings/rollup/manage/{booking.id}')
+        response = authenticated_client.get(f'/rollups/manage/{booking.id}')
         
         assert response.status_code == 200
         assert b'Manage Roll-Up' in response.data

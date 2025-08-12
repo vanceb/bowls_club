@@ -32,7 +32,7 @@ class MemberFactory(SQLAlchemyModelFactory):
     lastname = factory.Faker('last_name')
     email = factory.LazyAttribute(lambda obj: f'{obj.username}@example.com')
     phone = factory.Faker('phone_number')
-    status = 'Full'
+    # status defaults to 'Pending' from model - don't override
     is_admin = False
     share_email = True
     share_phone = True
@@ -62,6 +62,12 @@ class AdminMemberFactory(MemberFactory):
             return
         if extracted:
             obj.roles = extracted
+
+
+class FullMemberFactory(MemberFactory):
+    """Factory for creating full Member instances."""
+    
+    status = 'Full'
 
 
 class PendingMemberFactory(MemberFactory):

@@ -13,15 +13,13 @@ class TestMember:
     
     def test_member_creation(self, db_session):
         """Test basic member creation."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User',
             email='test@example.com',
             phone='123-456-7890'
         )
-        db_session.add(member)
-        db_session.commit()
         
         assert member.id is not None
         assert member.username == 'testuser'
@@ -36,7 +34,7 @@ class TestMember:
     
     def test_password_hashing(self, db_session):
         """Test password hashing and verification."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', 
             firstname='Test',
             lastname='User',
@@ -58,14 +56,14 @@ class TestMember:
     
     def test_member_roles(self, db_session):
         """Test member role assignment."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', 
             firstname='Test',
             lastname='User',
             email='test@example.com'
         )
-        role1 = Role(name='Test Role 1')  
-        role2 = Role(name='Test Role 2')
+        role1 = RoleFactory.create(name='Test Role 1')  
+        role2 = RoleFactory.create(name='Test Role 2')
         
         db_session.add_all([member, role1, role2])
         db_session.commit()
@@ -86,14 +84,12 @@ class TestMember:
     
     def test_member_repr(self, db_session):
         """Test member string representation."""
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User', 
             email='test@example.com'
         )
-        db_session.add(member)
-        db_session.commit()
         
         assert '<Member testuser>' in repr(member)
     
@@ -103,14 +99,12 @@ class TestMember:
         assert Member.is_bootstrap_mode() is True
         
         # Should be False when members exist
-        member = Member(
+        member = MemberFactory.create(
             username='testuser',
             firstname='Test',
             lastname='User',
             email='test@example.com'
         )
-        db_session.add(member)
-        db_session.commit()
         
         assert Member.is_bootstrap_mode() is False
     
@@ -133,23 +127,21 @@ class TestRole:
     
     def test_role_creation(self, db_session):
         """Test basic role creation."""
-        role = Role(name='Test Role')
-        db_session.add(role)
-        db_session.commit()
+        role = RoleFactory.create(name='Test Role')
         
         assert role.id is not None
         assert role.name == 'Test Role'
     
     def test_role_members_relationship(self, db_session):
         """Test role-member relationship."""
-        role = Role(name='Test Role')
-        member1 = Member(
+        role = RoleFactory.create(name='Test Role')
+        member1 = MemberFactory.create(
             username='user1', 
             firstname='User',
             lastname='One',
             email='user1@example.com'
         )
-        member2 = Member(
+        member2 = MemberFactory.create(
             username='user2',
             firstname='User', 
             lastname='Two',
@@ -171,9 +163,7 @@ class TestRole:
     
     def test_role_repr(self, db_session):
         """Test role string representation."""
-        role = Role(name='Test Role')
-        db_session.add(role)
-        db_session.commit()
+        role = RoleFactory.create(name='Test Role')
         
         assert '<Role Test Role>' in repr(role)
     

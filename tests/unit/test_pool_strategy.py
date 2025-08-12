@@ -209,9 +209,12 @@ class TestPoolStrategyUtils:
     def test_should_create_pool_for_duplication_unknown_strategy(self, mock_app, app, db_session):
         """Test should_create_pool_for_duplication defaults to True for unknown strategy."""
         with app.app_context():
-            # Mock logger
+            # Mock logger and config with unknown strategy
             mock_logger = MagicMock()
+            mock_config = MagicMock()
+            mock_config.get.return_value = {99: 'unknown_strategy'}  # Configure unknown strategy for event_type 99
             mock_app.logger = mock_logger
+            mock_app.config = mock_config
             
             # Create pool for original booking with unknown event type
             original = BookingFactory(event_type=99, has_pool=True)  # Unknown type
@@ -224,12 +227,12 @@ class TestPoolStrategyUtils:
             
             should_create, reason = should_create_pool_for_duplication(original, duplicate)
             assert should_create is True
-            assert "Unknown strategy 'booking' - defaulting to create new pool" in reason
+            assert "Unknown strategy 'unknown_strategy' - defaulting to create new pool" in reason
             
             # Should log warning about unknown strategy
             mock_logger.warning.assert_called_once()
             warning_call = mock_logger.warning.call_args[0][0]
-            assert "Unknown pool strategy 'booking'" in warning_call
+            assert "Unknown pool strategy 'unknown_strategy'" in warning_call
     
     def test_get_effective_pool_for_booking_own_pool(self, app, db_session):
         """Test get_effective_pool_for_booking returns booking's own pool."""
@@ -637,7 +640,9 @@ class TestPoolStrategyEdgeCases:
             modified_config[1] = 'event'  # Change Social to 'event' strategy
             
             with patch('app.bookings.utils.current_app') as mock_app:
-                mock_app.config.get.return_value = modified_config
+                mock_config = MagicMock()
+                mock_config.get.return_value = modified_config
+                mock_app.config = mock_config
                 
                 # Should now return 'event'
                 strategy = get_pool_strategy_for_booking(booking)
@@ -705,12 +710,15 @@ class TestPoolStrategyEdgeCases:
             
             with patch('app.bookings.utils.current_app') as mock_app:
                 mock_logger = MagicMock()
+                mock_config = MagicMock()
+                mock_config.get.return_value = {999: 'invalid_strategy'}  # Configure invalid strategy for event_type 999
                 mock_app.logger = mock_logger
+                mock_app.config = mock_config
                 
                 should_create, reason = should_create_pool_for_duplication(original, duplicate)
                 
                 # Should log warning for unknown strategy
                 mock_logger.warning.assert_called_once()
                 warning_call = mock_logger.warning.call_args[0][0]
-                assert "Unknown pool strategy" in warning_call
+                assert "Unknown pool strategy 'invalid_strategy'" in warning_call
                 assert "defaulting to 'booking'" in warning_call

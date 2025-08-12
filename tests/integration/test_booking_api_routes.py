@@ -5,6 +5,7 @@ import pytest
 import json
 from datetime import date, timedelta
 from app.models import Member, Booking
+from tests.fixtures.factories import MemberFactory, BookingFactory
 
 
 @pytest.mark.integration
@@ -28,26 +29,26 @@ class TestBookingAPIRoutes:
     def test_api_booking_get_success(self, authenticated_client, db_session):
         """Test API booking GET with existing booking."""
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id,
+            organizer=member,
             booking_type='event',
             priority='High',
             vs='Test Opposition',
             home_away='home',
             organizer_notes='Test notes'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = authenticated_client.get(f'/bookings/api/v1/booking/{booking.id}')
         
@@ -72,25 +73,24 @@ class TestBookingAPIRoutes:
         # Create test member and event
         member = Member(
             username='testuser', firstname='Test', lastname='User',
-            email='test@test.com', status='Full'
+            email='test@test.com', status='Full', joined_date=date.today()
         )
         db_session.add(member)
         db_session.commit()
         
         # Create booking (which includes all event information in booking-centric architecture)
-        booking = Booking(
+        booking = BookingFactory.create(
             name='Test Championship',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=3,
-            organizer_id=member.id,
+            organizer=member,
             event_type=2,  # Competition
             format=3,  # Triples
             gender=1,  # Gents
             vs='Championship Opponents'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         response = authenticated_client.get(f'/bookings/api/v1/booking/{booking.id}')
         
@@ -126,23 +126,23 @@ class TestBookingAPIRoutes:
     def test_api_booking_put_success(self, admin_client, db_session):
         """Test API booking PUT with valid data."""
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id,
+            organizer=member,
             priority='High',
             vs='Original Opposition'
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         update_data = {
             'rink_count': 3,
@@ -169,21 +169,21 @@ class TestBookingAPIRoutes:
     def test_api_booking_put_invalid_data(self, admin_client, db_session):
         """Test API booking PUT with invalid data."""
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id
+            organizer=member.id
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         # Try to set invalid rink count
         update_data = {
@@ -220,21 +220,21 @@ class TestBookingAPIRoutes:
     def test_api_booking_delete_success(self, admin_client, db_session):
         """Test API booking DELETE with existing booking."""
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id
+            organizer=member.id
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         booking_id = booking.id
         
@@ -254,21 +254,21 @@ class TestBookingAPIRoutes:
         from app.models import BookingTeam, BookingTeamMember
         
         # Create test member and booking
-        member = Member(
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
         db_session.add(member)
         db_session.commit()
         
-        booking = Booking(
+        booking = BookingFactory.create(
+            name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer_id=member.id
+            organizer=member.id
         )
-        db_session.add(booking)
-        db_session.commit()
+        # Factory already commits
         
         # Create team and team member
         team = BookingTeam(
