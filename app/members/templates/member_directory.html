@@ -23,10 +23,34 @@
             <!-- Results will be dynamically loaded here -->
         </tbody>
     </table>
+    
+    <!-- Pagination controls -->
+    <div id="pagination-container">
+        <!-- Pagination will be dynamically generated here -->
+    </div>
 
     <script>
-        function loadMembers(query = '') {
-            fetch(`/members/api/v1/search?q=${encodeURIComponent(query)}&route=members`)
+        let currentPage = 1;
+        let currentQuery = '';
+        const perPage = 20;
+        
+        function loadMembers(query = '', page = 1) {
+            currentQuery = query;
+            currentPage = page;
+            
+            // Show loading state
+            const tbody = document.getElementById('members-table-body');
+            tbody.innerHTML = '<tr><td colspan="4" class="has-text-centered"><span class="icon"><i class="fas fa-spinner fa-pulse"></i></span> Loading...</td></tr>';
+            
+            const url = `/members/api/v1/search?q=${encodeURIComponent(query)}&route=members&page=${page}&per_page=${perPage}`;
+            
+            fetch(url, {
+                credentials: 'same-origin',  // Ensure cookies/session are sent
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'  // Mark as AJAX request
+                }
+            })
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
@@ -36,7 +60,11 @@
                 .then(data => {
                     const tbody = document.getElementById('members-table-body');
                     tbody.innerHTML = ''; // Clear the table body
-                    data.members.forEach(member => {
+                    
+                    if (data.members.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" class="has-text-centered has-text-grey">No members found.</td></tr>';
+                    } else {
+                        data.members.forEach(member => {
                         const row = document.createElement('tr');
                         
                         // Create cells with proper privacy handling
@@ -97,13 +125,82 @@
                         row.appendChild(actionsCell);
                         
                         tbody.appendChild(row);
-                    });
+                        });
+                    }
+                    
+                    // Update pagination
+                    updatePagination(data.pagination);
                 })
                 .catch(error => {
                     console.error('Error searching members:', error);
                     const tbody = document.getElementById('members-table-body');
                     tbody.innerHTML = '<tr><td colspan="4" class="has-text-centered has-text-danger">Error loading search results. Please try again.</td></tr>';
+                    
+                    // Clear pagination on error
+                    document.getElementById('pagination-container').innerHTML = '';
                 });
+        }
+        
+        function updatePagination(paginationData) {
+            const container = document.getElementById('pagination-container');
+            
+            if (paginationData.total_pages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let paginationHTML = '<nav class="pagination is-centered" role="navigation" aria-label="pagination">';
+            
+            // Previous button
+            if (paginationData.has_prev) {
+                paginationHTML += `<a class="pagination-previous" onclick="loadMembers('${currentQuery}', ${paginationData.prev_num})">Previous</a>`;
+            } else {
+                paginationHTML += '<a class="pagination-previous" disabled>Previous</a>';
+            }
+            
+            // Next button
+            if (paginationData.has_next) {
+                paginationHTML += `<a class="pagination-next" onclick="loadMembers('${currentQuery}', ${paginationData.next_num})">Next</a>`;
+            } else {
+                paginationHTML += '<a class="pagination-next" disabled>Next</a>';
+            }
+            
+            // Page numbers
+            paginationHTML += '<ul class="pagination-list">';
+            
+            // Always show first page
+            if (paginationData.page > 3) {
+                paginationHTML += '<li><a class="pagination-link" onclick="loadMembers(\''+currentQuery+'\', 1)">1</a></li>';
+                if (paginationData.page > 4) {
+                    paginationHTML += '<li><span class="pagination-ellipsis">&hellip;</span></li>';
+                }
+            }
+            
+            // Show pages around current page
+            for (let i = Math.max(1, paginationData.page - 2); i <= Math.min(paginationData.total_pages, paginationData.page + 2); i++) {
+                if (i === paginationData.page) {
+                    paginationHTML += `<li><a class="pagination-link is-current" aria-label="Goto page ${i}" aria-current="page">${i}</a></li>`;
+                } else {
+                    paginationHTML += `<li><a class="pagination-link" onclick="loadMembers('${currentQuery}', ${i})">${i}</a></li>`;
+                }
+            }
+            
+            // Always show last page
+            if (paginationData.page < paginationData.total_pages - 2) {
+                if (paginationData.page < paginationData.total_pages - 3) {
+                    paginationHTML += '<li><span class="pagination-ellipsis">&hellip;</span></li>';
+                }
+                paginationHTML += `<li><a class="pagination-link" onclick="loadMembers('${currentQuery}', ${paginationData.total_pages})">${paginationData.total_pages}</a></li>`;
+            }
+            
+            paginationHTML += '</ul></nav>';
+            
+            // Add result count info
+            const start = (paginationData.page - 1) * paginationData.per_page + 1;
+            const end = Math.min(paginationData.page * paginationData.per_page, paginationData.total);
+            paginationHTML += `<p class="has-text-centered has-text-grey mt-3">Showing ${start}-${end} of ${paginationData.total} members</p>`;
+            
+            container.innerHTML = paginationHTML;
         }
 
         // Load all members when page loads
@@ -111,9 +208,16 @@
             loadMembers();
         });
 
-        // Set up search functionality
+        // Set up search functionality with debouncing
+        let searchTimeout;
         document.getElementById('search-input').addEventListener('input', function () {
-            loadMembers(this.value);
+            clearTimeout(searchTimeout);
+            const query = this.value;
+            
+            // Debounce search to avoid too many requests
+            searchTimeout = setTimeout(() => {
+                loadMembers(query, 1); // Reset to page 1 for new searches
+            }, 300);
         });
     </script>
 {% endblock %}

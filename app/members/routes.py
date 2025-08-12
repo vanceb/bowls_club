@@ -751,46 +751,18 @@ def admin_remove_user_from_role():
 @login_required
 def directory():
     """
-    Display paginated list of active members
+    Display member directory with AJAX-powered search and pagination
     """
     try:
-        from flask_paginate import Pagination, get_page_parameter
-        
         current_app.logger.info(f"User {current_user.id} accessing directory. Is admin: {current_user.is_admin}, Roles: {[role.name for role in current_user.roles]}")
         
-        # Get page parameter
-        page = request.args.get(get_page_parameter(), type=int, default=1)
-        per_page = 20
+        # Template will load members via AJAX for consistent pagination behavior
+        return render_template('member_directory.html')
         
-        # Get active members (Full, Social, Life)
-        members_query = sa.select(Member).where(
-            Member.status.in_(['Full', 'Social', 'Life'])
-        ).order_by(Member.lastname, Member.firstname)
-        
-        # Get total count for pagination
-        total = db.session.scalar(sa.select(sa.func.count()).select_from(members_query.subquery()))
-        
-        current_app.logger.info(f"Directory found {total} total members")
-        
-        # Get paginated members
-        members = db.session.scalars(
-            members_query.offset((page - 1) * per_page).limit(per_page)
-        ).all()
-        
-        current_app.logger.info(f"Directory returning {len(members)} members for page {page}")
-        
-        # Create pagination object
-        pagination = Pagination(page=page, per_page=per_page, total=total,
-                               css_framework='bulma')
-        
-        return render_template('member_directory.html', 
-                             members=members, 
-                             pagination=pagination,
-                             total=total)
     except Exception as e:
         current_app.logger.error(f"Error in members directory route: {str(e)}")
         flash('An error occurred while loading the members directory.', 'error')
-        return render_template('member_directory.html', members=[], pagination=None, total=0)
+        return render_template('member_directory.html')
 
 
 @bp.route('/apply', methods=['GET', 'POST'])
@@ -847,11 +819,20 @@ def apply():
 def api_search_members():
     """
     Search for members by name (AJAX endpoint)
-    Returns different data based on user permissions and route context
+    Returns paginated data based on user permissions and route context
     """
     try:
         search_term = request.args.get('q', '').strip()
         route_context = request.args.get('route', 'members')  # 'members' or 'manage_members'
+        
+        # Pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        
+        
+        # Ensure reasonable limits
+        per_page = min(per_page, 50)  # Maximum 50 items per page
+        page = max(page, 1)  # Minimum page 1
         
         # Determine if user should see admin data and if pending members should be included
         # Admin users have access to everything, or check for User Manager role
@@ -861,43 +842,40 @@ def api_search_members():
         )
         include_pending = route_context == 'manage_members' and show_admin_data
         
-        if not search_term:
-            # Return all members based on route context and permissions
-            if include_pending:
-                # Manage Members route: show ALL members including pending
-                members = db.session.scalars(sa.select(Member).order_by(Member.lastname, Member.firstname)).all()
-            else:
-                # Members route: show only active members
-                members = db.session.scalars(
-                    sa.select(Member)
-                    .where(Member.status.in_(['Full', 'Social', 'Life']))
-                    .order_by(Member.lastname, Member.firstname)
-                ).all()
+        # Build base query based on route context and permissions
+        if include_pending:
+            # Manage Members route: show ALL members including pending
+            base_query = sa.select(Member).order_by(Member.lastname, Member.firstname)
         else:
-            # Search members based on route context
-            if include_pending:
-                # Manage Members route: search ALL members including pending
-                members = db.session.scalars(sa.select(Member).where(sa.or_(
-                    Member.username.ilike(f'%{search_term}%'),
-                    Member.firstname.ilike(f'%{search_term}%'),
-                    Member.lastname.ilike(f'%{search_term}%'),
-                    Member.email.ilike(f'%{search_term}%')
-                )).order_by(Member.lastname, Member.firstname)).all()
-            else:
-                # Members route: search only active members
-                members = db.session.scalars(sa.select(Member).where(sa.and_(
-                    Member.status.in_(['Full', 'Social', 'Life']),
-                    sa.or_(
-                        Member.username.ilike(f'%{search_term}%'),
-                        Member.firstname.ilike(f'%{search_term}%'),
-                        Member.lastname.ilike(f'%{search_term}%'),
-                        Member.email.ilike(f'%{search_term}%')
-                    )
-                )).order_by(Member.lastname, Member.firstname)).all()
-                
-                # Limit results for non-admin users on Members route
-                if not show_admin_data:
-                    members = members[:20]
+            # Members route: show only active members
+            base_query = sa.select(Member).where(
+                Member.status.in_(['Full', 'Social', 'Life'])
+            ).order_by(Member.lastname, Member.firstname)
+            
+        if search_term:
+            # Add search filters
+            search_filter = sa.or_(
+                Member.username.ilike(f'%{search_term}%'),
+                Member.firstname.ilike(f'%{search_term}%'),
+                Member.lastname.ilike(f'%{search_term}%'),
+                Member.email.ilike(f'%{search_term}%')
+            )
+            base_query = base_query.where(search_filter)
+        
+        # Get total count for pagination
+        total_query = sa.select(sa.func.count()).select_from(base_query.subquery())
+        total = db.session.scalar(total_query)
+        
+        
+        # Calculate pagination
+        total_pages = (total + per_page - 1) // per_page  # Ceiling division
+        page = min(page, total_pages) if total_pages > 0 else 1
+        
+        # Get paginated results
+        members = db.session.scalars(
+            base_query.offset((page - 1) * per_page).limit(per_page)
+        ).all()
+        
         
         # Format results based on user permissions
         results = []
@@ -920,7 +898,17 @@ def api_search_members():
         return jsonify({
             'success': True,
             'members': results,
-            'count': len(results)
+            'count': len(results),
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'total_pages': total_pages,
+                'has_prev': page > 1,
+                'has_next': page < total_pages,
+                'prev_num': page - 1 if page > 1 else None,
+                'next_num': page + 1 if page < total_pages else None
+            }
         })
         
     except Exception as e:
