@@ -6,7 +6,7 @@ import tempfile
 import os
 from app import create_app, db
 from app.models import Member, Role, Booking, Pool, PoolRegistration, Team, TeamMember
-from tests.fixtures.factories import BookingFactory
+from tests.fixtures.factories import BookingFactory, MemberFactory, AdminMemberFactory, FullMemberFactory, PendingMemberFactory
 
 # Set environment variables for testing
 os.environ['SECRET_KEY'] = 'test-secret-key-for-testing-only'
@@ -93,77 +93,46 @@ def core_roles(db_session):
 @pytest.fixture
 def test_member(db_session):
     """Create a basic test member."""
-    from datetime import date
-    member = Member(
-        username='testuser',
+    member = FullMemberFactory.create(
         firstname='Test',
-        lastname='User', 
-        email='test@example.com',
-        phone='123-456-7890',
-        status='Full',
-        joined_date=date.today()
+        lastname='User',
+        password='testpassword123'
     )
-    member.set_password('testpassword123')
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
 @pytest.fixture
 def admin_member(db_session, core_roles):
     """Create an admin test member with all roles."""
-    from datetime import date
-    member = Member(
-        username='admin',
+    member = AdminMemberFactory.create(
         firstname='Admin',
         lastname='User',
-        email='admin@example.com', 
-        phone='123-456-7890',
-        status='Full',
-        is_admin=True,
-        joined_date=date.today()
+        password='adminpassword123',
+        roles=core_roles  # Assign all core roles
     )
-    member.set_password('adminpassword123')
-    member.roles = core_roles  # Assign all core roles
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
 @pytest.fixture
 def pending_member(db_session):
     """Create a pending member for testing."""
-    from datetime import date
-    member = Member(
-        username='pendinguser',
+    member = PendingMemberFactory.create(
         firstname='Pending',
         lastname='User',
-        email='pending@example.com',
-        phone='123-456-7890',
-        status='Pending',
-        joined_date=date.today()
+        password='pendingpassword123'
     )
-    member.set_password('pendingpassword123')
-    db_session.add(member)
-    db_session.commit()
     return member
 
 
 @pytest.fixture
 def user_manager_member(db_session, core_roles):
     """Create a member with User Manager role."""
-    from datetime import date
     user_manager_role = next(role for role in core_roles if role.name == 'User Manager')
-    member = Member(
-        username='usermanager',
+    member = FullMemberFactory.create(
         firstname='User',
         lastname='Manager',
-        email='usermanager@example.com',
-        phone='123-456-7890',
-        status='Full',
-        joined_date=date.today()
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [user_manager_role]
     db_session.add(member)
     db_session.commit()
@@ -224,25 +193,46 @@ def test_booking_with_pool(db_session, test_booking):
 
 
 @pytest.fixture
+def test_event(db_session):
+    """Create a test event (booking)."""
+    from datetime import datetime, timedelta, date
+    event = BookingFactory.create(
+        name='Test Event',
+        booking_date=date.today() + timedelta(days=7),
+        session=1,
+        rink_count=2,
+        booking_type='event',
+        event_type=1,  # Social
+        gender=4,  # Open
+        format=5   # Fours - 2 Wood
+    )
+    return event
+
+
+@pytest.fixture
+def test_event_with_pool(db_session, test_event):
+    """Create a test event with pool."""
+    pool = Pool(booking_id=test_event.id, is_open=True)
+    db_session.add(pool)
+    db_session.commit()
+    test_event.pool = pool
+    return test_event
+
+
+@pytest.fixture
 def event_manager_member(db_session, core_roles):
     """Create a member with Event Manager role."""
-    from datetime import date
     event_manager_role = next((role for role in core_roles if role.name == 'Event Manager'), None)
     if not event_manager_role:
         event_manager_role = Role(name='Event Manager')
         db_session.add(event_manager_role)
         db_session.commit()
     
-    member = Member(
-        username='eventmanager',
+    member = FullMemberFactory.create(
         firstname='Event',
         lastname='Manager',
-        email='eventmanager@example.com',
-        phone='123-456-7890',
-        status='Full',
-        joined_date=date.today()
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [event_manager_role]
     db_session.add(member)
     db_session.commit()
@@ -252,23 +242,17 @@ def event_manager_member(db_session, core_roles):
 @pytest.fixture
 def content_manager_member(db_session, core_roles):
     """Create a member with Content Manager role."""
-    from datetime import date
     content_manager_role = next((role for role in core_roles if role.name == 'Content Manager'), None)
     if not content_manager_role:
         content_manager_role = Role(name='Content Manager')
         db_session.add(content_manager_role)
         db_session.commit()
     
-    member = Member(
-        username='contentmanager',
+    member = FullMemberFactory.create(
         firstname='Content',
         lastname='Manager',
-        email='contentmanager@example.com',
-        phone='123-456-7890',
-        status='Full',
-        joined_date=date.today()
+        password='managerpassword123'
     )
-    member.set_password('managerpassword123')
     member.roles = [content_manager_role]
     db_session.add(member)
     db_session.commit()

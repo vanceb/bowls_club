@@ -77,9 +77,9 @@ def get_bookings(selected_date):
                 'organizer_notes': booking.organizer_notes
             }
             
-            if booking.event:
-                booking_info['event_name'] = booking.event.name
-                booking_info['event_type'] = booking.event.event_type
+            if booking.booking_type == 'event':
+                booking_info['event_name'] = booking.name
+                booking_info['event_type'] = booking.event_type
                 booking_info['vs'] = booking.vs
             
             bookings_data.append(booking_info)
@@ -352,10 +352,10 @@ def api_get_booking(booking_id):
         }
         
         # Add event details if it's an event booking
-        if booking.event:
-            booking_data['event_id'] = booking.event.id
-            booking_data['event_name'] = booking.event.name
-            booking_data['event_type'] = booking.event.event_type
+        if booking.booking_type == 'event':
+            booking_data['event_id'] = booking.id
+            booking_data['event_name'] = booking.name
+            booking_data['event_type'] = booking.event_type
         
         # Add team details if they exist
         if booking.booking_type == 'event' and booking.teams:

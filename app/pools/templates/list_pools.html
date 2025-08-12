@@ -146,7 +146,7 @@
                                 </a>
                                 {% if not pool.is_member_registered(current_user.id) and pool.can_register() %}
                                 <form method="POST" action="{{ url_for('pools.register_member', pool_id=pool.id) }}" style="display: inline;">
-                                    {{ csrf_token() }}
+                                    {{ csrf_form.csrf_token }}
                                     <button type="submit" class="button is-success is-small">
                                         <span class="icon">
                                             <i class="fas fa-user-plus"></i>

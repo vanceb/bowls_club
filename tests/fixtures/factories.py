@@ -5,7 +5,7 @@ import factory
 from factory.alchemy import SQLAlchemyModelFactory
 from datetime import date, timedelta
 from app import db
-from app.models import Member, Role, Booking, Team, Pool
+from app.models import Member, Role, Booking, Team, Pool, TeamMember
 
 
 class RoleFactory(SQLAlchemyModelFactory):
@@ -141,5 +141,19 @@ class EventBookingFactory(BookingFactory):
     event_type = 1  # Social
     format = 2  # Pairs
     gender = 3  # Mixed
+
+
+class TeamMemberFactory(SQLAlchemyModelFactory):
+    """Factory for creating TeamMember instances."""
+    
+    class Meta:
+        model = TeamMember
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = 'commit'
+    
+    team = factory.SubFactory(TeamFactory)
+    member = factory.SubFactory(MemberFactory)
+    position = 'Player'
+    availability_status = 'available'
 
 

@@ -69,10 +69,14 @@ def list_pools():
                     'capacity': pool.max_players
                 }
         
+        # Create CSRF form for pool registration buttons
+        csrf_form = FlaskForm()
+        
         return render_template('list_pools.html',
                              pools=pools,
                              pool_stats=pool_stats,
-                             current_filter=pool_type_filter)
+                             current_filter=pool_type_filter,
+                             csrf_form=csrf_form)
         
     except Exception as e:
         current_app.logger.error(f"Error listing pools: {str(e)}")
@@ -88,17 +92,18 @@ def create_event_pool(event_id):
     Create a pool for an event (via Booking model).
     """
     try:
-        # Check if event exists by finding its bookings
-        event_booking = db.session.scalar(
-            sa.select(Booking).where(Booking.event_id == event_id).limit(1)
-        )
+        # In booking-centric architecture, event_id is actually booking_id
+        booking = db.session.get(Booking, event_id)
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
         
-        # Get event name from first booking for display
-        event_name = f"Event {event_id}"
+        # Get event name from booking for display
+        event_name = booking.name or f"Booking {event_id}"
         
-        # Check if pool already exists for this event
+        # Check if pool already exists for this booking
         existing_pool = db.session.scalar(
-            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+            sa.select(Pool).where(Pool.booking_id == event_id).limit(1)
         )
         if existing_pool:
             flash('Pool already exists for this event.', 'error')
@@ -134,7 +139,7 @@ def create_event_pool(event_id):
         
         return render_template('create_pool.html', 
                              form=form, 
-                             event_id=event_id,
+                             booking=booking,
                              event_name=event_name,
                              pool_type='event')
         
@@ -458,39 +463,41 @@ def admin_create_event_pool(event_id):
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
-        # Check if event already has a pool
+        # Check if booking already has a pool (event_id is now booking_id)
         existing_pool = db.session.scalar(
-            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+            sa.select(Pool).where(Pool.booking_id == event_id).limit(1)
         )
         if existing_pool:
-            flash('This event already has pool registration enabled.', 'warning')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            flash('This booking already has pool registration enabled.', 'warning')
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
-        # TODO: This route needs to be updated for booking-centric system
-        flash('Pool creation via event ID is temporarily disabled. Please use booking management instead.', 'error')
-        return redirect(url_for('main.index'))
-        # Create new pool via booking
-        # new_pool = create_pool_for_booking_with_event_id(
-        #     event_id=event_id,
-        #     is_open=True
-        # )
+        # Create new pool for booking (booking-centric architecture)
+        booking = db.session.get(Booking, event_id)  # event_id parameter is actually booking_id
+        if not booking:
+            flash('Booking not found.', 'error')
+            return redirect(url_for('bookings.admin_list_bookings'))
+            
+        new_pool = create_pool_for_booking(
+            booking=booking,
+            is_open=True
+        )
         
-        # db.session.add(new_pool)
-        # db.session.commit()
-        # 
-        # # Audit log
-        # audit_log_create('Pool', new_pool.id, 
-        #                 f'Created pool for event ID: {event_id}')
+        db.session.add(new_pool)
+        db.session.commit()
         
-        flash(f'Pool registration has been enabled for event.', 'success')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        # Audit log
+        audit_log_create('Pool', new_pool.id, 
+                        f'Created pool for booking: {booking.name}')
+        
+        flash(f'Pool registration has been enabled for booking.', 'success')
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking.id))
         
     except Exception as e:
-        current_app.logger.error(f"Error creating event pool: {str(e)}")
+        current_app.logger.error(f"Error creating booking pool: {str(e)}")
         flash('An error occurred while creating the pool.', 'error')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
 
 
 @bp.route('/admin/add_member_to_pool/<int:event_id>', methods=['POST'])
@@ -504,42 +511,42 @@ def admin_add_member_to_pool(event_id):
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
-        # Check if event has pool enabled
-        event_pool = db.session.scalar(
-            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        # Check if booking has pool enabled (event_id is now booking_id)
+        booking_pool = db.session.scalar(
+            sa.select(Pool).where(Pool.booking_id == event_id).limit(1)
         )
-        if not event_pool:
-            flash('This event does not have pool registration enabled.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+        if not booking_pool:
+            flash('This booking does not have pool registration enabled.', 'error')
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Get member_id from form
         member_id = request.form.get('member_id', type=int)
         if not member_id:
             flash('Please select a member to add.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Get the member
         member = db.session.get(Member, member_id)
         if not member:
             flash('Member not found.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Check if member is already in the pool
         existing_registration = db.session.scalar(
             sa.select(PoolRegistration).where(
-                PoolRegistration.pool_id == event_pool.id,
+                PoolRegistration.pool_id == booking_pool.id,
                 PoolRegistration.member_id == member_id
             )
         )
         if existing_registration:
             flash(f'{member.firstname} {member.lastname} is already registered for this event.', 'warning')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Add member to pool
         registration = PoolRegistration(
-            pool_id=event_pool.id,
+            pool_id=booking_pool.id,
             member_id=member_id
         )
         db.session.add(registration)
@@ -550,12 +557,12 @@ def admin_add_member_to_pool(event_id):
                         f'Event Manager added {member.firstname} {member.lastname} to pool for event ID: {event_id}')
         
         flash(f'{member.firstname} {member.lastname} added to event pool successfully!', 'success')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
     except Exception as e:
         current_app.logger.error(f"Error adding member to pool: {str(e)}")
         flash('An error occurred while adding member to pool.', 'error')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
 
 
 @bp.route('/admin/delete_from_pool/<int:registration_id>', methods=['POST'])
@@ -577,9 +584,9 @@ def admin_delete_from_pool(registration_id):
             flash('Registration not found.', 'error')
             return redirect(url_for('bookings.admin_list_bookings'))
         
-        # Get event info from pool's booking
-        event_booking = registration.pool.booking
-        event_id = event_booking.event_id if event_booking else 'unknown'
+        # Get booking info from pool's booking (booking-centric architecture)
+        booking = registration.pool.booking
+        booking_id = booking.id if booking else 'unknown'
         
         # Store info for audit log and flash message
         member_name = f"{registration.member.firstname} {registration.member.lastname}"
@@ -590,10 +597,10 @@ def admin_delete_from_pool(registration_id):
         
         # Audit log
         audit_log_delete('PoolRegistration', registration_id, 
-                        f'Event Manager removed {member_name} from pool for event ID: {event_id}')
+                        f'Event Manager removed {member_name} from pool for booking ID: {booking_id}')
         
-        flash(f'{member_name} removed from event pool successfully!', 'success')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        flash(f'{member_name} removed from pool successfully!', 'success')
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=booking_id))
         
     except Exception as e:
         current_app.logger.error(f"Error removing member from pool: {str(e)}")
@@ -612,14 +619,14 @@ def admin_auto_select_pool_members(event_id):
         csrf_form = FlaskForm()
         if not csrf_form.validate_on_submit():
             flash('Security validation failed.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
-        # Get event pool
-        event_pool = db.session.scalar(
-            sa.select(Pool).join(Booking).where(Booking.event_id == event_id).limit(1)
+        # Get booking pool (event_id is now booking_id in booking-centric architecture)
+        booking_pool = db.session.scalar(
+            sa.select(Pool).where(Pool.booking_id == event_id).limit(1)
         )
-        if not event_pool:
-            flash('Event not found or pool not enabled.', 'error')
+        if not booking_pool:
+            flash('Booking not found or pool not enabled.', 'error')
             return redirect(url_for('bookings.admin_list_bookings'))
         
         selection_method = request.form.get('method', 'oldest_first')
@@ -627,14 +634,14 @@ def admin_auto_select_pool_members(event_id):
         
         if not num_to_select or num_to_select <= 0:
             flash('Invalid selection count.', 'error')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Get all registered members (all pool registrations are active)
-        registered_members = list(event_pool.registrations)
+        registered_members = list(booking_pool.registrations)
         
         if len(registered_members) < num_to_select:
             flash(f'Only {len(registered_members)} registered members available, cannot select {num_to_select}.', 'warning')
-            return redirect(url_for('events.manage_event', event_id=event_id))
+            return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
         # Apply selection method
         if selection_method == 'oldest_first':
@@ -648,7 +655,7 @@ def admin_auto_select_pool_members(event_id):
         
         # Pool status no longer tracked - all registered members are available for team creation
         flash(f'Pool members are always available for team creation. Use "Create Teams from Pool" instead.', 'info')
-        return redirect(url_for('events.manage_event', event_id=event_id))
+        return redirect(url_for('bookings.admin_manage_booking', booking_id=event_id))
         
     except Exception as e:
         db.session.rollback()

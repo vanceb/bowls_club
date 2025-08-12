@@ -71,9 +71,9 @@
                 <li><strong>Date:</strong> {{ booking.booking_date.strftime('%A %b %d, %Y') }}</li>
                 <li><strong>Session:</strong> {{ booking.session }}</li>
                 <li><strong>Type:</strong> {{ booking.booking_type.title() }}</li>
-                {% if booking.event %}
-                <li><strong>Event:</strong> {{ booking.event.name }}</li>
-                <li><strong>Format:</strong> {{ booking.event.get_format_name() }}</li>
+                {% if booking.booking_type == 'event' %}
+                <li><strong>Event:</strong> {{ booking.name }}</li>
+                <li><strong>Format:</strong> {{ booking.get_format_name() }}</li>
                 {% endif %}
             </ul>
         </div>

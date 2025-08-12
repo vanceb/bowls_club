@@ -37,11 +37,8 @@ class TestBookingRoutes:
         """Test get_bookings with valid date."""
         # Create test member and booking
         member = MemberFactory.create(
-            username='testuser', firstname='Test', lastname='User',
-            email='test@test.com', status='Full'
+            firstname='Test', lastname='User', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         test_date = date.today() + timedelta(days=1)
         booking = BookingFactory.create(
@@ -83,27 +80,25 @@ class TestBookingRoutes:
     
     def test_get_bookings_range_valid_dates(self, authenticated_client, db_session):
         """Test get_bookings_range with valid date range."""
-        # Create test member and bookings
-        member = Member(
-            username='testuser', firstname='Test', lastname='User',
-            email='test@test.com', status='Full', joined_date=date.today()
+        # Create test member and bookings using factories
+        member = MemberFactory.create(
+            firstname='Test', lastname='User', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         # Create bookings on different dates
         date1 = date.today() + timedelta(days=1)
         date2 = date.today() + timedelta(days=3)
         
-        booking1 = Booking(
+        booking1 = BookingFactory.create(
             name='Test Range Booking 1',
             booking_date=date1,
             session=1,
             rink_count=2,
             organizer=member,
-            booking_type='event'
+            booking_type='event',
+            event_type=1
         )
-        booking2 = Booking(
+        booking2 = BookingFactory.create(
             name='Test Range Booking 2',
             booking_date=date2,
             session=2,
@@ -111,8 +106,6 @@ class TestBookingRoutes:
             organizer=member,
             booking_type='rollup'
         )
-        db_session.add_all([booking1, booking2])
-        db_session.commit()
         
         start_date = date.today().isoformat()
         end_date = (date.today() + timedelta(days=7)).isoformat()
@@ -191,11 +184,8 @@ class TestBookingRoutes:
         """Test accepting rollup invitation."""
         # Create organizer and booking
         organizer = MemberFactory.create(
-            username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            firstname='Organizer', lastname='User', status='Full'
         )
-        db_session.add(organizer)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test Rollup Booking',
@@ -241,11 +231,8 @@ class TestBookingRoutes:
         """Test declining rollup invitation."""
         # Create organizer and booking
         organizer = MemberFactory.create(
-            username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            firstname='Organizer', lastname='User', status='Full'
         )
-        db_session.add(organizer)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test Rollup Booking',
@@ -296,11 +283,8 @@ class TestBookingRoutes:
         """Test manage rollup only accessible by organizer."""
         # Create different organizer
         organizer = MemberFactory.create(
-            username='organizer', firstname='Organizer', lastname='User',
-            email='organizer@test.com', status='Full'
+            firstname='Organizer', lastname='User', status='Full'
         )
-        db_session.add(organizer)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test Rollup Booking',
