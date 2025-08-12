@@ -694,10 +694,18 @@ def view_post(post_id):
     try:
         from flask import abort
         
-        # Get post by ID
-        post = db.session.get(Post, post_id)
+        today = date.today()
+        
+        # Get post by ID and validate publish/expire dates
+        post = db.session.scalar(
+            sa.select(Post).where(
+                Post.id == post_id,
+                Post.publish_on <= today,   # Only show posts that should be published
+                Post.expires_on >= today    # Only show posts that haven't expired
+            )
+        )
         if not post:
-            current_app.logger.error(f"Post not found with ID: {post_id}")
+            current_app.logger.error(f"Post not found or not available with ID: {post_id}")
             abort(404)
         
         current_app.logger.info(f"Found post: {post.title}, HTML file: {post.html_filename}")

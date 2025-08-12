@@ -23,20 +23,22 @@ def index():
     try:
         today = date.today()
         
-        # Fetch pinned posts (posts with pin_until date >= today)
+        # Fetch pinned posts (posts with pin_until date >= today and within publish/expire window)
         pinned_posts = db.session.scalars(
             sa.select(Post).where(
-                Post.expires_on >= today,
-                Post.pin_until >= today
+                Post.publish_on <= today,   # Only show posts that should be published
+                Post.expires_on >= today,   # Only show posts that haven't expired
+                Post.pin_until >= today     # Only show posts that are still pinned
             )
             .order_by(Post.publish_on.desc())
         ).all()
         
-        # Fetch non-pinned posts (posts without pin_until or pin_until < today)
+        # Fetch non-pinned posts (posts without pin_until or pin_until < today and within publish/expire window)
         non_pinned_posts = db.session.scalars(
             sa.select(Post).where(
-                Post.expires_on >= today,
-                sa.or_(Post.pin_until < today, Post.pin_until == None)
+                Post.publish_on <= today,                                    # Only show posts that should be published
+                Post.expires_on >= today,                                    # Only show posts that haven't expired
+                sa.or_(Post.pin_until < today, Post.pin_until == None)      # Only non-pinned posts
             )
             .order_by(Post.publish_on.desc())
             .limit(5)  # Show 5 recent non-pinned posts
