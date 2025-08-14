@@ -18,8 +18,11 @@
     </div>
     {% endif %}
 
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         {{ form.hidden_tag() }}
+        {% if draft_post_id %}
+        <input type="hidden" name="draft_post_id" value="{{ draft_post_id }}">
+        {% endif %}
         
         <div class="field">
             <label class="label">{{ form.title.label }}</label>
@@ -83,10 +86,41 @@
             {% endif %}
         </div>
 
+        <!-- Image Upload Section -->
+        <div class="field">
+            <label class="label">{{ form.images.label }}</label>
+            <div class="control">
+                <div class="file is-boxed">
+                    <label class="file-label">
+                        {{ form.images(class="file-input", multiple=True, accept="image/jpeg,image/png") }}
+                        <span class="file-cta">
+                            <span class="file-icon">
+                                <i class="fas fa-upload"></i>
+                            </span>
+                            <span class="file-label">Choose images...</span>
+                        </span>
+                    </label>
+                </div>
+                <p class="help">Select multiple JPEG or PNG images (max 10MB each). Click thumbnails below to insert into content.</p>
+            </div>
+            {% if form.images.errors %}
+            <p class="help is-danger">{{ form.images.errors[0] }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Image Thumbnail Gallery (will be populated by JavaScript) -->
+        <div id="image-gallery" class="field" style="display: none;">
+            <label class="label">Uploaded Images</label>
+            <div id="image-thumbnails" class="columns is-multiline is-mobile">
+                <!-- Thumbnails will be inserted here by JavaScript -->
+            </div>
+            <p class="help">Click on an image to insert it at the cursor position in your content.</p>
+        </div>
+
         <div class="field">
             <label class="label">{{ form.content.label }}</label>
             <div class="control">
-                {{ form.content(class="textarea", rows=10) }}
+                {{ form.content(class="textarea", rows=10, id="content-textarea") }}
             </div>
             {% if form.content.errors %}
             <p class="help is-danger">{{ form.content.errors[0] }}</p>
@@ -95,11 +129,27 @@
 
         <div class="field is-grouped">
             <div class="control">
-                <button type="submit" class="button is-primary">
+                <button type="submit" name="action" value="preview" class="button is-warning" formtarget="_blank">
+                    <span class="icon">
+                        <i class="fas fa-eye"></i>
+                    </span>
+                    <span>Preview</span>
+                </button>
+            </div>
+            <div class="control">
+                <button type="submit" name="action" value="save_draft" class="button is-info">
                     <span class="icon">
                         <i class="fas fa-save"></i>
                     </span>
-                    <span>Save</span>
+                    <span>Save Draft</span>
+                </button>
+            </div>
+            <div class="control">
+                <button type="submit" name="action" value="publish" class="button is-success">
+                    <span class="icon">
+                        <i class="fas fa-paper-plane"></i>
+                    </span>
+                    <span>Publish</span>
                 </button>
             </div>
             <div class="control">
@@ -108,4 +158,132 @@
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const imageInput = document.querySelector('input[name="images"]');
+    const imageGallery = document.getElementById('image-gallery');
+    const thumbnailContainer = document.getElementById('image-thumbnails');
+    const contentTextarea = document.getElementById('content-textarea');
+    
+    {% if draft_post_id %}
+    const draftPostId = {{ draft_post_id }};
+    const imageBaseUrl = "{{ url_for('content.serve_post_image', post_id=draft_post_id, filename='PLACEHOLDER') }}".replace('PLACEHOLDER', '');
+    {% else %}
+    const draftPostId = null;
+    const imageBaseUrl = null;
+    {% endif %}
+    
+    if (imageInput) {
+        imageInput.addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            
+            if (files.length > 0) {
+                imageGallery.style.display = 'block';
+                thumbnailContainer.innerHTML = '';
+                
+                files.forEach(function(file, index) {
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const thumbnailDiv = document.createElement('div');
+                            thumbnailDiv.className = 'column is-narrow';
+                            
+                            const thumbnailCard = document.createElement('div');
+                            thumbnailCard.className = 'card has-background-light';
+                            thumbnailCard.style.cursor = 'pointer';
+                            thumbnailCard.style.maxWidth = '120px';
+                            
+                            const cardImage = document.createElement('div');
+                            cardImage.className = 'card-image';
+                            
+                            const figure = document.createElement('figure');
+                            figure.className = 'image is-square';
+                            
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.alt = file.name;
+                            img.style.objectFit = 'cover';
+                            
+                            const cardContent = document.createElement('div');
+                            cardContent.className = 'card-content has-text-centered p-2';
+                            
+                            const fileName = document.createElement('p');
+                            fileName.className = 'is-size-7 has-text-weight-semibold';
+                            fileName.textContent = file.name.length > 15 
+                                ? file.name.substring(0, 12) + '...' 
+                                : file.name;
+                            
+                            const clickHint = document.createElement('p');
+                            clickHint.className = 'is-size-7 has-text-grey';
+                            clickHint.textContent = 'Click to insert';
+                            
+                            figure.appendChild(img);
+                            cardImage.appendChild(figure);
+                            cardContent.appendChild(fileName);
+                            cardContent.appendChild(clickHint);
+                            thumbnailCard.appendChild(cardImage);
+                            thumbnailCard.appendChild(cardContent);
+                            thumbnailDiv.appendChild(thumbnailCard);
+                            
+                            // Add click event to insert image reference at cursor
+                            thumbnailCard.addEventListener('click', function() {
+                                let imageRef;
+                                if (draftPostId && imageBaseUrl) {
+                                    imageRef = `![${file.name}](${imageBaseUrl}${file.name})`;
+                                } else {
+                                    imageRef = `![${file.name}](image-${file.name})`;
+                                }
+                                insertAtCursor(contentTextarea, imageRef);
+                                
+                                // Visual feedback
+                                thumbnailCard.style.backgroundColor = '#48c78e';
+                                thumbnailCard.style.color = 'white';
+                                setTimeout(function() {
+                                    thumbnailCard.style.backgroundColor = '';
+                                    thumbnailCard.style.color = '';
+                                }, 500);
+                            });
+                            
+                            // Add hover effects
+                            thumbnailCard.addEventListener('mouseenter', function() {
+                                if (thumbnailCard.style.backgroundColor !== 'rgb(72, 199, 142)') {
+                                    thumbnailCard.style.backgroundColor = '#f5f5f5';
+                                }
+                            });
+                            
+                            thumbnailCard.addEventListener('mouseleave', function() {
+                                if (thumbnailCard.style.backgroundColor !== 'rgb(72, 199, 142)') {
+                                    thumbnailCard.style.backgroundColor = '';
+                                }
+                            });
+                            
+                            thumbnailContainer.appendChild(thumbnailDiv);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                });
+            } else {
+                imageGallery.style.display = 'none';
+            }
+        });
+    }
+    
+    function insertAtCursor(textarea, text) {
+        const startPos = textarea.selectionStart;
+        const endPos = textarea.selectionEnd;
+        const textBefore = textarea.value.substring(0, startPos);
+        const textAfter = textarea.value.substring(endPos);
+        
+        // Insert text with newlines for better formatting
+        const insertText = '\n' + text + '\n';
+        textarea.value = textBefore + insertText + textAfter;
+        
+        // Move cursor to end of inserted text
+        const newCursorPos = startPos + insertText.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+    }
+});
+</script>
 {% endblock %}
