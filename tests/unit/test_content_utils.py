@@ -10,24 +10,21 @@ from unittest.mock import patch, mock_open
 class TestContentUtilities:
     """Test cases for content utilities."""
     
-    def test_generate_secure_filename(self):
-        """Test secure filename generation."""
-        from app.content.utils import generate_secure_filename
+    def test_sanitize_filename(self):
+        """Test filename sanitization."""
+        from app.content.utils import sanitize_filename
         
-        # Test with title and extension
-        filename = generate_secure_filename("Test Post", ".md")
-        assert filename.endswith("_Test_Post.md")
-        # UUID format is xxxx-xxxx-xxxx-xxxx-xxxx (36 chars total)
-        uuid_part = filename.split('_')[0]
-        assert len(uuid_part) == 36  # UUID length
+        # Test basic filename
+        filename = sanitize_filename("Test Post")
+        assert filename == "Test_Post"
         
-        # Test with special characters in title
-        filename = generate_secure_filename("Test & Post!", ".html")
-        assert filename.endswith("_Test___Post_.html")
+        # Test with special characters
+        filename = sanitize_filename("Test & Post!")
+        assert filename == "Test___Post_"
         
-        # Test without extension
-        filename = generate_secure_filename("Test Post")
-        assert filename.endswith("_Test_Post")
+        # Test with dots and hyphens (should be preserved)
+        filename = sanitize_filename("test-file.txt")
+        assert filename == "test-file.txt"
     
     def test_sanitize_html_content(self):
         """Test HTML sanitization."""
@@ -48,23 +45,26 @@ class TestContentUtilities:
         result = sanitize_html_content("")
         assert result == ""
     
-    def test_get_secure_post_path(self, app):
-        """Test secure post path generation."""
+    def test_validate_secure_path(self, app):
+        """Test secure path validation."""
         with app.app_context():
-            from app.content.utils import get_secure_post_path
+            from app.content.utils import validate_secure_path
+            import tempfile
+            import os
             
-            # Test valid filename
-            path = get_secure_post_path("valid-file.md")
-            assert path is not None
-            assert "valid-file.md" in path
-            
-            # Test path traversal attempt
-            path = get_secure_post_path("../../../etc/passwd")
-            assert path is None
-            
-            # Test None filename
-            path = get_secure_post_path(None)
-            assert path is None
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Test valid filename
+                path = validate_secure_path("valid-file.md", temp_dir)
+                assert path is not None
+                assert "valid-file.md" in path
+                
+                # Test path traversal attempt
+                path = validate_secure_path("../../../etc/passwd", temp_dir)
+                assert path is None
+                
+                # Test None filename
+                path = validate_secure_path(None, temp_dir)
+                assert path is None
     
     def test_get_secure_policy_page_path(self, app):
         """Test secure policy page path generation."""

@@ -28,10 +28,9 @@ class TestAdminAccess:
             '/members/admin/manage_members',  # User management
             '/members/admin/manage_roles',  # Role management
             '/members/admin/import_users',  # User import
-            '/events/',  # Event management
-            '/events/create',  # Event creation
+            '/bookings/admin/list',  # Event management (consolidated into bookings)
+            '/bookings/admin/create',  # Event creation
             '/pools/',  # Pool management
-            '/bookings/admin/list',  # Team management via bookings
             '/content/admin/write_post',  # Content creation
             '/content/admin/manage_posts',  # Content management
             '/content/admin/manage_policy_pages',  # Policy management
