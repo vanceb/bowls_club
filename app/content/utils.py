@@ -213,6 +213,48 @@ def get_post_image_path(post_directory, image_filename):
     # Validate and get the image file path
     return validate_secure_path(image_filename, images_dir_path)
 
+def get_post_existing_images(post_directory):
+    """
+    Get a list of existing image files in a post's directory.
+    
+    Args:
+        post_directory (str): The post's directory name (e.g., '1-abc12345-slug').
+        
+    Returns:
+        list: List of image filenames in the post's images directory.
+    """
+    if not post_directory:
+        return []
+    
+    base_path = current_app.config.get('POSTS_STORAGE_PATH')
+    if not base_path:
+        return []
+    
+    images_dir_path = os.path.join(base_path, post_directory, 'images')
+    
+    if not os.path.exists(images_dir_path):
+        return []
+    
+    try:
+        # Get all files in the images directory
+        all_files = os.listdir(images_dir_path)
+        
+        # Filter for image files only
+        image_extensions = current_app.config.get('IMAGE_ALLOWED_TYPES', ['jpg', 'jpeg', 'png', 'gif'])
+        image_files = []
+        
+        for filename in all_files:
+            if '.' in filename:
+                ext = filename.rsplit('.', 1)[1].lower()
+                if ext in image_extensions:
+                    image_files.append(filename)
+        
+        return sorted(image_files)  # Return sorted list for consistency
+        
+    except OSError:
+        current_app.logger.error(f"Error reading images directory: {images_dir_path}")
+        return []
+
 def rename_post_directory(old_directory, new_title):
     """
     Rename a post directory when the title changes.

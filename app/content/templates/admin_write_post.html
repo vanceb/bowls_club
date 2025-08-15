@@ -27,7 +27,7 @@
         <div class="field">
             <label class="label">{{ form.title.label }}</label>
             <div class="control">
-                {{ form.title(class="input") }}
+                {{ form.title(class="input", id="title") }}
             </div>
             {% if form.title.errors %}
             <p class="help is-danger">{{ form.title.errors[0] }}</p>
@@ -37,7 +37,7 @@
         <div class="field">
             <label class="label">{{ form.summary.label }}</label>
             <div class="control">
-                {{ form.summary(class="textarea") }}
+                {{ form.summary(class="textarea", id="summary") }}
             </div>
             {% if form.summary.errors %}
             <p class="help is-danger">{{ form.summary.errors[0] }}</p>
@@ -48,7 +48,7 @@
             <div class="field">
                 <label class="label">{{ form.publish_on.label }}</label>
                 <div class="control">
-                    {{ form.publish_on(class="input", type="date") }}
+                    {{ form.publish_on(class="input", type="date", id="publish_on") }}
                 </div>
                 {% if form.publish_on.errors %}
                 <p class="help is-danger">{{ form.publish_on.errors[0] }}</p>
@@ -58,7 +58,7 @@
             <div class="field">
                 <label class="label">{{ form.expires_on.label }}</label>
                 <div class="control">
-                    {{ form.expires_on(class="input", type="date") }}
+                    {{ form.expires_on(class="input", type="date", id="expires_on") }}
                 </div>
                 {% if form.expires_on.errors %}
                 <p class="help is-danger">{{ form.expires_on.errors[0] }}</p>
@@ -68,7 +68,7 @@
             <div class="field">
                 <label class="label">{{ form.pin_until.label }}</label>
                 <div class="control">
-                    {{ form.pin_until(class="input", type="date") }}
+                    {{ form.pin_until(class="input", type="date", id="pin_until") }}
                 </div>
                 {% if form.pin_until.errors %}
                 <p class="help is-danger">{{ form.pin_until.errors[0] }}</p>
@@ -79,7 +79,7 @@
         <div class="field">
             <label class="label">{{ form.tags.label }}</label>
             <div class="control">
-                {{ form.tags(class="input") }}
+                {{ form.tags(class="input", id="tags") }}
             </div>
             {% if form.tags.errors %}
             <p class="help is-danger">{{ form.tags.errors[0] }}</p>
@@ -88,11 +88,11 @@
 
         <!-- Image Upload Section -->
         <div class="field">
-            <label class="label">{{ form.images.label }}</label>
+            <label class="label">Upload Images</label>
             <div class="control">
                 <div class="file is-boxed">
                     <label class="file-label">
-                        {{ form.images(class="file-input", multiple=True, accept="image/jpeg,image/png") }}
+                        <input class="file-input" type="file" id="image-upload" multiple accept="image/jpeg,image/png">
                         <span class="file-cta">
                             <span class="file-icon">
                                 <i class="fas fa-upload"></i>
@@ -101,20 +101,63 @@
                         </span>
                     </label>
                 </div>
-                <p class="help">Select multiple JPEG or PNG images (max 10MB each). Click thumbnails below to insert into content.</p>
+                <p class="help">Select multiple JPEG or PNG images (max 10MB each). Images upload immediately when selected.</p>
             </div>
-            {% if form.images.errors %}
-            <p class="help is-danger">{{ form.images.errors[0] }}</p>
-            {% endif %}
+            <div id="upload-status" style="display: none;"></div>
         </div>
 
-        <!-- Image Thumbnail Gallery (will be populated by JavaScript) -->
-        <div id="image-gallery" class="field" style="display: none;">
-            <label class="label">Uploaded Images</label>
-            <div id="image-thumbnails" class="columns is-multiline is-mobile">
-                <!-- Thumbnails will be inserted here by JavaScript -->
+        <!-- Combined Images Gallery -->
+        <div class="field">
+            <label class="label">Images</label>
+            <div id="all-images-container" class="columns is-multiline is-mobile">
+                <!-- Existing Images -->
+                {% if existing_images %}
+                    {% for image in existing_images %}
+                    <div class="column is-narrow">
+                        <div class="card has-background-light" style="max-width: 150px;">
+                            <div class="card-image">
+                                <figure class="image is-square">
+                                    <img src="{{ url_for('content.serve_post_image', post_id=post.id, filename=image) }}" 
+                                         alt="{{ image }}" style="object-fit: cover;">
+                                </figure>
+                            </div>
+                            <div class="card-content has-text-centered p-2">
+                                <p class="is-size-7 has-text-weight-semibold">
+                                    {{ image[:15] + '...' if image|length > 15 else image }}
+                                </p>
+                                <div class="field">
+                                    <div class="control">
+                                        <label class="radio">
+                                            <input type="radio" name="hero_image" value="{{ image }}" 
+                                                   {% if post.hero_image == image %}checked{% endif %}>
+                                            Hero Image
+                                        </label>
+                                    </div>
+                                </div>
+                                <p class="is-size-7 has-text-grey" style="cursor: pointer;" 
+                                   onclick="insertImageReference('{{ image }}')">Click to insert</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <!-- No Hero Image Option -->
+                <div class="column is-narrow" id="no-hero-option">
+                    <div class="card has-background-light" style="max-width: 150px; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+                        <div class="has-text-centered">
+                            <label class="radio">
+                                <input type="radio" name="hero_image" value="" 
+                                       {% if not post.hero_image %}checked{% endif %}>
+                                No Hero Image
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Newly uploaded images will be inserted here by JavaScript -->
             </div>
-            <p class="help">Click on an image to insert it at the cursor position in your content.</p>
+            <p class="help">Select a radio button to set the hero image. Click "Click to insert" to add image references to your content.</p>
         </div>
 
         <div class="field">
@@ -161,112 +204,116 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const imageInput = document.querySelector('input[name="images"]');
-    const imageGallery = document.getElementById('image-gallery');
-    const thumbnailContainer = document.getElementById('image-thumbnails');
+    const imageUpload = document.getElementById('image-upload');
+    const uploadStatus = document.getElementById('upload-status');
     const contentTextarea = document.getElementById('content-textarea');
     
-    {% if draft_post_id %}
-    const draftPostId = {{ draft_post_id }};
-    const imageBaseUrl = "{{ url_for('content.serve_post_image', post_id=draft_post_id, filename='PLACEHOLDER') }}".replace('PLACEHOLDER', '');
+    {% if draft_post_id or post %}
+    const postId = {{ draft_post_id or post.id }};
+    const imageBaseUrl = "{{ url_for('content.serve_post_image', post_id=draft_post_id or post.id, filename='PLACEHOLDER') }}".replace('PLACEHOLDER', '');
     {% else %}
-    const draftPostId = null;
+    const postId = null;
     const imageBaseUrl = null;
     {% endif %}
     
-    if (imageInput) {
-        imageInput.addEventListener('change', function(e) {
-            const files = Array.from(e.target.files);
+    // Handle immediate image upload via AJAX
+    if (imageUpload && postId) {
+        imageUpload.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
             
-            if (files.length > 0) {
-                imageGallery.style.display = 'block';
-                thumbnailContainer.innerHTML = '';
-                
-                files.forEach(function(file, index) {
-                    if (file.type.startsWith('image/')) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            const thumbnailDiv = document.createElement('div');
-                            thumbnailDiv.className = 'column is-narrow';
-                            
-                            const thumbnailCard = document.createElement('div');
-                            thumbnailCard.className = 'card has-background-light';
-                            thumbnailCard.style.cursor = 'pointer';
-                            thumbnailCard.style.maxWidth = '120px';
-                            
-                            const cardImage = document.createElement('div');
-                            cardImage.className = 'card-image';
-                            
-                            const figure = document.createElement('figure');
-                            figure.className = 'image is-square';
-                            
-                            const img = document.createElement('img');
-                            img.src = e.target.result;
-                            img.alt = file.name;
-                            img.style.objectFit = 'cover';
-                            
-                            const cardContent = document.createElement('div');
-                            cardContent.className = 'card-content has-text-centered p-2';
-                            
-                            const fileName = document.createElement('p');
-                            fileName.className = 'is-size-7 has-text-weight-semibold';
-                            fileName.textContent = file.name.length > 15 
-                                ? file.name.substring(0, 12) + '...' 
-                                : file.name;
-                            
-                            const clickHint = document.createElement('p');
-                            clickHint.className = 'is-size-7 has-text-grey';
-                            clickHint.textContent = 'Click to insert';
-                            
-                            figure.appendChild(img);
-                            cardImage.appendChild(figure);
-                            cardContent.appendChild(fileName);
-                            cardContent.appendChild(clickHint);
-                            thumbnailCard.appendChild(cardImage);
-                            thumbnailCard.appendChild(cardContent);
-                            thumbnailDiv.appendChild(thumbnailCard);
-                            
-                            // Add click event to insert image reference at cursor
-                            thumbnailCard.addEventListener('click', function() {
-                                let imageRef;
-                                if (draftPostId && imageBaseUrl) {
-                                    imageRef = `![${file.name}](${imageBaseUrl}${file.name})`;
-                                } else {
-                                    imageRef = `![${file.name}](image-${file.name})`;
-                                }
-                                insertAtCursor(contentTextarea, imageRef);
-                                
-                                // Visual feedback
-                                thumbnailCard.style.backgroundColor = '#48c78e';
-                                thumbnailCard.style.color = 'white';
-                                setTimeout(function() {
-                                    thumbnailCard.style.backgroundColor = '';
-                                    thumbnailCard.style.color = '';
-                                }, 500);
-                            });
-                            
-                            // Add hover effects
-                            thumbnailCard.addEventListener('mouseenter', function() {
-                                if (thumbnailCard.style.backgroundColor !== 'rgb(72, 199, 142)') {
-                                    thumbnailCard.style.backgroundColor = '#f5f5f5';
-                                }
-                            });
-                            
-                            thumbnailCard.addEventListener('mouseleave', function() {
-                                if (thumbnailCard.style.backgroundColor !== 'rgb(72, 199, 142)') {
-                                    thumbnailCard.style.backgroundColor = '';
-                                }
-                            });
-                            
-                            thumbnailContainer.appendChild(thumbnailDiv);
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            } else {
-                imageGallery.style.display = 'none';
+            // Show upload status
+            uploadStatus.style.display = 'block';
+            uploadStatus.innerHTML = '<div class="notification is-info">Saving form data and uploading images...</div>';
+            
+            // Save current form data to localStorage before upload
+            const form = document.querySelector('form');
+            const formData = {
+                title: form.querySelector('#title').value,
+                summary: form.querySelector('#summary').value,
+                content: form.querySelector('#content-textarea').value,
+                tags: form.querySelector('#tags').value,
+                publish_on: form.querySelector('#publish_on').value,
+                expires_on: form.querySelector('#expires_on').value,
+                pin_until: form.querySelector('#pin_until').value,
+                hero_image: form.querySelector('input[name="hero_image"]:checked')?.value || ''
+            };
+            localStorage.setItem('draftFormData_' + postId, JSON.stringify(formData));
+            
+            // Upload images via AJAX
+            const imageFormData = new FormData();
+            for (let file of files) {
+                imageFormData.append('images', file);
             }
+            
+            fetch(`{{ url_for('content.admin_upload_images', post_id=0) }}`.replace('0', postId), {
+                method: 'POST',
+                body: imageFormData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    uploadStatus.innerHTML = '<div class="notification is-success">' + data.message + '</div>';
+                    // Refresh the page to show new images in gallery - preserve draft_post_id in URL
+                    setTimeout(() => {
+                        const currentUrl = new URL(window.location);
+                        currentUrl.searchParams.set('draft_id', postId);
+                        window.location.href = currentUrl.toString();
+                    }, 1000);
+                } else {
+                    uploadStatus.innerHTML = '<div class="notification is-danger">Upload failed: ' + data.error + '</div>';
+                }
+                // Clear the file input
+                imageUpload.value = '';
+            })
+            .catch(error => {
+                uploadStatus.innerHTML = '<div class="notification is-danger">Upload failed: ' + error.message + '</div>';
+                imageUpload.value = '';
+            });
         });
+    }
+    
+    // Restore form data from localStorage if available
+    if (postId) {
+        const savedData = localStorage.getItem('draftFormData_' + postId);
+        if (savedData) {
+            try {
+                const formData = JSON.parse(savedData);
+                const form = document.querySelector('form');
+                
+                // Restore form fields
+                if (formData.title && form.querySelector('#title')) form.querySelector('#title').value = formData.title;
+                if (formData.summary && form.querySelector('#summary')) form.querySelector('#summary').value = formData.summary;
+                if (formData.content && form.querySelector('#content-textarea')) form.querySelector('#content-textarea').value = formData.content;
+                if (formData.tags && form.querySelector('#tags')) form.querySelector('#tags').value = formData.tags;
+                if (formData.publish_on && form.querySelector('#publish_on')) form.querySelector('#publish_on').value = formData.publish_on;
+                if (formData.expires_on && form.querySelector('#expires_on')) form.querySelector('#expires_on').value = formData.expires_on;
+                if (formData.pin_until && form.querySelector('#pin_until')) form.querySelector('#pin_until').value = formData.pin_until;
+                if (formData.hero_image) {
+                    const heroRadio = form.querySelector(`input[name="hero_image"][value="${formData.hero_image}"]`);
+                    if (heroRadio) heroRadio.checked = true;
+                }
+                
+                // Clear the saved data after restoring
+                localStorage.removeItem('draftFormData_' + postId);
+                
+                console.log('Form data restored from localStorage');
+            } catch (e) {
+                console.error('Error restoring form data:', e);
+                localStorage.removeItem('draftFormData_' + postId);
+            }
+        }
+    }
+    
+    // Simple function for inserting image references
+    window.insertImageReference = function(filename) {
+        if (imageBaseUrl) {
+            const imageRef = `![${filename}](${imageBaseUrl}${filename})`;
+            insertAtCursor(contentTextarea, imageRef);
+        }
     }
     
     function insertAtCursor(textarea, text) {

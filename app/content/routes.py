@@ -12,12 +12,41 @@ from app.audit import audit_log_create, audit_log_update, audit_log_delete, audi
 from app.content.forms import WritePostForm, PolicyPageForm
 from app.content.utils import (
     create_post_directory, get_post_file_path, get_post_image_path, rename_post_directory,
-    sanitize_html_content, get_secure_policy_page_path, get_secure_archive_path, 
+    get_post_existing_images, sanitize_html_content, get_secure_policy_page_path, get_secure_archive_path, 
     parse_metadata_from_markdown, find_orphaned_policy_pages, recover_orphaned_policy_page
 )
 from app.routes import role_required, admin_required
 from app.forms import FlaskForm
 
+
+def validate_hero_image_selection(hero_image, post, newly_uploaded_images=None):
+    """
+    Validate that the selected hero image exists in the post's images or newly uploaded images.
+    
+    Args:
+        hero_image (str): The selected hero image filename.
+        post: The Post object.
+        newly_uploaded_images (list): List of newly uploaded image filenames.
+        
+    Returns:
+        bool: True if valid, False if invalid.
+    """
+    if not hero_image:
+        return True  # No hero image is valid
+    
+    # Check if hero image is in newly uploaded images
+    if newly_uploaded_images:
+        newly_uploaded_filenames = [img.get('filename') for img in newly_uploaded_images if img.get('filename')]
+        if hero_image in newly_uploaded_filenames:
+            return True
+    
+    # Check if hero image exists in post's existing images
+    if post and post.directory_name:
+        existing_images = get_post_existing_images(post.directory_name)
+        if hero_image in existing_images:
+            return True
+    
+    return False
 
 def handle_image_uploads(image_files, post):
     """
@@ -216,8 +245,16 @@ def admin_write_post():
                 expires_on=draft_post.expires_on,
                 pin_until=draft_post.pin_until,
                 tags=draft_post.tags,
-                content=content
+                content=content,
+                hero_image=draft_post.hero_image or ''
             )
+            
+            # Populate hero_image choices for existing drafts
+            existing_images = get_post_existing_images(draft_post.directory_name) if draft_post.directory_name else []
+            hero_choices = [('', 'No hero image')]
+            for image in existing_images:
+                hero_choices.append((image, image))
+            form.hero_image.choices = hero_choices
         else:
             form = WritePostForm()
             
@@ -296,58 +333,172 @@ def admin_write_post():
             current_app.logger.info(f"All form keys: {list(request.form.keys())}")
             
         if request.method == 'POST' and request.form.get('action') == 'preview':
-            current_app.logger.info("Preview action detected - bypassing form validation")
+            current_app.logger.info("Preview action detected - first saving as draft, then previewing")
             
-            # Get form data directly without validation
-            title = request.form.get('title', '').strip()
-            summary = request.form.get('summary', '').strip()
-            content = request.form.get('content', '').strip()
-            publish_on = form.publish_on.data or date.today()
-            expires_on = form.expires_on.data or (date.today() + timedelta(days=30))
-            pin_until = form.pin_until.data
-            tags = request.form.get('tags', '').strip()
+            # Temporarily change action to save_draft to reuse save logic
+            original_action = request.form.get('action')
+            # Create a mutable copy of form data
+            form_data = request.form.to_dict(flat=False)
+            form_data['action'] = ['save_draft']
             
-            # Handle image uploads for preview if any images are provided
-            if draft_post and form.images.data:
-                try:
-                    uploaded_images = handle_image_uploads(form.images.data, draft_post)
-                    if uploaded_images:
-                        current_app.logger.info(f"Uploaded {len(uploaded_images)} images for preview")
-                except Exception as e:
-                    current_app.logger.error(f"Error uploading images for preview: {str(e)}")
+            # Create a new form with the modified data for validation and saving
+            from werkzeug.datastructures import MultiDict
+            preview_form_data = MultiDict(form_data)
             
-            # Generate preview HTML without saving
-            if content:
-                import markdown2
-                preview_html = markdown2.markdown(content, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
-                preview_html = sanitize_html_content(preview_html)
+            # Set the action back to save_draft temporarily
+            temp_form = WritePostForm(preview_form_data)
+            
+            # Populate hero_image choices for validation
+            hero_choices = [('', 'No hero image')]
+            if draft_post and draft_post.directory_name:
+                existing_images = get_post_existing_images(draft_post.directory_name)
+                for image in existing_images:
+                    hero_choices.append((image, image))
+            temp_form.hero_image.choices = hero_choices
+            
+            # Validate and save as draft first
+            if temp_form.validate():
+                current_app.logger.info("Preview: Form validation successful, saving as draft first")
+                
+                # Get form data
+                title = temp_form.title.data.strip()
+                summary = temp_form.summary.data.strip()
+                content = request.form.get('content', '').strip()
+                tags = temp_form.tags.data.strip() if temp_form.tags.data else ''
+                publish_on = temp_form.publish_on.data
+                expires_on = temp_form.expires_on.data
+                pin_until = temp_form.pin_until.data
+                hero_image = request.form.get('hero_image', '').strip() or None
+                
+                # Validate hero image selection
+                if not validate_hero_image_selection(hero_image, draft_post, []):
+                    flash('Selected hero image is not valid. Please choose from uploaded images or "No hero image".', 'error')
+                    existing_images = []
+                    if draft_post and draft_post.directory_name:
+                        existing_images = get_post_existing_images(draft_post.directory_name)
+                    return render_template('admin_write_post.html', form=form, draft_post_id=draft_post_id, 
+                                         post=draft_post, existing_images=existing_images)
+                
+                # Save as draft using existing logic
+                if draft_post:
+                    # Update existing draft
+                    post = draft_post
+                    old_title = post.title  # Store old title before updating
+                    post.title = title
+                    post.summary = summary
+                    post.publish_on = publish_on
+                    post.expires_on = expires_on
+                    post.pin_until = pin_until
+                    post.tags = tags
+                    post.hero_image = hero_image
+                    post.is_draft = True  # Ensure it stays a draft
+                    
+                    # Update directory name if title changed (using existing logic pattern)
+                    if post.directory_name and old_title != title:
+                        old_directory_name = post.directory_name
+                        new_directory = rename_post_directory(post.directory_name, title)
+                        if new_directory and new_directory != post.directory_name:
+                            post.directory_name = new_directory
+                            current_app.logger.info(f"Preview: Renamed post directory from {old_directory_name} to {new_directory}")
+                        else:
+                            current_app.logger.info(f"Preview: Directory rename not needed or failed for post {post.id}")
+                    
+                    # Create content files using existing logic pattern
+                    markdown_path = get_post_file_path(post.directory_name, post.markdown_filename)
+                    html_path = get_post_file_path(post.directory_name, post.html_filename)
+                    
+                    if markdown_path and html_path:
+                        # Create markdown metadata header (same pattern as existing logic)
+                        metadata = f"""---
+title: {title}
+summary: {summary}
+publish_on: {publish_on.isoformat()}
+expires_on: {expires_on.isoformat()}
+pin_until: {pin_until.isoformat() if pin_until else ''}
+tags: {tags}
+---
+
+"""
+                        
+                        # Save markdown file
+                        with open(markdown_path, 'w', encoding='utf-8') as f:
+                            f.write(metadata + content)
+                        
+                        # Convert markdown to HTML and save
+                        import markdown2
+                        html_content = markdown2.markdown(content, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
+                        html_content = sanitize_html_content(html_content)
+                        with open(html_path, 'w', encoding='utf-8') as f:
+                            f.write(html_content)
+                    
+                    db.session.commit()
+                    current_app.logger.info("Preview: Draft saved successfully")
+                    
+                    # Now proceed with preview using the saved draft
+                    preview_post = post
+                    
+                    # Generate preview HTML from the content
+                    if content:
+                        import markdown2
+                        preview_html = markdown2.markdown(content, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
+                        preview_html = sanitize_html_content(preview_html)
+                    else:
+                        preview_html = '<p>No content to preview.</p>'
+                    
+                    return render_template('view_post.html', post=preview_post, content=preview_html, is_preview=True)
+                else:
+                    # If no draft post exists, create a temporary one for preview
+                    title = temp_form.title.data.strip() if temp_form.title.data else 'Untitled'
+                    summary = temp_form.summary.data.strip() if temp_form.summary.data else 'No summary'
+                    content = request.form.get('content', '').strip()
+                    
+                    preview_post = Post(
+                        title=title,
+                        summary=summary,
+                        publish_on=temp_form.publish_on.data,
+                        expires_on=temp_form.expires_on.data,
+                        pin_until=temp_form.pin_until.data,
+                        tags=temp_form.tags.data.strip() if temp_form.tags.data else '',
+                        hero_image=request.form.get('hero_image', '').strip() or None,
+                        author_id=current_user.id,
+                        is_draft=True
+                    )
+                    preview_post.id = 'preview'
+                    
+                    # Generate preview HTML
+                    if content:
+                        import markdown2
+                        preview_html = markdown2.markdown(content, extras=['fenced-code-blocks', 'tables', 'header-ids', 'code-friendly'])
+                        preview_html = sanitize_html_content(preview_html)
+                    else:
+                        preview_html = '<p>No content to preview.</p>'
+                    
+                    return render_template('view_post.html', post=preview_post, content=preview_html, is_preview=True)
             else:
-                preview_html = '<p>No content to preview.</p>'
-            
-            # Use the existing draft post for preview to enable image serving
-            if draft_post:
-                preview_post = draft_post
-                preview_post.title = title or 'Untitled'
-                preview_post.summary = summary or 'No summary'
-                preview_post.publish_on = publish_on
-                preview_post.expires_on = expires_on
-                preview_post.pin_until = pin_until
-                preview_post.tags = tags
-            else:
-                # Create a preview post object (not saved to database)
-                preview_post = Post(
-                    title=title or 'Untitled',
-                    summary=summary or 'No summary',
-                    publish_on=publish_on,
-                    expires_on=expires_on,
-                    pin_until=pin_until,
-                    tags=tags,
-                    author_id=current_user.id,
-                    is_draft=True
-                )
-                preview_post.id = 'preview'  # Set a dummy ID for preview if no draft exists
-            
-            return render_template('view_post.html', post=preview_post, content=preview_html, is_preview=True)
+                # Validation failed - show form with errors
+                current_app.logger.info("Preview: Form validation failed")
+                for field, errors in temp_form.errors.items():
+                    for error in errors:
+                        flash(f'{field.title()}: {error}', 'error')
+                
+                existing_images = []
+                if draft_post and draft_post.directory_name:
+                    existing_images = get_post_existing_images(draft_post.directory_name)
+                return render_template('admin_write_post.html', form=form, draft_post_id=draft_post_id, 
+                                     post=draft_post, existing_images=existing_images)
+        
+        # Update hero_image choices dynamically before validation if we have a draft post
+        if request.method == 'POST' and draft_post:
+            existing_images = get_post_existing_images(draft_post.directory_name) if draft_post.directory_name else []
+            hero_choices = [('', 'No hero image')]
+            for image in existing_images:
+                hero_choices.append((image, image))
+            # Add newly uploaded images to choices (their filenames)
+            if form.images.data:
+                for image_file in form.images.data:
+                    if image_file and image_file.filename:
+                        hero_choices.append((image_file.filename, image_file.filename))
+            form.hero_image.choices = hero_choices
         
         if form.validate_on_submit():
             current_app.logger.info("Form validation successful")
@@ -356,18 +507,8 @@ def admin_write_post():
             action = request.form.get('action', 'publish')
             current_app.logger.info(f"Form action: {action}")
             
-            # Handle image uploads first if there are any
+            # Images are now uploaded immediately via AJAX, so no form processing needed
             uploaded_images = []
-            current_app.logger.info(f"Image data present: {bool(form.images.data)}, Draft post: {bool(draft_post)}")
-            
-            # For POST requests, we need to get the draft post ID from a hidden field or create a new post first
-            post_for_images = draft_post
-            if not post_for_images and form.images.data:
-                current_app.logger.info("No draft post available for images, will handle after post creation")
-            elif form.images.data and post_for_images:
-                current_app.logger.info(f"Processing image uploads for post {post_for_images.id}")
-                uploaded_images = handle_image_uploads(form.images.data, post_for_images)
-                current_app.logger.info(f"Image upload completed: {len(uploaded_images)} images processed")
             
             # Get form data
             title = form.title.data.strip()
@@ -377,6 +518,16 @@ def admin_write_post():
             publish_on = form.publish_on.data
             expires_on = form.expires_on.data
             pin_until = form.pin_until.data
+            hero_image = request.form.get('hero_image', '').strip() or None
+            
+            # Validate hero image selection
+            if not validate_hero_image_selection(hero_image, draft_post, uploaded_images):
+                flash('Selected hero image is not valid. Please choose from uploaded images or "No hero image".', 'error')
+                existing_images = []
+                if draft_post and draft_post.directory_name:
+                    existing_images = get_post_existing_images(draft_post.directory_name)
+                return render_template('admin_write_post.html', form=form, draft_post_id=draft_post_id, 
+                                     post=draft_post, existing_images=existing_images)
             
             # Validate required fields for publish action (drafts can have empty content)
             if action == 'publish' and (not title or not summary or not content):
@@ -399,6 +550,7 @@ def admin_write_post():
                 post.expires_on = expires_on
                 post.pin_until = pin_until
                 post.tags = tags
+                post.hero_image = hero_image
                 post.is_draft = is_draft
                 
                 markdown_filename = post.markdown_filename
@@ -412,6 +564,7 @@ def admin_write_post():
                     expires_on=expires_on,
                     pin_until=pin_until,
                     tags=tags,
+                    hero_image=hero_image,
                     markdown_filename='post.md',  # Fixed filename in new structure
                     html_filename='post.html',    # Fixed filename in new structure
                     author_id=current_user.id,
@@ -442,11 +595,7 @@ def admin_write_post():
                     
                     db.session.commit()
                 
-                # Handle image uploads after post is created/updated
-                if form.images.data and not uploaded_images:
-                    current_app.logger.info(f"Processing image uploads for post {post.id} after creation")
-                    uploaded_images = handle_image_uploads(form.images.data, post)
-                    current_app.logger.info(f"Post-creation image upload completed: {len(uploaded_images)} images processed")
+                # Images are uploaded immediately via AJAX, no post-creation upload needed
                 
                 # Get secure file paths using new directory structure
                 markdown_path = get_post_file_path(post.directory_name, 'post.md')
@@ -509,7 +658,14 @@ tags: {tags}
         
         # GET request - render form
         current_app.logger.info(f"Rendering template with draft_post_id: {draft_post_id}")
-        return render_template('admin_write_post.html', form=form, draft_post_id=draft_post_id)
+        
+        # Get existing images if we have a draft post
+        existing_images = []
+        if draft_post and draft_post.directory_name:
+            existing_images = get_post_existing_images(draft_post.directory_name)
+        
+        return render_template('admin_write_post.html', form=form, draft_post_id=draft_post_id, 
+                             post=draft_post, existing_images=existing_images)
         
     except Exception as e:
         current_app.logger.error(f"Error in write_post: {str(e)}")
@@ -653,6 +809,9 @@ def admin_edit_post(post_id):
         # Parse metadata and content
         metadata, content = parse_metadata_from_markdown(markdown_content)
 
+        # Get existing images for populating hero_image choices
+        existing_images = get_post_existing_images(post.directory_name) if post.directory_name else []
+        
         # Prepopulate the form with post data
         form = WritePostForm(
             title=post.title,
@@ -661,8 +820,15 @@ def admin_edit_post(post_id):
             expires_on=post.expires_on,
             pin_until=post.pin_until,
             tags=post.tags,
-            content=content
+            content=content,
+            hero_image=post.hero_image or ''
         )
+        
+        # Populate hero_image choices dynamically
+        hero_choices = [('', 'No hero image')]
+        for image in existing_images:
+            hero_choices.append((image, image))
+        form.hero_image.choices = hero_choices
 
         # Handle preview action BEFORE form validation (preview doesn't require validation)
         if request.method == 'POST' and request.form.get('action') == 'preview':
@@ -676,6 +842,7 @@ def admin_edit_post(post_id):
             expires_on = post.expires_on
             pin_until = post.pin_until
             tags = request.form.get('tags', '').strip()
+            hero_image = request.form.get('hero_image', '').strip() or None
             
             # Generate preview HTML without saving
             if content:
@@ -694,6 +861,7 @@ def admin_edit_post(post_id):
                 expires_on=expires_on,
                 pin_until=pin_until,
                 tags=tags,
+                hero_image=hero_image,
                 author_id=current_user.id,
                 is_draft=True
             )
@@ -701,6 +869,13 @@ def admin_edit_post(post_id):
             preview_post.directory_name = post.directory_name  # Use actual directory for images
             
             return render_template('view_post.html', post=preview_post, content=preview_html, is_preview=True)
+
+        # Update hero_image choices dynamically before validation for existing posts
+        if request.method == 'POST':
+            hero_choices = [('', 'No hero image')]
+            for image in existing_images:
+                hero_choices.append((image, image))
+            form.hero_image.choices = hero_choices
 
         if form.validate_on_submit():
             # Check which action was submitted
@@ -718,6 +893,18 @@ def admin_edit_post(post_id):
             # Determine if this should be a draft or published post
             is_draft = (action == 'save_draft')
             
+            # Get hero_image from form data
+            hero_image = request.form.get('hero_image', '').strip() or None
+            
+            # Validate hero image selection
+            if not validate_hero_image_selection(hero_image, post):
+                flash('Selected hero image is not valid. Please choose from existing images or "No hero image".', 'error')
+                existing_images = []
+                if post and post.directory_name:
+                    existing_images = get_post_existing_images(post.directory_name)
+                csrf_form = FlaskForm()
+                return render_template('admin_write_post.html', form=form, post=post, csrf_form=csrf_form, existing_images=existing_images)
+            
             # Capture changes for audit log
             changes = get_model_changes(post, {
                 'title': form.title.data,
@@ -726,6 +913,7 @@ def admin_edit_post(post_id):
                 'expires_on': form.expires_on.data,
                 'pin_until': form.pin_until.data,
                 'tags': form.tags.data,
+                'hero_image': hero_image,
                 'is_draft': is_draft
             })
             
@@ -737,6 +925,7 @@ def admin_edit_post(post_id):
             post.expires_on = form.expires_on.data
             post.pin_until = form.pin_until.data
             post.tags = form.tags.data
+            post.hero_image = hero_image
             post.is_draft = is_draft
             
             # Check if directory needs to be renamed due to title change
@@ -785,13 +974,49 @@ def admin_edit_post(post_id):
 
         # Create CSRF form for template
         csrf_form = FlaskForm()
-        return render_template('admin_write_post.html', form=form, post=post, csrf_form=csrf_form)
+        return render_template('admin_write_post.html', form=form, post=post, csrf_form=csrf_form, existing_images=existing_images)
         
     except Exception as e:
         current_app.logger.error(f"Error in edit_post: {str(e)}")
         flash('An error occurred while editing the post.', 'error')
         return redirect(url_for('content.admin_manage_posts'))
 
+
+@bp.route('/admin/upload_images/<int:post_id>', methods=['POST'])
+@login_required
+@role_required('Content Manager')
+def admin_upload_images(post_id):
+    """
+    AJAX endpoint for immediate image upload
+    """
+    try:
+        post = db.session.get(Post, post_id)
+        if not post:
+            return jsonify({'success': False, 'error': 'Post not found'}), 404
+        
+        if 'images' not in request.files:
+            return jsonify({'success': False, 'error': 'No images provided'}), 400
+        
+        files = request.files.getlist('images')
+        if not files or not any(f.filename for f in files):
+            return jsonify({'success': False, 'error': 'No valid images provided'}), 400
+        
+        # Upload images immediately
+        uploaded_images = handle_image_uploads(files, post)
+        
+        if uploaded_images:
+            # Return success with uploaded image info
+            return jsonify({
+                'success': True, 
+                'message': f'Uploaded {len(uploaded_images)} images successfully',
+                'images': uploaded_images
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to upload images'}), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"Error in admin_upload_images: {str(e)}")
+        return jsonify({'success': False, 'error': 'Upload failed'}), 500
 
 @bp.route('/admin/delete_post/<int:post_id>', methods=['POST'])
 @login_required
