@@ -115,6 +115,7 @@ class Post(db.Model):
     is_draft: so.Mapped[bool] = so.mapped_column(sa.Boolean, default=False, nullable=False)
     author_id: so.Mapped[int] = so.mapped_column(sa.Integer, sa.ForeignKey('member.id'), nullable=False)
     directory_name: so.Mapped[Optional[str]] = so.mapped_column(sa.String(255), nullable=True)
+    hero_image: so.Mapped[Optional[str]] = so.mapped_column(sa.String(255), nullable=True)
     markdown_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
     html_filename: so.Mapped[str] = so.mapped_column(sa.String(255), nullable=False)
     created_at: so.Mapped[datetime] = so.mapped_column(sa.DateTime, default=datetime.utcnow, nullable=False)

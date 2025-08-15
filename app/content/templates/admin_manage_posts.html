@@ -12,22 +12,49 @@
             <thead>
                 <tr>
                     <th><input type="checkbox" id="select-all"></th>
+                    <th>Hero Image</th>
                     <th>Title</th>
                     <th>Expires On</th>
                 </tr>
             </thead>
             <tbody>
                 {% for post in posts %}
-                <tr data-post-id="{{ post.id }}">
-                    <td><input type="checkbox" name="post_ids" value="{{ post.id }}" class="post-checkbox" data-expires-on="{{ post.expires_on }}"></td>
-                    <td><a href="{{ url_for('content.admin_edit_post', post_id=post.id) }}">{{ post.title }}</a></td>
-                    <td>{{ post.expires_on }}</td>
+                {% set is_expired = post.expires_on < today %}
+                <tr data-post-id="{{ post.id }}" class="{% if is_expired %}has-background-danger-light{% endif %}">
+                    <td><input type="checkbox" name="post_ids" value="{{ post.id }}" class="post-checkbox" data-expires-on="{{ post.expires_on }}" data-is-draft="{{ post.is_draft|lower }}"></td>
+                    <td>
+                        {% if post.hero_image %}
+                        <figure class="image is-48x48">
+                            <img src="{{ url_for('content.serve_post_image', post_id=post.id, filename=post.hero_image) }}" 
+                                 alt="{{ post.title }}" 
+                                 style="object-fit: cover; border-radius: 4px;">
+                        </figure>
+                        {% else %}
+                        <span class="has-text-grey-light">No hero image</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('content.admin_edit_post', post_id=post.id) }}" class="{% if is_expired %}has-text-grey{% endif %}">{{ post.title }}</a>
+                        {% if post.is_draft %}
+                        <span class="tag is-info is-small ml-2">Draft</span>
+                        {% endif %}
+                        {% if is_expired %}
+                        <span class="tag is-danger is-small ml-2">Expired</span>
+                        {% endif %}
+                    </td>
+                    <td class="{% if is_expired %}has-text-danger has-text-weight-semibold{% endif %}">{{ post.expires_on }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
 
         <div class="buttons">
+            <button type="button" class="button is-info" id="select-drafts">
+                <span class="icon">
+                    <i class="fas fa-file-alt"></i>
+                </span>
+                <span>Select Drafts</span>
+            </button>
             <button type="button" class="button is-warning" id="select-expired">
                 <span class="icon">
                     <i class="fas fa-clock"></i>
@@ -46,6 +73,14 @@
 
 
 <script>
+    document.getElementById('select-drafts').addEventListener('click', function() {
+        document.querySelectorAll('.post-checkbox').forEach(checkbox => {
+            if (checkbox.dataset.isDraft === 'true') {
+                checkbox.checked = true;
+            }
+        });
+    });
+
     document.getElementById('select-expired').addEventListener('click', function() {
         const today = new Date('{{ today }}');
         document.querySelectorAll('.post-checkbox').forEach(checkbox => {

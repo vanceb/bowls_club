@@ -5,8 +5,26 @@
 
 {% block content %}
 <div class="container">
+    {% if is_preview %}
+    <!-- Preview Banner -->
+    <div class="notification is-warning">
+        <strong>Preview Mode</strong> - This is a preview of your post. Close this tab to return to editing.
+    </div>
+    {% endif %}
+    
     <h1 class="title">{{ post.title }}</h1>
     <p class="subtitle">Published on {{ post.publish_on }}</p>
+    
+    <!-- Hero Image -->
+    {% if post.hero_image and post.id != 'preview' %}
+    <div class="hero-image mb-5">
+        <figure class="image">
+            <img src="{{ url_for('content.serve_post_image', post_id=post.id, filename=post.hero_image) }}" 
+                 alt="{{ post.title }}" 
+                 style="width: 100%; max-height: 400px; object-fit: cover; border-radius: 6px;">
+        </figure>
+    </div>
+    {% endif %}
     
     <!-- Summary Box -->
     <div class="box">

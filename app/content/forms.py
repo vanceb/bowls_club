@@ -6,7 +6,7 @@ from flask import current_app
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed, FileSize
 from wtforms import (
-    StringField, BooleanField, SubmitField, TextAreaField, DateField, IntegerField, MultipleFileField
+    StringField, BooleanField, SubmitField, TextAreaField, DateField, IntegerField, MultipleFileField, SelectField, RadioField
 )
 from wtforms.validators import (
     DataRequired, Length, Optional, NumberRange, ValidationError
@@ -34,6 +34,14 @@ class WritePostForm(FlaskForm):
         ]
     )
     
+    # Hero image selection field - will be populated dynamically with uploaded images
+    hero_image = RadioField(
+        'Hero Image',
+        choices=[('', 'No hero image')],
+        validators=[Optional()],
+        default=''
+    )
+    
     def validate_images(self, field):
         """Custom validation for image uploads using config values"""
         if not field.data:
@@ -48,6 +56,17 @@ class WritePostForm(FlaskForm):
                 if ext not in allowed_types:
                     allowed_str = ', '.join(allowed_types)
                     raise ValidationError(f'Only {allowed_str} files are allowed!')
+    
+    def validate_hero_image(self, field):
+        """Custom validation for hero image selection"""
+        if not field.data:
+            return  # Hero image is optional
+        
+        # We can't validate hero image during form validation because:
+        # 1. For new posts, the images haven't been saved yet
+        # 2. For existing posts, we need the post ID to check the directory
+        # Hero image validation will be done in the route handler instead
+        pass
     
     submit = SubmitField('Submit')
 

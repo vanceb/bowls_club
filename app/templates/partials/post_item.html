@@ -1,8 +1,24 @@
 <li class="mb-4">
     <a href="{{ url_for('content.view_post', post_id=post.id) }}">
-        <h2 class="title is-5">{{ post.title }}</h2>
-        <p class="subtitle is-6">Published on {{ post.publish_on }}</p>
-        <p>{{ post.summary }}</p>
+        <div class="columns is-mobile">
+            <!-- Hero Image Thumbnail -->
+            {% if post.hero_image %}
+            <div class="column is-narrow">
+                <figure class="image is-128x128">
+                    <img src="{{ url_for('content.serve_post_image', post_id=post.id, filename=post.hero_image) }}" 
+                         alt="{{ post.title }}" 
+                         style="object-fit: cover; border-radius: 6px;">
+                </figure>
+            </div>
+            {% endif %}
+            
+            <!-- Post Content -->
+            <div class="column">
+                <h2 class="title is-5">{{ post.title }}</h2>
+                <p class="subtitle is-6">Published on {{ post.publish_on }}</p>
+                <p>{{ post.summary }}</p>
+            </div>
+        </div>
     </a>
 </li>
 <hr class="is-divider">
