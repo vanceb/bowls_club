@@ -24,7 +24,7 @@ from app.pools.utils import (
 from app.bookings.utils import can_user_manage_booking
 from app.audit import (
     audit_log_create, audit_log_update, audit_log_delete,
-    audit_log_security_event, get_model_changes
+    audit_log_security_event, audit_log_bulk_operation, get_model_changes
 )
 
 
@@ -758,12 +758,12 @@ def api_get_pool(pool_id):
             ]
         }
         
-        # Add association details
-        if pool.booking and pool.booking.event_id:
+        # Add event type details from booking
+        if pool.booking:
             pool_data['event'] = {
-                'id': pool.booking.event_id,
-                'name': f'Event {pool.booking.event_id}',
-                'event_type': 'Event'
+                'type_id': pool.booking.event_type,
+                'type_name': pool.booking.get_event_type_name(),
+                'booking_name': pool.booking.name
             }
         
         if pool.booking:
