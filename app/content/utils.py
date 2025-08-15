@@ -77,31 +77,60 @@ def sanitize_filename(filename):
     sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
     return sanitized
 
-def generate_secure_filename(title, extension=''):
+def slugify_title(title, max_length=30):
     """
-    Generate a secure filename using UUID to prevent path traversal attacks.
+    Convert a title to a URL-friendly slug.
     
     Args:
-        title (str): The original title (used for reference only).
-        extension (str): The file extension (e.g., '.md', '.html').
+        title (str): The title to convert.
+        max_length (int): Maximum length of the slug.
         
     Returns:
-        str: A secure UUID-based filename.
+        str: URL-friendly slug.
     """
-    # Generate a UUID for the filename
-    secure_id = str(uuid.uuid4())
+    if not title:
+        return "untitled"
     
-    # Optional: include a sanitized portion of the title for human readability
-    # But limit it to prevent path traversal
-    safe_title = re.sub(r'[^\w\-_]', '_', title)[:20]  # Limit to 20 chars
+    # Convert to lowercase and replace non-alphanumeric characters with hyphens
+    slug = re.sub(r'[^\w\s-]', '', title.lower())
+    slug = re.sub(r'[\s_-]+', '-', slug)
+    slug = slug.strip('-')
     
-    # Create filename with UUID as primary identifier
-    if safe_title:
-        filename = f"{secure_id}_{safe_title}{extension}"
-    else:
-        filename = f"{secure_id}{extension}"
+    # Truncate to max length
+    if len(slug) > max_length:
+        slug = slug[:max_length].rstrip('-')
     
-    return filename
+    return slug or "untitled"
+
+def create_post_directory(post_id, title):
+    """
+    Create a directory for a post using the structure: {post_id}-{uuid_prefix}-{slugified_title}
+    
+    Args:
+        post_id (int): The post ID from the database.
+        title (str): The post title.
+        
+    Returns:
+        str: The directory name created.
+    """
+    # Generate short UUID prefix (8 characters)
+    uuid_prefix = str(uuid.uuid4())[:8]
+    
+    # Create slugified title
+    slug = slugify_title(title)
+    
+    # Create directory name
+    dir_name = f"{post_id}-{uuid_prefix}-{slug}"
+    
+    # Create the full directory path
+    base_path = current_app.config.get('POSTS_STORAGE_PATH')
+    dir_path = os.path.join(base_path, dir_name)
+    
+    # Create the directory and images subdirectory
+    os.makedirs(dir_path, exist_ok=True)
+    os.makedirs(os.path.join(dir_path, 'images'), exist_ok=True)
+    
+    return dir_name
 
 def validate_secure_path(filename, base_path):
     """
@@ -134,19 +163,98 @@ def validate_secure_path(filename, base_path):
         
     return normalized_path
 
-def get_secure_post_path(filename):
+def get_post_file_path(post_directory, filename):
     """
-    Get a secure path for post files.
+    Get a secure path for files within a post directory.
     
     Args:
-        filename (str): The post filename.
+        post_directory (str): The post directory name.
+        filename (str): The filename within the directory.
         
     Returns:
         str: Secure path for the post file, or None if invalid.
     """
-    from flask import current_app
     base_path = current_app.config.get('POSTS_STORAGE_PATH')
-    return validate_secure_path(filename, base_path)
+    if not base_path or not post_directory:
+        return None
+    
+    # Validate the directory name (should match our pattern)
+    if not re.match(r'^\d+-[a-f0-9]{8}-[\w\-]+$', post_directory):
+        return None
+    
+    # Create path to the post directory
+    post_dir_path = os.path.join(base_path, post_directory)
+    
+    # Validate and get the file path within the post directory
+    return validate_secure_path(filename, post_dir_path)
+
+def get_post_image_path(post_directory, image_filename):
+    """
+    Get a secure path for image files within a post's images directory.
+    
+    Args:
+        post_directory (str): The post directory name.
+        image_filename (str): The image filename.
+        
+    Returns:
+        str: Secure path for the image file, or None if invalid.
+    """
+    base_path = current_app.config.get('POSTS_STORAGE_PATH')
+    if not base_path or not post_directory:
+        return None
+    
+    # Validate the directory name
+    if not re.match(r'^\d+-[a-f0-9]{8}-[\w\-]+$', post_directory):
+        return None
+    
+    # Create path to the post's images directory
+    images_dir_path = os.path.join(base_path, post_directory, 'images')
+    
+    # Validate and get the image file path
+    return validate_secure_path(image_filename, images_dir_path)
+
+def rename_post_directory(old_directory, new_title):
+    """
+    Rename a post directory when the title changes.
+    
+    Args:
+        old_directory (str): The current directory name.
+        new_title (str): The new post title.
+        
+    Returns:
+        str: The new directory name, or None if failed.
+    """
+    base_path = current_app.config.get('POSTS_STORAGE_PATH')
+    if not base_path or not old_directory:
+        return None
+    
+    # Extract post_id and uuid from old directory name
+    match = re.match(r'^(\d+)-([a-f0-9]{8})-', old_directory)
+    if not match:
+        return None
+    
+    post_id, uuid_prefix = match.groups()
+    
+    # Create new directory name
+    slug = slugify_title(new_title)
+    new_directory = f"{post_id}-{uuid_prefix}-{slug}"
+    
+    # If the directory name hasn't changed, return the old one
+    if old_directory == new_directory:
+        return old_directory
+    
+    old_path = os.path.join(base_path, old_directory)
+    new_path = os.path.join(base_path, new_directory)
+    
+    try:
+        # Rename the directory
+        if os.path.exists(old_path) and not os.path.exists(new_path):
+            os.rename(old_path, new_path)
+            return new_directory
+        else:
+            return old_directory  # Keep old name if new path exists
+    except OSError:
+        return None  # Failed to rename
 
 def get_secure_archive_path(filename):
     """

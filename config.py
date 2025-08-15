@@ -62,6 +62,11 @@ class Config:
 # Config options relating to Posts    
     POSTS_PER_PAGE = 10 # Number of posts to display per page
     POST_EXPIRATION_DAYS = 30  # Number of days before posts expire
+    
+# Image upload configuration for news articles
+    IMAGE_ALLOWED_TYPES = ['jpg', 'jpeg', 'png']  # Allowed image file extensions
+    IMAGE_MAX_SIZE_MB = 10  # Maximum file size in megabytes
+    IMAGE_ALLOWED_MIMETYPES = ['image/jpeg', 'image/png']  # Allowed MIME types for validation
 
 # How many rinks are there for booking
     RINKS = 6
