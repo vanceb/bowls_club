@@ -1448,7 +1448,15 @@ def admin_manage_booking(booking_id):
                         new_organizer_id_str = request.form.get('organizer_id', '')
                         if new_organizer_id_str:
                             old_organizer_id = booking.organizer_id
-                            new_organizer_id = int(new_organizer_id_str) if new_organizer_id_str != '' else None
+                            # Handle case where form returns string 'None' or empty string
+                            if new_organizer_id_str == '' or new_organizer_id_str == 'None':
+                                new_organizer_id = None
+                            else:
+                                try:
+                                    new_organizer_id = int(new_organizer_id_str)
+                                except ValueError:
+                                    current_app.logger.warning(f"Invalid organizer_id value: '{new_organizer_id_str}', setting to None")
+                                    new_organizer_id = None
                             if old_organizer_id != new_organizer_id:
                                 booking.organizer_id = new_organizer_id
                                 changes_made = True

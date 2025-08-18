@@ -229,7 +229,7 @@ class BookingManagementForm(FlaskForm):
     # Organizer Assignment  
     organizer_id = SelectField(
         'Event Organizer', 
-        coerce=lambda x: int(x) if x else None,  # Handle empty strings
+        coerce=lambda x: int(x) if x and x != 'None' and x != '' else None,  # Handle empty strings and 'None'
         choices=[],  # Will be populated dynamically with active members
         validators=[Optional()],
         render_kw={'class': 'select'}

@@ -144,6 +144,7 @@ def register_template_filters(app):
         from app.bookings.utils import format_booking_details
         return format_booking_details(booking, include_date, rollup_include_date)
     
+    
     @app.template_filter('from_json')
     def from_json_filter(json_str):
         """Convert JSON string to Python object"""

@@ -2,9 +2,16 @@
 {% set is_away = event.home_away == 'away' %}
 <tr class="{{ row_class }}">
     <td>
-        <strong>
-            {{ event|booking_details|safe }}
-        </strong>
+        {% if event.series_id %}
+            {% set series_name = event.get_series_name() %}
+            {% if series_name and series_name != event.name and not series_name.endswith(' (Series)') %}
+                <strong>{{ series_name }}</strong>
+            {% else %}
+                <strong>{{ event|booking_details|safe }}</strong>
+            {% endif %}
+        {% else %}
+            <strong>{{ event|booking_details|safe }}</strong>
+        {% endif %}
     </td>
     <td>
         {{ event.get_gender_name() }} {{ event.get_format_name() }} {{ event.get_event_type_name() }}

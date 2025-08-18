@@ -91,6 +91,7 @@ def create_booking_with_defaults(name: str, **kwargs) -> Booking:
     return Booking(**booking_data)
 
 
+
 def format_booking_details(booking: Booking, include_date: bool = True, rollup_include_date: bool = None) -> str:
     """
     Generate consistent booking details string for display across the application.
