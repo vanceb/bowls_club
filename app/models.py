@@ -570,7 +570,7 @@ class TeamMember(db.Model):
 # Add relationships to existing models
 Member.created_teams = so.relationship('Team', back_populates='creator', foreign_keys='Team.created_by')
 Member.team_memberships = so.relationship('TeamMember', back_populates='member')
-Booking.teams = so.relationship('Team', back_populates='booking')
+Booking.teams = so.relationship('Team', back_populates='booking', cascade='all, delete-orphan')
 
 # Add booking-related relationships to Member model
 Member.organized_bookings = so.relationship('Booking', back_populates='organizer', foreign_keys='Booking.organizer_id')

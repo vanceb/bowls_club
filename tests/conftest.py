@@ -82,9 +82,14 @@ def core_roles(db_session):
     """Create core roles for testing."""
     roles = []
     for role_name in ['User Manager', 'Content Manager', 'Event Manager']:
-        role = Role(name=role_name)
-        db_session.add(role)
-        roles.append(role)
+        # Check if role already exists
+        existing_role = db_session.query(Role).filter_by(name=role_name).first()
+        if existing_role:
+            roles.append(existing_role)
+        else:
+            role = Role(name=role_name)
+            db_session.add(role)
+            roles.append(role)
     
     db_session.commit()
     return roles

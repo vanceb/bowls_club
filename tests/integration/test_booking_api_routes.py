@@ -33,8 +33,6 @@ class TestBookingAPIRoutes:
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test API Booking',
@@ -68,23 +66,22 @@ class TestBookingAPIRoutes:
         assert booking_data['organizer_notes'] == 'Test notes'
         assert booking_data['organizer_name'] == 'Test User'
     
-    def test_api_booking_get_with_event(self, authenticated_client, db_session):
-        """Test API booking GET with associated event."""
-        # Create test member and event
-        member = Member(
+    def test_api_booking_get_with_event_data(self, authenticated_client, db_session):
+        """Test API booking GET with event-specific data (booking-centric architecture)."""
+        # Create test member using factory
+        member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
-            email='test@test.com', status='Full', joined_date=date.today()
+            email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
-        # Create booking (which includes all event information in booking-centric architecture)
+        # Create booking with event information in booking-centric architecture
         booking = BookingFactory.create(
             name='Test Championship',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=3,
             organizer=member,
+            booking_type='event',  # Required for event_name to be included
             event_type=2,  # Competition
             format=3,  # Triples
             gender=1,  # Gents
@@ -99,9 +96,11 @@ class TestBookingAPIRoutes:
         assert data['success'] is True
         
         booking_data = data['booking']
-        assert booking_data['event_id'] == event.id
-        assert booking_data['event_name'] == 'Test Championship'
+        assert booking_data['id'] == booking.id
+        assert booking_data['event_name'] == 'Test Championship'  # event_name for event bookings
         assert booking_data['vs'] == 'Championship Opponents'
+        assert booking_data['event_type'] == 2  # Competition
+        assert booking_data['event_id'] == booking.id  # event_id is set to booking.id for event bookings
     
     def test_api_booking_put_requires_login(self, client):
         """Test API booking PUT requires authentication."""
@@ -111,7 +110,7 @@ class TestBookingAPIRoutes:
     def test_api_booking_put_requires_event_manager(self, authenticated_client):
         """Test API booking PUT requires Event Manager role."""
         response = authenticated_client.put('/bookings/api/v1/booking/1')
-        assert response.status_code == 302  # Redirect due to role requirement
+        assert response.status_code == 403  # Forbidden due to role requirement
     
     def test_api_booking_put_not_found(self, admin_client):
         """Test API booking PUT with non-existent booking."""
@@ -130,8 +129,6 @@ class TestBookingAPIRoutes:
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test API Booking',
@@ -173,15 +170,13 @@ class TestBookingAPIRoutes:
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer=member.id
+            organizer=member
         )
         # Factory already commits
         
@@ -206,7 +201,7 @@ class TestBookingAPIRoutes:
     def test_api_booking_delete_requires_event_manager(self, authenticated_client):
         """Test API booking DELETE requires Event Manager role."""
         response = authenticated_client.delete('/bookings/api/v1/booking/1')
-        assert response.status_code == 302  # Redirect due to role requirement
+        assert response.status_code == 403  # Forbidden due to role requirement
     
     def test_api_booking_delete_not_found(self, admin_client):
         """Test API booking DELETE with non-existent booking."""
@@ -224,15 +219,13 @@ class TestBookingAPIRoutes:
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer=member.id
+            organizer=member
         )
         # Factory already commits
         
@@ -251,34 +244,33 @@ class TestBookingAPIRoutes:
     
     def test_api_booking_delete_with_teams(self, admin_client, db_session):
         """Test API booking DELETE cascades to teams and team members."""
-        from app.models import BookingTeam, BookingTeamMember
+        from app.models import Team, TeamMember
         
         # Create test member and booking
         member = MemberFactory.create(
             username='testuser', firstname='Test', lastname='User',
             email='test@test.com', status='Full'
         )
-        db_session.add(member)
-        db_session.commit()
         
         booking = BookingFactory.create(
             name='Test API Booking',
             booking_date=date.today() + timedelta(days=1),
             session=1,
             rink_count=2,
-            organizer=member.id
+            organizer=member
         )
         # Factory already commits
         
         # Create team and team member
-        team = BookingTeam(
+        team = Team(
             booking_id=booking.id,
-            team_name='Test Team'
+            team_name='Test Team',
+            created_by=member.id
         )
         db_session.add(team)
         db_session.commit()
         
-        team_member = BookingTeamMember(
+        team_member = TeamMember(
             team_id=team.id,
             member_id=member.id,
             position='Lead'
@@ -298,5 +290,5 @@ class TestBookingAPIRoutes:
         
         # Verify cascading deletion
         assert db_session.get(Booking, booking_id) is None
-        assert db_session.get(BookingTeam, team_id) is None
-        assert db_session.get(BookingTeamMember, team_member_id) is None
+        assert db_session.get(Team, team_id) is None
+        assert db_session.get(TeamMember, team_member_id) is None
